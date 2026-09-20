@@ -5,6 +5,37 @@
 #include <stdint.h>
 
 typedef struct {
+    float x;
+    float y;
+} GLDMTPoint;
+
+typedef struct {
+    GLDMTPoint position;
+    GLDMTPoint velocity;
+} GLDMTVector;
+
+// Shared private-framework ABI used by the C trackpad bridge and Swift mouse
+// provider. Keeping one layout prevents the two input paths from diverging.
+typedef struct {
+    int32_t frame;
+    int32_t padding;
+    double timestamp;
+    int32_t identifier;
+    int32_t state;
+    int32_t finger_id;
+    int32_t hand_id;
+    GLDMTVector normalized;
+    float size;
+    int32_t zero1;
+    float angle;
+    float major_axis;
+    float minor_axis;
+    GLDMTVector millimeters;
+    int32_t zero2[2];
+    float unknown;
+} GLDMTTouch;
+
+typedef struct {
     int32_t identifier;
     int32_t state;
     float x;

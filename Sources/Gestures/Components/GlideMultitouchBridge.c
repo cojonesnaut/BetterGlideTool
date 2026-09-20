@@ -7,37 +7,7 @@
 
 typedef void *MTDeviceRef;
 
-typedef struct {
-    float x;
-    float y;
-} MTPoint;
-
-typedef struct {
-    MTPoint position;
-    MTPoint velocity;
-} MTVector;
-
-// This compatibility layout is deliberately contained in this bridge. The
-// Swift runtime sees only GLDTouchPoint and can disable this provider if the
-// framework or ABI is unavailable on a future macOS release.
-typedef struct {
-    int32_t frame;
-    int32_t padding;
-    double timestamp;
-    int32_t identifier;
-    int32_t state;
-    int32_t finger_id;
-    int32_t hand_id;
-    MTVector normalized;
-    float size;
-    int32_t zero1;
-    float angle;
-    float major_axis;
-    float minor_axis;
-    MTVector millimeters;
-    int32_t zero2[2];
-    float unknown;
-} MTTouch;
+typedef GLDMTTouch MTTouch;
 
 typedef int (*MTContactCallback)(MTDeviceRef, MTTouch *, int32_t, double, int32_t);
 typedef MTDeviceRef (*MTDeviceCreateDefaultFunction)(void);
@@ -368,6 +338,19 @@ bool GLDTStart(GLDTFrameCallback callback, void *context) {
 
     MTDeviceRef created_device = create_device();
     if (created_device == NULL) {
+        if (opened_here) dlclose(handle);
+        pthread_mutex_lock(&state_lock);
+        last_start_status = GLDTStatusDefaultDeviceUnavailable;
+        pthread_mutex_unlock(&state_lock);
+        return false;
+    }
+
+    // Never feed mouse touches into trackpad-only edge/TrackPoint recognizers.
+    typedef int32_t (*GetFamilyFunction)(MTDeviceRef, int32_t *);
+    GetFamilyFunction get_family = (GetFamilyFunction)dlsym(handle, "MTDeviceGetFamilyID");
+    int32_t family = 0;
+    if (get_family && get_family(created_device, &family) == 0 && (family == 112 || family == 113)) {
+        if (resolved_release) resolved_release(created_device);
         if (opened_here) dlclose(handle);
         pthread_mutex_lock(&state_lock);
         last_start_status = GLDTStatusDefaultDeviceUnavailable;
