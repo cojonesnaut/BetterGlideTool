@@ -33,12 +33,12 @@ struct MenuBarView: View {
 
         updateItem
 
-        Text("Glide \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
+        Text("BetterGlideTool \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
             .foregroundStyle(.secondary)
 
         Divider()
 
-        Button("Quit Glide") {
+        Button("Quit BetterGlideTool") {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
@@ -61,7 +61,7 @@ struct MenuBarView: View {
             }
 
         case .downloading, .installing:
-            Text("Updating Glide…")
+            Text("Updating BetterGlideTool…")
                 .foregroundStyle(.secondary)
 
         case .idle, .checking, .upToDate, .failed, .manualInstall:

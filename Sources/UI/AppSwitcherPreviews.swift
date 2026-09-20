@@ -41,7 +41,7 @@ enum AppSwitcherPreviewProvider {
     }
 
     private static let captureQueue = DispatchQueue(
-        label: "com.glide.app-switcher-previews",
+        label: "com.betterglidetool.app-switcher-previews",
         qos: .userInitiated
     )
     private static let cacheLock = NSLock()

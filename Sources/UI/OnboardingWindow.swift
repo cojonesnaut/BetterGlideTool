@@ -16,7 +16,7 @@ import Combine
 @MainActor
 final class OnboardingController: NSObject, NSWindowDelegate {
     static let shared = OnboardingController()
-    private static let completedKey = "GlideHasCompletedOnboarding"
+    private static let completedKey = "BetterGlideToolHasCompletedOnboarding"
 
     static var shouldShow: Bool {
         !UserDefaults.standard.bool(forKey: completedKey)
@@ -107,7 +107,9 @@ private struct OnboardingView: View {
                 .frame(width: 110, height: 110)
                 .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
 
-            Text("Welcome to Glide")
+            Text("Welcome to BetterGlideTool")
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .font(.system(size: 32, weight: .bold, design: .rounded))
             Text("Your trackpad, but with superpowers.")
                 .font(.title3)
@@ -169,7 +171,7 @@ private struct OnboardingView: View {
                 .font(.system(size: 13))
             }
 
-            Text("Glide lives in your menu bar")
+            Text("BetterGlideTool lives in your menu bar")
                 .font(.system(size: 26, weight: .bold, design: .rounded))
             Text("Click the hand icon any time to open Preferences,\npause gestures, or quit.")
                 .multilineTextAlignment(.center)
@@ -265,8 +267,8 @@ private struct PermissionStepView: View {
                 .font(.system(size: 26, weight: .bold, design: .rounded))
 
             Text(granted
-                 ? "Glide can now see your trackpad gestures.\nHit Continue to learn the moves."
-                 : "Glide reads trackpad touches and controls windows through macOS Accessibility. Nothing leaves your Mac — there's no network access, no analytics.")
+                 ? "BetterGlideTool can now see your trackpad gestures.\nHit Continue to learn the moves."
+                 : "BetterGlideTool reads trackpad touches and controls windows through macOS Accessibility. Nothing leaves your Mac — there's no network access, no analytics.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 400)
@@ -274,7 +276,7 @@ private struct PermissionStepView: View {
             if !granted {
                 VStack(alignment: .leading, spacing: 12) {
                     stepRow(1, "Click the button below.")
-                    stepRow(2, "Find **Glide** in the list and switch it on.")
+                    stepRow(2, "Find **BetterGlideTool** in the list and switch it on.")
                     stepRow(3, "Come back here — this page updates by itself.")
                 }
                 .padding(.vertical, 4)
