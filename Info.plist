@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Glide</string>
+    <string>BetterGlideTool</string>
     <key>CFBundleDisplayName</key>
-    <string>Glide</string>
+    <string>BetterGlideTool</string>
     <key>CFBundleIdentifier</key>
-    <string>com.glide.app</string>
+    <string>com.betterglidetool.app</string>
     <key>CFBundleVersion</key>
     <string>2.3.0</string>
     <key>CFBundleShortVersionString</key>
     <string>2.3.0</string>
     <key>CFBundleExecutable</key>
-    <string>Glide</string>
+    <string>BetterGlideTool</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleIconFile</key>
@@ -29,8 +29,8 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
     <key>NSAccessibilityUsageDescription</key>
-    <string>Glide requires Accessibility access to detect gestures and control windows.</string>
+    <string>BetterGlideTool requires Accessibility access to detect gestures and control windows.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Glide runs the AppleScript actions you configure, and reads app menus so you can assign menu items to gestures.</string>
+    <string>BetterGlideTool runs the AppleScript actions you configure, and reads app menus so you can assign menu items to gestures.</string>
 </dict>
 </plist>

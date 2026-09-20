@@ -1,7 +1,7 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────
-#  Glide — build.sh
-#  Compiles all Swift sources and produces Glide.app
+#  BetterGlideTool — build.sh
+#  Compiles all Swift sources and produces BetterGlideTool.app
 #  Compatible with macOS 13+ (Apple Silicon & Intel)
 #
 #  Usage:
@@ -28,8 +28,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="Glide"
-BUNDLE_ID="com.glide.app"
+APP_NAME="BetterGlideTool"
+BUNDLE_ID="com.betterglidetool.app"
 BUILD_DIR="$SCRIPT_DIR/build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
@@ -44,7 +44,7 @@ APP_EXECUTABLE="$MACOS/$APP_NAME"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     cat <<EOF
-Glide build script
+BetterGlideTool build script
 
 Usage:
   ./build.sh
@@ -177,6 +177,16 @@ mkdir -p "$MACOS" "$RESOURCES"
 # ─────────────────────────────────────────────────────────────
 
 cp "$SCRIPT_DIR/Info.plist" "$CONTENTS/Info.plist"
+
+# Only opt into releases from this fork; local builds remain offline by default.
+RELEASE_REPOSITORY="${BETTERGLIDETOOL_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
+if [[ -n "$RELEASE_REPOSITORY" ]]; then
+    if [[ ! "$RELEASE_REPOSITORY" =~ ^[A-Za-z0-9-]+/BetterGlideTool$ ]]; then
+        echo "ERROR: Release repository must be OWNER/BetterGlideTool"
+        exit 1
+    fi
+    /usr/libexec/PlistBuddy -c "Add :BetterGlideToolRepository string $RELEASE_REPOSITORY" "$CONTENTS/Info.plist"
+fi
 
 
 # ─────────────────────────────────────────────────────────────
@@ -370,7 +380,7 @@ if [[ "$IDENTITY" == "-" ]]; then
     codesign \
         --force \
         --sign - \
-        --entitlements "$SCRIPT_DIR/Glide.entitlements" \
+        --entitlements "$SCRIPT_DIR/BetterGlideTool.entitlements" \
         "$APP_BUNDLE"
 
 else
@@ -382,7 +392,7 @@ else
         --sign "$IDENTITY" \
         --options runtime \
         --timestamp \
-        --entitlements "$SCRIPT_DIR/Glide.entitlements" \
+        --entitlements "$SCRIPT_DIR/BetterGlideTool.entitlements" \
         "$APP_BUNDLE"
 
 fi
@@ -428,28 +438,28 @@ if [[ "${1:-}" == "--dmg" ]]; then
     ln -s /Applications "$DMG_STAGE/Applications"
 
     cat > "$DMG_STAGE/READ ME - How to Install.txt" <<'EOF'
-How to install Glide
+How to install BetterGlideTool
 ====================
 
-1. Drag Glide.app onto the Applications folder icon.
+1. Drag BetterGlideTool.app onto the Applications folder icon.
 
-2. Glide is a free open-source app and is not notarized by Apple,
+2. BetterGlideTool is a free open-source app and is not notarized by Apple,
    so macOS blocks it on first launch. It is NOT damaged. To open it
    (needed only once):
 
-   - Double-click Glide. macOS says it was "Not Opened" - click Done.
+   - Double-click BetterGlideTool. macOS says it was "Not Opened" - click Done.
    - Open System Settings -> Privacy & Security, scroll down to
-     "Glide.app was blocked", and click "Open Anyway".
+     "BetterGlideTool.app was blocked", and click "Open Anyway".
 
    On macOS 14 or older you can instead right-click (Control-click)
-   Glide in Applications, choose "Open", then click "Open".
+   BetterGlideTool in Applications, choose "Open", then click "Open".
 
    If an older Mac claims the app is "damaged", run this one line
    in Terminal:
 
-       xattr -cr /Applications/Glide.app
+       xattr -cr /Applications/BetterGlideTool.app
 
-3. Open Glide from Applications. When prompted, grant Accessibility
+3. Open BetterGlideTool from Applications. When prompted, grant Accessibility
    access in System Settings -> Privacy & Security -> Accessibility.
 
 4. Look for the hand icon in your menu bar. Enjoy!
@@ -470,14 +480,14 @@ EOF
     #
     # Setup:
     #
-    #   xcrun notarytool store-credentials glide-notary \
+    #   xcrun notarytool store-credentials betterglidetool-notary \
     #     --apple-id <email> \
     #     --team-id <TEAMID> \
     #     --password <app-specific-pw>
 
     if [[ -n "$DEV_ID_CERT" ]] && \
        xcrun notarytool history \
-           --keychain-profile glide-notary \
+           --keychain-profile betterglidetool-notary \
            >/dev/null 2>&1
     then
 
@@ -485,7 +495,7 @@ EOF
 
         xcrun notarytool submit \
             "$DMG_PATH" \
-            --keychain-profile glide-notary \
+            --keychain-profile betterglidetool-notary \
             --wait
 
         xcrun stapler staple "$DMG_PATH"
@@ -497,7 +507,7 @@ EOF
     else
 
         echo "ℹ️  Skipping notarization (needs a Developer ID cert +"
-        echo "    'xcrun notarytool store-credentials glide-notary' setup)."
+        echo "    'xcrun notarytool store-credentials betterglidetool-notary' setup)."
 
     fi
 
@@ -519,7 +529,7 @@ echo "Next steps:"
 echo "  1. Run:  open \"$APP_BUNDLE\""
 echo "  2. macOS will prompt for Accessibility permission."
 echo "  3. Go to System Settings → Privacy & Security → Accessibility"
-echo "     and enable Glide."
+echo "     and enable BetterGlideTool."
 echo "  4. The hand icon will appear in your menu bar."
 
 echo ""

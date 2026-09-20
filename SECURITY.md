@@ -1,3 +1,9 @@
+# BetterGlideTool security
+
+BetterGlideTool is a fork of [Glide](https://github.com/Vatsal057/Glide). Report fork-specific security issues privately to the fork maintainer via [the fork repository](https://github.com/cojonesnaut/BetterGlideTool). The policy below is retained as upstream background; its contact and release promises apply to the original Glide project. BetterGlideTool uses its own configuration directory and only enables updates when its own repository is configured; see [README.md](README.md).
+
+---
+
 # Security Policy
 
 ## Reporting a vulnerability

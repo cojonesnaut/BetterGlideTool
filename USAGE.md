@@ -1,6 +1,6 @@
-# Glide Usage Manual
+# BetterGlideTool Usage Manual
 
-Complete reference for all Glide capabilities, organized into topic guides. Start with the [README](README.md#default-gestures) for quick start defaults, and consult these guides for detailed configuration.
+Complete reference for all BetterGlideTool capabilities, organized into topic guides. Start with the [README](README.md#build) for build and setup instructions, and consult these guides for detailed configuration.
 
 ## Table of Contents
 
@@ -13,7 +13,7 @@ Complete reference for all Glide capabilities, organized into topic guides. Star
 7. [Tuning & precision controls](docs/07-tuning.md): Sensitivity thresholds, palm rejection, edge margins, and force-click zones.
 8. [General preferences](docs/08-general-preferences.md): Window targeting, haptic feedback, system gesture conflicts, and updates.
 9. [Your configuration file](docs/09-configuration-file.md): Editing, exporting, and importing `config.yaml`.
-10. [Permissions Glide asks for](docs/10-permissions.md): Accessibility, Screen Recording, and Automation requirements.
+10. [Permissions BetterGlideTool asks for](docs/10-permissions.md): Accessibility, Screen Recording, and Automation requirements.
 11. [Troubleshooting](docs/11-troubleshooting.md): Common configuration issues and solutions.
 12. [Trackpad Edge Controls](docs/12-edge-controls.md): Physical rim sliders for volume, brightness, backlight, scrolling, and app switching.
 
