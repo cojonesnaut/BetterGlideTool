@@ -22,58 +22,58 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" Info.plist
 
-      - name: Build Glide App + DMG
+      - name: Build BetterGlideTool App + DMG
         run: |
           chmod +x build.sh
           ./build.sh --dmg
-          mv build/Glide.dmg "build/Glide-${GITHUB_REF_NAME}.dmg"
+          mv build/BetterGlideTool.dmg "build/BetterGlideTool-${GITHUB_REF_NAME}.dmg"
 
-      # Glide's in-app updater downloads this DMG and verifies it against the
+      # BetterGlideTool's in-app updater downloads this DMG and verifies it against the
       # checksum below before it will replace the running app. Keep the file
       # name ending in `.sha256` — that's how the app finds it.
       - name: Publish Checksum
         working-directory: build
         run: |
-          shasum -a 256 "Glide-${GITHUB_REF_NAME}.dmg" > "Glide-${GITHUB_REF_NAME}.dmg.sha256"
-          cat "Glide-${GITHUB_REF_NAME}.dmg.sha256"
+          shasum -a 256 "BetterGlideTool-${GITHUB_REF_NAME}.dmg" > "BetterGlideTool-${GITHUB_REF_NAME}.dmg.sha256"
+          cat "BetterGlideTool-${GITHUB_REF_NAME}.dmg.sha256"
 
       - name: Verify Release Artifacts
         working-directory: build
         run: |
-          test -f "Glide-${GITHUB_REF_NAME}.dmg"
-          shasum -a 256 -c "Glide-${GITHUB_REF_NAME}.dmg.sha256"
+          test -f "BetterGlideTool-${GITHUB_REF_NAME}.dmg"
+          shasum -a 256 -c "BetterGlideTool-${GITHUB_REF_NAME}.dmg.sha256"
           # The updater refuses any image whose app fails signature
           # verification, so catch that here rather than after publishing.
-          hdiutil attach "Glide-${GITHUB_REF_NAME}.dmg" -nobrowse -readonly -mountpoint /tmp/glide-verify
-          codesign --verify --deep --strict /tmp/glide-verify/Glide.app
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" /tmp/glide-verify/Glide.app/Contents/Info.plist
-          hdiutil detach /tmp/glide-verify
+          hdiutil attach "BetterGlideTool-${GITHUB_REF_NAME}.dmg" -nobrowse -readonly -mountpoint /tmp/betterglidetool-verify
+          codesign --verify --deep --strict /tmp/betterglidetool-verify/BetterGlideTool.app
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" /tmp/betterglidetool-verify/BetterGlideTool.app/Contents/Info.plist
+          hdiutil detach /tmp/betterglidetool-verify
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            build/Glide-*.dmg
-            build/Glide-*.dmg.sha256
-          name: Glide ${{ github.ref_name }}
+            build/BetterGlideTool-*.dmg
+            build/BetterGlideTool-*.dmg.sha256
+          name: BetterGlideTool ${{ github.ref_name }}
           generate_release_notes: true
           body: |
-            ## Already running Glide?
+            ## Already running BetterGlideTool?
 
-            Open **Glide → Preferences → General** and click **Check for Updates**.
-            Glide downloads and installs this version itself, then relaunches —
+            Open **BetterGlideTool → Preferences → General** and click **Check for Updates**.
+            BetterGlideTool downloads and installs this version itself, then relaunches —
             no DMG dragging, and no Gatekeeper warning.
 
             ## New install
 
-            1. Download **Glide-${{ github.ref_name }}.dmg** below and open it.
-            2. Drag **Glide** into the **Applications** folder.
-            3. Glide is free and open source, so it isn't notarized by Apple. If macOS says the app is "damaged", run this one line in Terminal:
+            1. Download **BetterGlideTool-${{ github.ref_name }}.dmg** below and open it.
+            2. Drag **BetterGlideTool** into the **Applications** folder.
+            3. BetterGlideTool is free and open source, so it isn't notarized by Apple. If macOS says the app is "damaged", run this one line in Terminal:
 
                ```
-               xattr -cr /Applications/Glide.app
+               xattr -cr /Applications/BetterGlideTool.app
                ```
 
-            4. Open Glide, then grant Accessibility access in **System Settings → Privacy & Security → Accessibility**.
+            4. Open BetterGlideTool, then grant Accessibility access in **System Settings → Privacy & Security → Accessibility**.
 
-            `Glide-${{ github.ref_name }}.dmg.sha256` holds the checksum the in-app updater verifies against.
+            `BetterGlideTool-${{ github.ref_name }}.dmg.sha256` holds the checksum the in-app updater verifies against.
