@@ -5,7 +5,7 @@ struct ConfigurationTab: View {
 
     private let configPath: String = {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return support.appendingPathComponent("Glide/config.yaml").path
+        return support.appendingPathComponent("BetterGlideTool/config.yaml").path
     }()
 
     var body: some View {
@@ -59,7 +59,7 @@ struct ConfigurationTab: View {
                 // Export
                 GroupBox(label: Label("Export", systemImage: "square.and.arrow.up")) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Save a backup copy of your gestures and settings as a `.yaml` file. Share it with other Glide users or keep it as a snapshot.")
+                        Text("Save a backup copy of your gestures and settings as a `.yaml` file. Share it with other BetterGlideTool users or keep it as a snapshot.")
                             .foregroundStyle(.secondary)
                             .font(.callout)
 
@@ -89,7 +89,7 @@ struct ConfigurationTab: View {
                 // Reset section
                 GroupBox(label: Label("Reset", systemImage: "arrow.counterclockwise")) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Restore Glide to its factory default gesture configuration. Your current gestures will be lost.")
+                        Text("Restore BetterGlideTool to its factory default gesture configuration. Your current gestures will be lost.")
                             .foregroundStyle(.secondary)
                             .font(.callout)
 
@@ -127,7 +127,7 @@ struct ConfigurationTab: View {
 
     private func openConfigFolder() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let glideDir = support.appendingPathComponent("Glide")
+        let glideDir = support.appendingPathComponent("BetterGlideTool")
         try? FileManager.default.createDirectory(at: glideDir, withIntermediateDirectories: true)
         NSWorkspace.shared.open(glideDir)
     }

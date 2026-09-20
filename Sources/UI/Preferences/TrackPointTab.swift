@@ -191,9 +191,9 @@ struct TrackPointTab: View {
             case .twoFingerHold:
                 explainer("Hold two fingers motionless until armed. Moving earlier leaves the touch to macOS as an ordinary two-finger scroll.")
             case .cornerZone, .anywhere:
-                explainer("A short hold is what separates the stick from an ordinary drag. Move before the hold is up and Glide steps aside, letting macOS handle the touch normally.")
+                explainer("A short hold is what separates the stick from an ordinary drag. Move before the hold is up and BetterGlideTool steps aside, letting macOS handle the touch normally.")
             case .doubleTapHold:
-                explainer("The double tap is the deliberate part, so the hold that follows can be short. Move before the hold is up and Glide steps aside, letting macOS handle the touch normally.")
+                explainer("The double tap is the deliberate part, so the hold that follows can be short. Move before the hold is up and BetterGlideTool steps aside, letting macOS handle the touch normally.")
             }
 
             SliderRow(

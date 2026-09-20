@@ -38,7 +38,7 @@ struct KeyboardTab: View {
                         Text("No Keyboard Shortcuts")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text("Add global shortcuts to run Glide actions from anywhere.")
+                        Text("Add global shortcuts to run BetterGlideTool actions from anywhere.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                             .multilineTextAlignment(.center)

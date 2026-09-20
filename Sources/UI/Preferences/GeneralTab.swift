@@ -31,7 +31,7 @@ struct GeneralTab: View {
                         Divider().padding(.leading, 12)
 
                         SettingsRow(label: "Launch at Login") {
-                            Toggle("Start Glide automatically when you log in", isOn: Binding(get: { store.launchAtLoginEnabled }, set: store.updateLaunchAtLogin))
+                            Toggle("Start BetterGlideTool automatically when you log in", isOn: Binding(get: { store.launchAtLoginEnabled }, set: store.updateLaunchAtLogin))
                         }
                     }
                 }
@@ -69,8 +69,8 @@ struct GeneralTab: View {
                     Text(store.accessibilityGranted ? "Permission granted" : "Permission required")
                         .font(.headline)
                     Text(store.accessibilityGranted
-                         ? "Glide has all the permissions it needs to intercept trackpad gestures."
-                         : "Glide needs Accessibility access to detect trackpad gestures. Click below to grant it.")
+                         ? "BetterGlideTool has all the permissions it needs to intercept trackpad gestures."
+                         : "BetterGlideTool needs Accessibility access to detect trackpad gestures. Click below to grant it.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -133,7 +133,7 @@ struct GeneralTab: View {
         GroupBox(label: Label("macOS Gesture Conflicts", systemImage: "exclamationmark.arrow.triangle.2.circlepath")) {
             VStack(alignment: .leading, spacing: 0) {
                 SettingsRow(label: "Auto-Disable") {
-                    Toggle("Turn off macOS gestures that collide with Glide gestures",
+                    Toggle("Turn off macOS gestures that collide with BetterGlideTool gestures",
                            isOn: Binding(get: { store.autoDisableNativeGestures },
                                          set: store.updateAutoDisableNativeGestures))
                 }
@@ -143,7 +143,7 @@ struct GeneralTab: View {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
-                        Text("No conflicts — no active macOS gesture shares a trigger with your Glide gestures.")
+                        Text("No conflicts — no active macOS gesture shares a trigger with your BetterGlideTool gestures.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -186,11 +186,11 @@ struct GeneralTab: View {
                     }
                 }
 
-                // ── Re-enable anything Glide turned off ──
+                // ── Re-enable anything BetterGlideTool turned off ──
                 if !store.disabledNativeGestures.isEmpty {
                     Divider().padding(.leading, 12)
                     HStack {
-                        Text("Disabled by Glide")
+                        Text("Disabled by BetterGlideTool")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -211,7 +211,7 @@ struct GeneralTab: View {
                                 .foregroundStyle(.secondary)
                             Spacer()
                             Button("Re-enable") { store.reEnableNativeGesture(gesture) }
-                                .help("Restores the native macOS gesture to how it was before Glide disabled it")
+                                .help("Restores the native macOS gesture to how it was before BetterGlideTool disabled it")
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -236,7 +236,7 @@ struct GeneralTab: View {
                         .frame(width: 44, height: 44)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
-                            Text("Glide").font(.headline)
+                            Text("BetterGlideTool").font(.headline)
                             Text("v\(appVersion)").font(.caption.weight(.medium)).materialPill()
                         }
                         Text("Free and open source. Everything stays on your Mac.")
@@ -247,8 +247,8 @@ struct GeneralTab: View {
                     Button("Welcome Tour") {
                         OnboardingController.shared.show()
                     }
-                    Button("GitHub") {
-                        NSWorkspace.shared.open(URL(string: "https://github.com/Vatsal057/Glide")!)
+                    Button(UpdateChecker.repositoryURL == nil ? "Original Glide" : "GitHub") {
+                        NSWorkspace.shared.open(UpdateChecker.repositoryURL ?? URL(string: "https://github.com/Vatsal057/Glide")!)
                     }
                 }
 

@@ -685,7 +685,7 @@ struct RuleEditor: View {
             LabeledContent("Shortcut") {
                 VStack(alignment: .leading, spacing: 5) {
                     ShortcutRecorderView(shortcut: $rule.customShortcut)
-                    Text("Records the key combination Glide sends when this gesture fires.")
+                    Text("Records the key combination BetterGlideTool sends when this gesture fires.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }

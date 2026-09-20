@@ -136,7 +136,7 @@ struct AppSwitcherTab: View {
                     .labelsHidden()
 
                     Text(store.appSwitcher.style == .newer
-                         ? "Newer mode presents Glide's visual Liquid Glass app switcher overlay with window previews and vertical window selection decks."
+                         ? "Newer mode presents BetterGlideTool's visual Liquid Glass app switcher overlay with window previews and vertical window selection decks."
                          : "Legacy mode uses macOS's native Command+Tab keyboard shortcuts approach directly during trackpad swipes.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -294,7 +294,7 @@ struct AppSwitcherTab: View {
                         Text(screenCaptureGranted ? "Window previews are ready" : "Using app icons")
                             .font(.subheadline.weight(.semibold))
                         Text(screenCaptureGranted
-                             ? "Glide shows a preview for each selectable window on the current Space as you move through apps."
+                             ? "BetterGlideTool shows a preview for each selectable window on the current Space as you move through apps."
                              : "The switcher works without Screen Recording. Grant access if you also want window previews.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -319,7 +319,7 @@ struct AppSwitcherTab: View {
 
                 Divider()
 
-                Label("If the custom panel cannot open, Glide falls back to the native macOS switcher.", systemImage: "checkmark.shield")
+                Label("If the custom panel cannot open, BetterGlideTool falls back to the native macOS switcher.", systemImage: "checkmark.shield")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -375,7 +375,7 @@ struct AppSwitcherTab: View {
         TuningSection(title: "Behavior", icon: "gearshape") {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Restore minimized windows in native fallback", isOn: switcherBinding(\.restoreMinimizedOnCommit))
-                Text("The custom switcher always restores only the minimized window you select. This option applies when Glide falls back to macOS’s native switcher.")
+                Text("The custom switcher always restores only the minimized window you select. This option applies when BetterGlideTool falls back to macOS’s native switcher.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
