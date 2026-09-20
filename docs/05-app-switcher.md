@@ -14,7 +14,7 @@ The App Switcher is a hold-and-swipe interface to browse and switch between acti
 
 Standard macOS app switching (`⌘Tab`) operates strictly at the application level. When an application has multiple open windows (such as multiple browser windows, terminal sessions, or project documents), targeting a specific window requires secondary shortcuts (such as `⌘\``) or Mission Control.
 
-Glide introduces **2D spatial navigation**:
+BetterGlideTool introduces **2D spatial navigation**:
 - **Horizontal swipes (left/right):** Cycle through running applications.
 - **Vertical swipes (up/down):** Navigate the window deck of the currently highlighted app.
 

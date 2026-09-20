@@ -75,7 +75,7 @@ These actions allow triggering external scripts, menus, and shortcuts:
 | Shell Command… | Executes a terminal command. |
 | AppleScript… | Executes an AppleScript script. |
 
-> ⚠️ **Shell Command, AppleScript, and Run Shortcut execute system code when triggered.** When importing a configuration file from another user, Glide displays a security verification modal listing all embedded scripts before activating them. See [Your configuration file](09-configuration-file.md).
+> ⚠️ **Shell Command, AppleScript, and Run Shortcut execute system code when triggered.** When importing a configuration file from another user, BetterGlideTool displays a security verification modal listing all embedded scripts before activating them. See [Your configuration file](09-configuration-file.md).
 
 ### Other
 | Action | What it does |

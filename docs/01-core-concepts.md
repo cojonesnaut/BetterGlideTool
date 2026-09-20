@@ -2,7 +2,7 @@
 
 # Core concepts
 
-Glide lets you control your Mac using fluid trackpad movements alongside global keyboard shortcuts. Open **Preferences → Gestures** to inspect and edit them. Every gesture is built from a few foundational elements:
+BetterGlideTool lets you control your Mac using fluid trackpad movements alongside global keyboard shortcuts. Open **Preferences → Gestures** to inspect and edit them. Every gesture is built from a few foundational elements:
 
 - **Finger count:** Gestures use **3**, **4**, or **5** fingers.
   <br><img src="../assets/gestures/four_finger_swipe.svg" width="220">

@@ -12,7 +12,7 @@ Configure edge bindings in **Preferences → Edge Controls**.
    - **Right Edge** *(default: System Volume):* Slide up to raise volume; slide down to lower volume.
    - **Left Edge** *(default: Display Brightness):* Slide up to brighten the display; slide down to dim it.
    - **Top / Bottom Edges** *(optional):* Assign to Keyboard Backlight, Microphone Input Gain, Night Shift, Scroll, or App Switcher scrub.
-2. **Native OSD Bezels:** Glide triggers native macOS system display bezels (identical to the overlays displayed by physical media keys). This operates with 0.0% CPU overhead and zero latency.
+2. **Native OSD Bezels:** BetterGlideTool triggers native macOS system display bezels (identical to the overlays displayed by physical media keys). This operates with 0.0% CPU overhead and zero latency.
 3. **Tactile Haptic Ticks:** Each adjustment increment delivers a subtle tactile tap via the trackpad Taptic Engine.
 
 ## Edge Scrolling
@@ -25,7 +25,7 @@ Direction matches the system's natural scrolling by default: content follows you
 
 ### What makes it smooth
 
-Multitouch frames arrive at uneven intervals and each position carries a little sensor noise, so emitting each frame's travel directly reads as judder even when your finger moved evenly. Glide buffers the travel and releases it on a steady 120 Hz clock, which cuts tick-to-tick judder by roughly 8× at a cost of about 22 ms of delay. Total distance is unchanged, so **Scroll Speed** still means exactly what it says.
+Multitouch frames arrive at uneven intervals and each position carries a little sensor noise, so emitting each frame's travel directly reads as judder even when your finger moved evenly. BetterGlideTool buffers the travel and releases it on a steady 120 Hz clock, which cuts tick-to-tick judder by roughly 8× at a cost of about 22 ms of delay. Total distance is unchanged, so **Scroll Speed** still means exactly what it says.
 
 Scrolling is also the one edge action with no haptic ticks and no quantization. The others are notched, moving in discrete steps with a tap for each; scrolling reads travel continuously, which is both what makes it smooth and what keeps it from buzzing the Taptic Engine every frame.
 
@@ -51,11 +51,11 @@ Tune these under **Preferences → Edge Controls → Edge Scrolling**:
 
 Edge gestures run on a single contact, which means the finger working the slider is the same one macOS reads as pointer movement. Without intervention the cursor drifts off toward whichever screen edge you are sliding along.
 
-So once an edge gesture takes over, Glide freezes the pointer until you lift. This applies to every edge action, not just scrolling. For scrolling it also decides *where* the scroll lands, since scroll events go to the window under the pointer — freezing it keeps the scroll on the window it started over.
+So once an edge gesture takes over, BetterGlideTool freezes the pointer until you lift. This applies to every edge action, not just scrolling. For scrolling it also decides *where* the scroll lands, since scroll events go to the window under the pointer — freezing it keeps the scroll on the window it started over.
 
 The freeze begins only when the gesture actually commits (see below). A touch near the rim that never commits leaves the cursor completely alone, so nothing is lost if you were only moving the pointer.
 
-Freezing alone is not quite enough, though. The travel that *earned* the commit has already moved the cursor by then, and those events have been delivered — suppression cannot take them back. So on commit Glide also puts the cursor back where your finger first landed. Without that, the pointer still crept a few millimetres' worth on every gesture, which is the drift you would otherwise keep seeing.
+Freezing alone is not quite enough, though. The travel that *earned* the commit has already moved the cursor by then, and those events have been delivered — suppression cannot take them back. So on commit BetterGlideTool also puts the cursor back where your finger first landed. Without that, the pointer still crept a few millimetres' worth on every gesture, which is the drift you would otherwise keep seeing.
 
 ## Accidental Trigger Protection
 
