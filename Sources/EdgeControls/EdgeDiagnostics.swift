@@ -44,7 +44,7 @@ enum EdgeDiagnostics {
 
         print("""
         ─────────────────────────────────────────────────────────────
-         Glide — Edge Controls pointer diagnostics
+         BetterGlideTool — Edge Controls pointer diagnostics
         ─────────────────────────────────────────────────────────────
          Margin / activation : \(String(format: "%.1f mm / %.1f mm", settings.marginMm, settings.activationTravelMm))
          Edge assignments    : top=\(settings.topEdge.rawValue) bottom=\(settings.bottomEdge.rawValue) \
@@ -74,7 +74,7 @@ enum EdgeDiagnostics {
                      surface.width, surface.height,
                      reported == nil ? "NOMINAL — device would not report" : "measured from the device"))
         print(" Live pipeline running. Only edges you have assigned will engage.")
-        print(" NOTE: quit the menu-bar Glide first — two instances fight over the taps.\n")
+        print(" NOTE: quit the menu-bar BetterGlideTool first — two instances fight over the taps.\n")
 
         var results: [TrackpadPhysicalEdge: Observation] = [:]
         let order: [TrackpadPhysicalEdge] = [.bottom, .top, .left, .right]
