@@ -925,6 +925,7 @@ final class Settings {
     private var _rules:           [GestureRule]
     private var _appSwitcher:     AppSwitcherSettings = AppSwitcherSettings()
     private var _trackPoint:      TrackPointSettings  = TrackPointSettings()
+    private var _magicMouse = MagicMouseSettings()
     private var _edgeControls:    EdgeControlsSettings = EdgeControlsSettings()
     /// Guards `_tuning` — the only setting read off the main thread (the MT
     /// callback reads edge margins every frame).
@@ -952,6 +953,11 @@ final class Settings {
     var trackPoint: TrackPointSettings {
         get { _trackPoint }
         set { _trackPoint = TrackPointSettings.normalized(newValue); GlideConfigStore.shared.scheduleSave() }
+    }
+
+    var magicMouse: MagicMouseSettings {
+        get { _magicMouse }
+        set { _magicMouse = MagicMouseSettings.normalized(newValue); GlideConfigStore.shared.scheduleSave() }
     }
 
     var edgeControls: EdgeControlsSettings {
@@ -1026,6 +1032,7 @@ final class Settings {
         _appSwitcher     = AppSwitcherSettings.normalized(switcher)
         _trackPoint      = TrackPointSettings.normalized(config.toTrackPoint())
         _edgeControls    = EdgeControlsSettings.normalized(config.toEdgeControls())
+        _magicMouse      = MagicMouseSettings.normalized(config.magicMouse)
         _rules           = Self.normalizeRules(loadedRules, appSwitcher: _appSwitcher)
         let normalizedTuning = Self.normalizedTuning(config.toTuning())
         tuningLock.lock(); _tuning = normalizedTuning; tuningLock.unlock()

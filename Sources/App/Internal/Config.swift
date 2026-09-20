@@ -147,6 +147,7 @@ struct GlideConfig {
     var tuning: Tuning = Tuning()
     /// haptic event rawValue → pattern rawValue (see HapticEvent / HapticPattern)
     var haptics: [String: String] = [:]
+    var magicMouse = MagicMouseSettings()
     var gestures: [Gesture] = []
 }
 
@@ -162,6 +163,7 @@ extension GlideConfig {
         let s = Settings.shared
         let t = s.tuning
         var cfg = GlideConfig()
+        cfg.magicMouse = s.magicMouse
 
         cfg.speed.swipeThreshold         = t.initialThreshold
         cfg.speed.fastVelocityThreshold  = t.fastVelocityThreshold
@@ -585,6 +587,14 @@ enum GlideConfigSerializer {
             }
         }
 
+        lines += ["", "  # Magic Mouse settings are independent of trackpad gestures.", "  magic_mouse:",
+                  "    enabled: \(config.magicMouse.enabled)",
+                  "    tap_duration: \(config.magicMouse.tapDuration)",
+                  "    tap_movement: \(config.magicMouse.tapMovement)",
+                  "    swipe_distance: \(config.magicMouse.swipeDistance)"]
+        for gesture in MagicMouseGesture.allCases {
+            lines.append("    \(gesture.rawValue): \"\(config.magicMouse.action(for: gesture).rawValue)\"")
+        }
         return lines.joined(separator: "\n") + "\n"
     }
 
@@ -737,12 +747,37 @@ enum GlideConfigParser {
             case "app_switcher": i += 1; parseAppSwitcher(lines, from: &i, parentIndent: indent, into: &cfg.appSwitcher)
             case "trackpoint":   i += 1; parseTrackPoint(lines, from: &i, parentIndent: indent, into: &cfg.trackPoint)
             case "edge_controls", "edgecontrols": i += 1; parseEdgeControls(lines, from: &i, parentIndent: indent, into: &cfg.edgeControls)
+            case "magic_mouse":  i += 1; parseMagicMouse(lines, from: &i, parentIndent: indent, into: &cfg.magicMouse)
             case "tuning":       i += 1; parseTuning(lines, from: &i, parentIndent: indent, into: &cfg.tuning)
             case "gestures":    i += 1; parseGestures(lines, from: &i, parentIndent: indent, into: &cfg.gestures)
             default:            i += 1
             }
         }
         return cfg
+    }
+
+    private static func parseMagicMouse(_ lines: [String], from i: inout Int, parentIndent: Int, into mouse: inout MagicMouseSettings) {
+        while i < lines.count {
+            let line = lines[i]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") { i += 1; continue }
+            let (indent, key, val) = tokenize(line)
+            if indent <= parentIndent { break }
+            switch key {
+            case "enabled": mouse.enabled = boolVal(val) ?? mouse.enabled
+            case "tap_duration": mouse.tapDuration = doubleVal(val) ?? mouse.tapDuration
+            case "tap_movement": mouse.tapMovement = doubleVal(val) ?? mouse.tapMovement
+            case "swipe_distance": mouse.swipeDistance = doubleVal(val) ?? mouse.swipeDistance
+            default:
+                if let key, let gesture = MagicMouseGesture(rawValue: key) {
+                    // Unknown actions disable that binding, rather than silently
+                    // activating a default action from a newer configuration.
+                    mouse.bindings[gesture] = stringVal(val).flatMap(MagicMouseAction.init(rawValue:)) ?? MagicMouseAction.none
+                }
+            }
+            i += 1
+        }
+        mouse = MagicMouseSettings.normalized(mouse)
     }
 
     private static func parseSpeed(_ lines: [String], from i: inout Int, parentIndent: Int, into speed: inout GlideConfig.Speed) {

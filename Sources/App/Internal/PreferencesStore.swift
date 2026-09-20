@@ -30,6 +30,7 @@ final class PreferencesStore: ObservableObject {
     }
     @Published private(set) var appSwitcher: AppSwitcherSettings = .init()
     @Published private(set) var trackPoint: TrackPointSettings = .init()
+    @Published private(set) var magicMouse = MagicMouseSettings()
     @Published private(set) var edgeControls: EdgeControlsSettings = .init()
     @Published private(set) var tuning: GestureTuning = .init()
     @Published private(set) var windowTargetingMode: WindowTargetingMode = .focusedThenCursor
@@ -52,6 +53,8 @@ final class PreferencesStore: ObservableObject {
         appSwitcher = s.appSwitcher
         trackPoint = s.trackPoint
         TrackPointController.shared.applySettings()
+        magicMouse = s.magicMouse
+        MagicMouseInput.shared.applySettings()
         edgeControls = s.edgeControls
         EdgeControlsController.shared.applySettings()
         tuning = s.tuning
@@ -104,6 +107,14 @@ final class PreferencesStore: ObservableObject {
 
     func resetRules() {
         rules = Settings.defaultRules.map(sanitizedRule)
+    }
+
+    func updateMagicMouse(_ mutate: (inout MagicMouseSettings) -> Void) {
+        var value = magicMouse
+        mutate(&value)
+        Settings.shared.magicMouse = value
+        magicMouse = Settings.shared.magicMouse
+        MagicMouseInput.shared.applySettings()
     }
 
     func updateAppSwitcher(_ mutate: (inout AppSwitcherSettings) -> Void) {
