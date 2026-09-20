@@ -679,14 +679,14 @@ struct GestureApp: App {
     @StateObject private var engineBridge = EngineBridge.shared
 
     var body: some Scene {
-        MenuBarExtra("Glide", systemImage: "hand.draw") {
+        MenuBarExtra("BetterGlideTool", systemImage: "hand.draw") {
             MenuBarView()
                 .environmentObject(preferencesStore)
                 .environmentObject(engineBridge)
         }
         .menuBarExtraStyle(.menu)
 
-        Window("Glide Preferences", id: "preferences") {
+        Window("BetterGlideTool Preferences", id: "preferences") {
             PreferencesWindow()
                 .environmentObject(preferencesStore)
                 .environmentObject(engineBridge)
@@ -896,7 +896,7 @@ final class EngineBridge: ObservableObject {
                 // Still not trusted and past the fast window — stop polling entirely.
                 // A user grants Accessibility right after the launch prompt, which the
                 // fast poll catches; a later grant is caught by the didBecomeActive
-                // observer above when they next interact with Glide. Re-arming a 5s
+                // observer above when they next interact with BetterGlideTool. Re-arming a 5s
                 // timer here meant a Mac that never grants access woke the CPU every
                 // five seconds for the entire life of the process.
                 if let start = self.accessibilityPollStart,
