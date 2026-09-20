@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.betterglidetool.app</string>
     <key>CFBundleVersion</key>
-    <string>2.3.0</string>
+    <string>2.4.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.3.0</string>
+    <string>2.4.0</string>
     <key>CFBundleExecutable</key>
     <string>BetterGlideTool</string>
     <key>CFBundlePackageType</key>
@@ -29,7 +29,7 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
     <key>NSAccessibilityUsageDescription</key>
-    <string>BetterGlideTool requires Accessibility access to detect gestures and control windows.</string>
+    <string>BetterGlideTool requires Accessibility access to detect trackpad and Magic Mouse gestures and control windows.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>BetterGlideTool runs the AppleScript actions you configure, and reads app menus so you can assign menu items to gestures.</string>
 </dict>

@@ -1,6 +1,6 @@
 # BetterGlideTool
 
-A renamed fork of [Glide by Vatsal057](https://github.com/Vatsal057/Glide): a native macOS utility for trackpad gestures, window management, edge sliders, TrackPoint mode, and global shortcuts.
+A renamed fork of [Glide by Vatsal057](https://github.com/Vatsal057/Glide): a native macOS utility for trackpad and Magic Mouse gestures, window management, edge sliders, TrackPoint mode, and global shortcuts.
 
 BetterGlideTool retains Glide's gesture engine and uses its own app name, bundle identifier (`com.betterglidetool.app`), configuration directory, and release artifacts. The original MIT license and copyright are preserved in [LICENSE](LICENSE). The upstream history, changelog, artwork, and internal implementation names are retained for attribution and easier upstream merges.
 
@@ -38,7 +38,8 @@ Drag the app into Applications and grant **BetterGlideTool** Accessibility acces
 
 ## Features and configuration
 
-- Customizable multi-finger swipes, clicks, force-clicks, and holds.
+- Customizable multi-finger trackpad swipes, clicks, force-clicks, and holds.
+- Magic Mouse taps and two-finger swipes, with middle-click, window, app, and media actions.
 - Window snapping, maximizing, restoring, and a spatial app switcher.
 - Trackpad edge controls for volume, brightness, and scrolling.
 - TrackPoint pointer mode and global keyboard shortcuts.
@@ -71,3 +72,19 @@ The local Apple Silicon build was verified with the macOS 26.5 SDK. If the macOS
 ```sh
 SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk ./build.sh
 ```
+
+## Magic Mouse
+
+Open **Preferences → Magic Mouse**. Support is enabled by default when the main gesture engine is active and Accessibility permission is granted. A two-finger tap produces a middle click; a three-finger tap opens Mission Control. One-finger taps and two-finger swipes are opt-in, with separate action assignments and sensitivity controls.
+
+The new input provider, recognizer, settings, and preferences are Swift. It reuses the existing action engine and shared multitouch ABI, adds no third-party libraries, and uses IOKit device notifications instead of a new polling timer. Recognition runs on incoming touch frames; only completed actions cross to the main queue. Mouse and trackpad state stay separate.
+
+See [Magic Mouse setup and behavior](docs/13-magic-mouse.md). Force-click, haptics, TrackPoint, and trackpad edge sliders remain trackpad features.
+
+## Verification
+
+```sh
+bash Verification/run.sh
+```
+
+The checks cover touch recognition, accidental-click rejection, device isolation, and configuration import/export. They compile and run without enabling gesture handling or requesting permissions. Set `SDKROOT` as described above if your installed Command Line Tools need the older SDK.

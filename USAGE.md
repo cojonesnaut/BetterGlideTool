@@ -18,3 +18,5 @@ Complete reference for all BetterGlideTool capabilities, organized into topic gu
 12. [Trackpad Edge Controls](docs/12-edge-controls.md): Physical rim sliders for volume, brightness, backlight, scrolling, and app switching.
 
 Each guide links to the preceding and following topics for step-by-step reading.
+
+14. [Magic Mouse](docs/13-magic-mouse.md): Tap and swipe assignments, sensitivity, Bluetooth reconnection, and native gesture conflicts.
