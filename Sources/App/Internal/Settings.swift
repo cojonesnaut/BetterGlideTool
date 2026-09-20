@@ -575,7 +575,7 @@ enum AppSwitcherStyle: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// Hold-to-browse app switcher with Glide overlay and native fallback. Separate from the gesture rule list.
+/// Hold-to-browse app switcher with BetterGlideTool overlay and native fallback. Separate from the gesture rule list.
 struct AppSwitcherSettings: Codable, Equatable {
     var enabled: Bool = true
     var style: AppSwitcherStyle = .newer
@@ -1203,12 +1203,12 @@ final class Settings {
             swipe(3, .swipeDown, .minimizeAllApps, haptic: .falling),
 
             GestureRule(fingers: 3, direction: .click, action: .quitFrontmost),
-            // Quitting Finder, or Glide itself while its window is open, is never
+            // Quitting Finder, or BetterGlideTool itself while its window is open, is never
             // what the gesture meant. Listed after the broad rule so they win.
             GestureRule(fingers: 3, direction: .click, action: .closeWindow,
                         appFilter: "com.apple.finder"),
             GestureRule(fingers: 3, direction: .click, action: .closeWindow,
-                        appFilter: "com.glide.app"),
+                        appFilter: "com.betterglidetool.app"),
 
             // Screenshots are silent: the shutter is the feedback, and a haptic
             // on top of it reads as a second, phantom capture.

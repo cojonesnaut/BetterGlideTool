@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// Checks GitHub Releases for a newer Glide, then downloads and installs it
+/// Checks GitHub Releases for a newer BetterGlideTool, then downloads and installs it
 /// in place. No Sparkle, no appcast, no trip to the website.
 ///
 /// The whole flow lives in one state machine so the UI can render every stage
@@ -46,7 +46,7 @@ final class UpdateChecker: ObservableObject {
         case downloading(fraction: Double?)
         case installing
         case installed(version: String)
-        /// Downloaded fine, but Glide couldn't replace itself.
+        /// Downloaded fine, but BetterGlideTool couldn't replace itself.
         case manualInstall(dmg: URL, reason: String)
         case failed(String)
 
@@ -62,10 +62,24 @@ final class UpdateChecker: ObservableObject {
 
     // MARK: - Config
 
-    private static let latestReleaseAPI =
-        URL(string: "https://api.github.com/repos/Vatsal057/Glide/releases/latest")!
-    private static let releasesPage =
-        URL(string: "https://github.com/Vatsal057/Glide/releases/latest")!
+    // A fork must never download the upstream app as its own update.
+    // Release builds populate this value from their GitHub repository.
+    private static let repository: String? = {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "BetterGlideToolRepository") as? String,
+              value.range(of: #"^[A-Za-z0-9-]+/BetterGlideTool$"#, options: .regularExpression) != nil else {
+            return nil
+        }
+        return value
+    }()
+    static var repositoryURL: URL? {
+        repository.flatMap { URL(string: "https://github.com/\($0)") }
+    }
+    private static var latestReleaseAPI: URL? {
+        repository.flatMap { URL(string: "https://api.github.com/repos/\($0)/releases/latest") }
+    }
+    private static var releasesPage: URL? {
+        repositoryURL?.appendingPathComponent("releases/latest")
+    }
 
     /// How long a "you're up to date" answer stays good enough for the
     /// automatic check that runs when Preferences opens.
@@ -84,6 +98,7 @@ final class UpdateChecker: ObservableObject {
     /// Checks at most once per `autoCheckInterval`, and never while something
     /// is already in flight or an update is already waiting.
     func checkIfDue() {
+        guard Self.repository != nil else { return }
         switch state {
         case .idle, .upToDate, .failed:
             break
@@ -96,6 +111,10 @@ final class UpdateChecker: ObservableObject {
 
     func check() {
         guard !state.isBusy else { return }
+        guard Self.repository != nil else {
+            state = .failed("Updates will be available once BetterGlideTool has its own release repository.")
+            return
+        }
         state = .checking
 
         Task {
@@ -142,7 +161,7 @@ final class UpdateChecker: ObservableObject {
 
             // Integrity check against the checksum published beside the image.
             //
-            // Glide is ad-hoc signed, so `codesign --verify` only proves the
+            // BetterGlideTool is ad-hoc signed, so `codesign --verify` only proves the
             // bundle is internally consistent — it can't prove the bundle is
             // *ours*. This digest is the only real authenticity control in the
             // pipeline, so once a release publishes one, a failure to check it
@@ -217,7 +236,8 @@ final class UpdateChecker: ObservableObject {
     }
 
     func openReleasesPage() {
-        NSWorkspace.shared.open(Self.releasesPage)
+        guard let url = Self.releasesPage else { return }
+        NSWorkspace.shared.open(url)
     }
 
     func dismiss() {
@@ -250,9 +270,12 @@ final class UpdateChecker: ObservableObject {
     }
 
     private func fetchLatestRelease() async throws -> Update {
-        var request = URLRequest(url: Self.latestReleaseAPI)
+        guard let api = Self.latestReleaseAPI, let releasesPage = Self.releasesPage else {
+            throw URLError(.unsupportedURL)
+        }
+        var request = URLRequest(url: api)
         // GitHub's API rejects requests without a User-Agent.
-        request.setValue("Glide-App", forHTTPHeaderField: "User-Agent")
+        request.setValue("BetterGlideTool-App", forHTTPHeaderField: "User-Agent")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
 
@@ -272,7 +295,7 @@ final class UpdateChecker: ObservableObject {
             version: release.tagName.hasPrefix("v")
                 ? String(release.tagName.dropFirst())
                 : release.tagName,
-            pageURL: Self.trustedURL(release.htmlURL) ?? Self.releasesPage,
+            pageURL: Self.trustedURL(release.htmlURL) ?? releasesPage,
             dmgURL: dmg.flatMap { Self.trustedURL($0.browserDownloadURL) },
             checksumURL: checksum.flatMap { Self.trustedURL($0.browserDownloadURL) },
             size: dmg?.size ?? 0
@@ -307,7 +330,7 @@ final class UpdateChecker: ObservableObject {
 
     private func fetchText(_ url: URL) async throws -> String {
         var request = URLRequest(url: url)
-        request.setValue("Glide-App", forHTTPHeaderField: "User-Agent")
+        request.setValue("BetterGlideTool-App", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 15
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -320,7 +343,7 @@ final class UpdateChecker: ObservableObject {
 
     private func download(_ url: URL, expectedSize: Int64) async throws -> URL {
         let destination = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("Glide-update-\(UUID().uuidString).dmg")
+            .appendingPathComponent("BetterGlideTool-update-\(UUID().uuidString).dmg")
 
         return try await FileDownload.run(
             url: url,
@@ -417,7 +440,7 @@ final class FileDownload: NSObject, URLSessionDownloadDelegate {
         self.session = session
 
         var request = URLRequest(url: url)
-        request.setValue("Glide-App", forHTTPHeaderField: "User-Agent")
+        request.setValue("BetterGlideTool-App", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 60
 
         defer { session.finishTasksAndInvalidate() }

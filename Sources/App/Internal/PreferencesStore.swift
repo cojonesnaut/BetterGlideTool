@@ -252,9 +252,9 @@ final class PreferencesStore: ObservableObject {
     // ── YAML Config Export — copies live file to user-chosen location ──
     func exportConfig() {
         let panel = NSSavePanel()
-        panel.title                    = "Export Glide Config"
+        panel.title                    = "Export BetterGlideTool Config"
         panel.nameFieldLabel           = "Save As:"
-        panel.nameFieldStringValue     = "glide_config.yaml"
+        panel.nameFieldStringValue     = "betterglidetool_config.yaml"
         panel.allowedContentTypes      = [.yaml]
         panel.canCreateDirectories     = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -268,14 +268,14 @@ final class PreferencesStore: ObservableObject {
     // ── YAML Config Import — loads file, applies, saves to live path ──
     func importConfig() {
         let panel = NSOpenPanel()
-        panel.title                   = "Import Glide Config"
+        panel.title                   = "Import BetterGlideTool Config"
         panel.allowedContentTypes     = [.yaml]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories    = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         guard let config = GlideConfigStore.shared.inspect(url) else {
-            configAlert = .error("File is not a valid Glide config.")
+            configAlert = .error("File is not a valid BetterGlideTool config.")
             return
         }
 
@@ -290,7 +290,7 @@ final class PreferencesStore: ObservableObject {
             reload()
             configAlert = .importSuccess
         } else {
-            configAlert = .error("File is not a valid Glide config.")
+            configAlert = .error("File is not a valid BetterGlideTool config.")
         }
     }
 

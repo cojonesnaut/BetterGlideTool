@@ -2,12 +2,12 @@ import AppKit
 import CryptoKit
 import Foundation
 
-/// Installs a downloaded Glide DMG over the running app bundle.
+/// Installs a downloaded BetterGlideTool DMG over the running app bundle.
 ///
 /// No Sparkle. The pipeline is deliberately boring and inspectable:
 ///
 ///   1. `hdiutil attach` the disk image at a private mount point.
-///   2. Confirm the bundle inside is Glide, and is genuinely newer.
+///   2. Confirm the bundle inside is BetterGlideTool, and is genuinely newer.
 ///   3. `codesign --verify` it so a truncated or tampered download can't be installed.
 ///   4. `ditto` it to a staging folder beside the destination (same volume).
 ///   5. Atomically swap it over the running bundle.
@@ -37,15 +37,15 @@ enum UpdateInstaller {
             case .mountFailed(let detail):
                 return "Couldn't open the downloaded disk image. \(detail)"
             case .appNotFoundInImage:
-                return "The disk image didn't contain Glide.app."
+                return "The disk image didn't contain BetterGlideTool.app."
             case .wrongApp(let found):
-                return "The disk image contained \(found) instead of Glide."
+                return "The disk image contained \(found) instead of BetterGlideTool."
             case .downgrade(let image, let running):
                 return "The disk image contains version \(image), older than the installed \(running)."
             case .signatureInvalid(let detail):
                 return "The downloaded app failed signature verification. \(detail)"
             case .destinationNotWritable(let path):
-                return "Glide can't update itself at \(path). Install it manually instead."
+                return "BetterGlideTool can't update itself at \(path). Install it manually instead."
             case .stagingFailed(let detail):
                 return "Couldn't copy the new version into place. \(detail)"
             case .swapFailed(let detail):
@@ -69,7 +69,7 @@ enum UpdateInstaller {
     }
 
     /// Compares a computed digest against a published `shasum`-style line,
-    /// e.g. `d34db33f…  Glide-v2.1.0.dmg`.
+    /// e.g. `d34db33f…  BetterGlideTool-v2.1.0.dmg`.
     static func checksumMatches(_ digest: String, publishedLine: String) -> Bool {
         let published = publishedLine
             .split(whereSeparator: \.isWhitespace)
@@ -99,7 +99,7 @@ enum UpdateInstaller {
 
         // ── 1. Mount at a private mount point ──────────────────────────
         let mountPoint = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("glide-update-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("betterglidetool-update-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
 
         let attach = try shell("/usr/bin/hdiutil", [
@@ -143,7 +143,7 @@ enum UpdateInstaller {
 
         // ── 3. Verify the code signature ───────────────────────────────
         //
-        // Glide ships ad-hoc signed (it isn't notarized), and `--verify`
+        // BetterGlideTool ships ad-hoc signed (it isn't notarized), and `--verify`
         // still checks every sealed resource against the bundle's own
         // signature — which is exactly the tamper/truncation check we want.
         let verify = try shell("/usr/bin/codesign", ["--verify", "--deep", "--strict", sourceApp.path])
@@ -152,7 +152,7 @@ enum UpdateInstaller {
         }
 
         // ── 4. Stage beside the destination, on the same volume ────────
-        let staging = parent.appendingPathComponent(".glide-update-\(UUID().uuidString)", isDirectory: true)
+        let staging = parent.appendingPathComponent(".betterglidetool-update-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: staging) }
 
@@ -196,7 +196,7 @@ enum UpdateInstaller {
         // old one is deleted, so a crash mid-way still leaves a working app.
         let parked = destination
             .deletingLastPathComponent()
-            .appendingPathComponent(".glide-old-\(UUID().uuidString).app")
+            .appendingPathComponent(".betterglidetool-old-\(UUID().uuidString).app")
         do {
             try FileManager.default.moveItem(at: destination, to: parked)
         } catch {
@@ -222,7 +222,7 @@ enum UpdateInstaller {
         let pid = ProcessInfo.processInfo.processIdentifier
         let script = """
         #!/bin/sh
-        # Wait for Glide to exit (capped, so this never becomes a stray process).
+        # Wait for BetterGlideTool to exit (capped, so this never becomes a stray process).
         i=0
         while /bin/kill -0 \(pid) 2>/dev/null; do
             /bin/sleep 0.2
@@ -235,7 +235,7 @@ enum UpdateInstaller {
         """
 
         let scriptURL = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("glide-relaunch-\(UUID().uuidString).sh")
+            .appendingPathComponent("betterglidetool-relaunch-\(UUID().uuidString).sh")
 
         do {
             try script.write(to: scriptURL, atomically: true, encoding: .utf8)
@@ -258,7 +258,7 @@ enum UpdateInstaller {
 
     private static func locateApp(in mountPoint: URL) -> URL? {
         let fm = FileManager.default
-        let expected = mountPoint.appendingPathComponent("Glide.app")
+        let expected = mountPoint.appendingPathComponent("BetterGlideTool.app")
         if fm.fileExists(atPath: expected.path) { return expected }
 
         let contents = (try? fm.contentsOfDirectory(

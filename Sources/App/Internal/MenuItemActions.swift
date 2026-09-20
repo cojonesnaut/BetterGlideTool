@@ -26,7 +26,7 @@ enum MenuItemCatalog {
         guard AXIsProcessTrusted() else {
             return MenuItemScanResult(
                 options: [],
-                failureReason: "Glide needs Accessibility access. Open System Settings → Privacy & Security → Accessibility and enable Glide."
+                failureReason: "BetterGlideTool needs Accessibility access. Open System Settings → Privacy & Security → Accessibility and enable BetterGlideTool."
             )
         }
 
@@ -66,7 +66,7 @@ enum MenuItemCatalog {
                 Could not read menus for \(processName).
 
                 • Click Refresh with \(processName) open and in the foreground.
-                • In System Settings → Privacy & Security → Automation, allow Glide to control System Events.
+                • In System Settings → Privacy & Security → Automation, allow BetterGlideTool to control System Events.
                 • Some apps (including Electron apps) expose fewer menus until their menu bar is visible.
                 """
             )
