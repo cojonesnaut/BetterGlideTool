@@ -98,6 +98,7 @@ final class GestureEngine {
         AppSwitcherState.shared.startMRUTracking()
 
         isRunning = true
+        MagicMouseInput.shared.start()
         updateObservableState()
         AppLogger.debug("[Engine] Started")
     }
@@ -108,6 +109,7 @@ final class GestureEngine {
     func checkHealth() {
         guard isRunning else { return }
         inputManager.checkHealth()
+        MagicMouseInput.shared.checkHealth()
         guard !MultitouchBridge.shared.isDeviceRunning else { return }
         AppLogger.debug("[Engine] Multitouch device not running — rebuilding")
         MultitouchBridge.shared.restart(callback: glideMTCallback)
@@ -117,6 +119,7 @@ final class GestureEngine {
         guard isRunning else { return }
 
         finishIfNeeded()
+        MagicMouseInput.shared.stop()
         TrackPointController.shared.engineWillStop()
         EdgeControlsController.shared.reset()
         MultitouchBridge.shared.stop()
