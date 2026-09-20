@@ -69,8 +69,8 @@ struct GeneralTab: View {
                     Text(store.accessibilityGranted ? "Permission granted" : "Permission required")
                         .font(.headline)
                     Text(store.accessibilityGranted
-                         ? "BetterGlideTool has all the permissions it needs to intercept trackpad gestures."
-                         : "BetterGlideTool needs Accessibility access to detect trackpad gestures. Click below to grant it.")
+                         ? "BetterGlideTool has all the permissions it needs to handle trackpad and Magic Mouse gestures."
+                         : "BetterGlideTool needs Accessibility access to detect trackpad and Magic Mouse gestures. Click below to grant it.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }

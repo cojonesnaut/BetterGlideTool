@@ -3,6 +3,7 @@ import AppKit
 
 enum PrefsTab: String, CaseIterable, Identifiable {
     case gestures      = "Gestures"
+    case magicMouse    = "Magic Mouse"
     case keyboard      = "Keyboard"
     case appSwitcher   = "App Switcher"
     case trackPoint    = "TrackPoint"
@@ -19,6 +20,7 @@ enum PrefsTab: String, CaseIterable, Identifiable {
         case .trackPoint:    return "dot.circle.and.hand.point.up.left.fill"
         case .edgeControls:  return "rectangle.inset.filled"
         case .gestures:      return "hand.draw"
+        case .magicMouse:    return "magicmouse"
         case .keyboard:      return "keyboard"
         case .tuning:        return "slider.horizontal.3"
         case .general:       return "gearshape"
@@ -63,6 +65,7 @@ struct PreferencesWindow: View {
                 case .trackPoint:    TrackPointTab()
                 case .edgeControls:  EdgeControlsTab()
                 case .gestures:      GesturesTab()
+                case .magicMouse:    MagicMouseTab()
                 case .keyboard:      KeyboardTab()
                 case .tuning:        TuningTab()
                 case .general:       GeneralTab()
