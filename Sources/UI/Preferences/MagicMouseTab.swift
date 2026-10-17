@@ -52,7 +52,7 @@ struct MagicMouseTab: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }.padding(12)
                     }
-                    Text("TrackPoint, edge sliders, and force-click remain trackpad features. Magic Mouse has no pressure sensor or haptic motor.")
+                    Text("Edge sliders and force-click remain trackpad features. Magic Mouse has no pressure sensor or haptic motor.")
                         .font(.callout).foregroundStyle(.secondary)
                     Button("Reset Connection & Sensitivity") {
                         store.updateMagicMouse { $0 = MagicMouseSettings() }

@@ -31,34 +31,6 @@ struct GlideConfig {
         var autoDisableNativeGestures: Bool = false
     }
 
-    struct AppSwitcher {
-        var enabled: Bool = true
-        var style: String = "newer"
-        var fingers: Int = 3
-        var skipWindowlessFinder: Bool = true
-        var restoreMinimizedOnCommit: Bool = true
-        var animationsEnabled: Bool = false
-    }
-
-    struct TrackPoint {
-        var enabled: Bool = true
-        var activationMode: String = "double_tap_hold"
-        var zone: String = "bottom_right"
-        var zoneSize: Float = 0.198
-        var activationDelay: Double = 0.59
-        var activationMovement: Float = 0.012
-        var doubleTapWindow: Double = 0.35
-        var deadZone: Float = 0.006
-        var pushRange: Float = 0.042
-        var maxSpeed: Float = 3350
-        var acceleration: Float = 1.39
-        var hapticFeedback: Bool = true
-        var scrollEnabled: Bool = true
-        var scrollSpeed: Float = 1200
-        var invertScroll: Bool = false
-        var smoothing: Float = 0.022
-    }
-
     struct EdgeControls {
         var enabled: Bool = true
         var topEdge: String = "none"
@@ -145,8 +117,6 @@ struct GlideConfig {
 
     var speed: Speed = Speed()
     var preferences: Preferences = Preferences()
-    var appSwitcher: AppSwitcher = AppSwitcher()
-    var trackPoint: TrackPoint = TrackPoint()
     var edgeControls: EdgeControls = EdgeControls()
     var tuning: Tuning = Tuning()
     /// haptic event rawValue → pattern rawValue (see HapticEvent / HapticPattern)
@@ -184,30 +154,6 @@ extension GlideConfig {
         cfg.preferences.debugLogging     = s.debugLoggingEnabled
         cfg.preferences.launchAtLogin    = s.launchAtLoginEnabled
         cfg.preferences.autoDisableNativeGestures = s.autoDisableNativeGestures
-
-        cfg.appSwitcher.enabled = s.appSwitcher.enabled
-        cfg.appSwitcher.style   = s.appSwitcher.style.rawValue
-        cfg.appSwitcher.fingers = s.appSwitcher.fingers
-        cfg.appSwitcher.skipWindowlessFinder = s.appSwitcher.skipWindowlessFinder
-        cfg.appSwitcher.restoreMinimizedOnCommit = s.appSwitcher.restoreMinimizedOnCommit
-        cfg.appSwitcher.animationsEnabled = s.appSwitcher.animationsEnabled
-
-        cfg.trackPoint.enabled            = s.trackPoint.enabled
-        cfg.trackPoint.activationMode     = s.trackPoint.activationMode.rawValue
-        cfg.trackPoint.zone               = s.trackPoint.zone.yamlValue ?? "bottom_right"
-        cfg.trackPoint.zoneSize           = s.trackPoint.zoneSize
-        cfg.trackPoint.activationDelay    = s.trackPoint.activationDelay
-        cfg.trackPoint.activationMovement = s.trackPoint.activationMovement
-        cfg.trackPoint.doubleTapWindow    = s.trackPoint.doubleTapWindow
-        cfg.trackPoint.deadZone           = s.trackPoint.deadZone
-        cfg.trackPoint.pushRange          = s.trackPoint.pushRange
-        cfg.trackPoint.maxSpeed           = s.trackPoint.maxSpeed
-        cfg.trackPoint.acceleration       = s.trackPoint.acceleration
-        cfg.trackPoint.hapticFeedback     = s.trackPoint.hapticFeedback
-        cfg.trackPoint.scrollEnabled      = s.trackPoint.scrollEnabled
-        cfg.trackPoint.scrollSpeed        = s.trackPoint.scrollSpeed
-        cfg.trackPoint.invertScroll       = s.trackPoint.invertScroll
-        cfg.trackPoint.smoothing          = s.trackPoint.smoothing
 
         cfg.edgeControls.enabled    = s.edgeControls.enabled
         cfg.edgeControls.topEdge    = s.edgeControls.topEdge.rawValue
@@ -327,38 +273,6 @@ extension GlideConfig {
     }
 
     // ── Convert to Settings-domain types (used by Settings.apply(_:)) ──
-
-    func toAppSwitcher() -> AppSwitcherSettings {
-        var s = AppSwitcherSettings()
-        s.enabled = appSwitcher.enabled
-        s.style = AppSwitcherStyle(rawValue: appSwitcher.style) ?? .newer
-        s.fingers = appSwitcher.fingers
-        s.skipWindowlessFinder = appSwitcher.skipWindowlessFinder
-        s.restoreMinimizedOnCommit = appSwitcher.restoreMinimizedOnCommit
-        s.animationsEnabled = appSwitcher.animationsEnabled
-        return AppSwitcherSettings.normalized(s)
-    }
-
-    func toTrackPoint() -> TrackPointSettings {
-        var p = TrackPointSettings()
-        p.enabled            = trackPoint.enabled
-        p.activationMode     = TrackPointActivationMode(rawValue: trackPoint.activationMode) ?? .twoFingerHold
-        p.zone               = TrackpadZone(yamlValue: trackPoint.zone) ?? .bottomRight
-        p.zoneSize           = trackPoint.zoneSize
-        p.activationDelay    = trackPoint.activationDelay
-        p.activationMovement = trackPoint.activationMovement
-        p.doubleTapWindow    = trackPoint.doubleTapWindow
-        p.deadZone           = trackPoint.deadZone
-        p.pushRange          = trackPoint.pushRange
-        p.maxSpeed           = trackPoint.maxSpeed
-        p.acceleration       = trackPoint.acceleration
-        p.hapticFeedback     = trackPoint.hapticFeedback
-        p.scrollEnabled      = trackPoint.scrollEnabled
-        p.scrollSpeed        = trackPoint.scrollSpeed
-        p.invertScroll       = trackPoint.invertScroll
-        p.smoothing          = trackPoint.smoothing
-        return TrackPointSettings.normalized(p)
-    }
 
     func toEdgeControls() -> EdgeControlsSettings {
         var e = EdgeControlsSettings()
@@ -564,37 +478,6 @@ enum GlideConfigSerializer {
         ]
         lines += config.haptics.sorted { $0.key < $1.key }.map { "    \($0.key): \"\($0.value)\"" }
         lines += [
-            "",
-            "  # ── App Switcher (hold + swipe to browse, release to confirm) ──",
-            "  app_switcher:",
-            "    enabled: \(config.appSwitcher.enabled ? "true" : "false")",
-            "    style: \(config.appSwitcher.style)",
-            "    fingers: \(config.appSwitcher.fingers)",
-            "    skip_windowless_finder: \(config.appSwitcher.skipWindowlessFinder ? "true" : "false")",
-            "    restore_minimized_on_commit: \(config.appSwitcher.restoreMinimizedOnCommit ? "true" : "false")",
-            "    animations_enabled: \(config.appSwitcher.animationsEnabled ? "true" : "false")",
-            "",
-            "  # ── TrackPoint (pointing stick on trackpad) ──",
-            "  trackpoint:",
-            "    enabled: \(config.trackPoint.enabled ? "true" : "false")",
-            "    activation_mode: \(config.trackPoint.activationMode)",
-            "    zone: \(config.trackPoint.zone)",
-            "    zone_size: \(fmt(config.trackPoint.zoneSize))",
-            "    activation_delay: \(String(config.trackPoint.activationDelay))",
-            "    activation_movement: \(fmt(config.trackPoint.activationMovement))",
-            "    # Gap allowed between the two taps of double_tap_hold.",
-            "    double_tap_window: \(String(config.trackPoint.doubleTapWindow))",
-            "    dead_zone: \(fmt(config.trackPoint.deadZone))",
-            "    push_range: \(fmt(config.trackPoint.pushRange))",
-            "    max_speed: \(String(config.trackPoint.maxSpeed))",
-            "    acceleration: \(String(config.trackPoint.acceleration))",
-            "    haptic_feedback: \(config.trackPoint.hapticFeedback ? "true" : "false")",
-            "    # Rest a second finger anywhere on the pad to scroll with the stick.",
-            "    scroll_enabled: \(config.trackPoint.scrollEnabled ? "true" : "false")",
-            "    scroll_speed: \(String(config.trackPoint.scrollSpeed))",
-            "    invert_scroll: \(config.trackPoint.invertScroll ? "true" : "false")",
-            "    # Eases finger tremor out of the push. Seconds; 0 disables.",
-            "    smoothing: \(String(config.trackPoint.smoothing))",
             "",
             "  # ── Edge Controls ──────────────────────────────────",
             "  edge_controls:",
@@ -843,8 +726,8 @@ enum GlideConfigParser {
             case "speed":       i += 1; parseSpeed(lines, from: &i, parentIndent: indent, into: &cfg.speed)
             case "preferences":  i += 1; parsePreferences(lines, from: &i, parentIndent: indent, into: &cfg.preferences)
             case "haptics":     i += 1; parseHaptics(lines, from: &i, parentIndent: indent, into: &cfg.haptics)
-            case "app_switcher": i += 1; parseAppSwitcher(lines, from: &i, parentIndent: indent, into: &cfg.appSwitcher)
-            case "trackpoint":   i += 1; parseTrackPoint(lines, from: &i, parentIndent: indent, into: &cfg.trackPoint)
+            // Retired sections: still accepted in older files, but nothing reads them.
+            case "app_switcher", "trackpoint": i += 1; skipSection(lines, from: &i, parentIndent: indent)
             case "edge_controls", "edgecontrols": i += 1; parseEdgeControls(lines, from: &i, parentIndent: indent, into: &cfg.edgeControls)
             case "device_tuning": i += 1; parseDeviceTuning(lines, from: &i, parentIndent: indent, into: &cfg.deviceTuning)
             case "magic_mouse":  i += 1; parseMagicMouse(lines, from: &i, parentIndent: indent, into: &cfg.magicMouse)
@@ -975,52 +858,10 @@ enum GlideConfigParser {
         }
     }
 
-    private static func parseAppSwitcher(_ lines: [String], from i: inout Int, parentIndent: Int, into switcher: inout GlideConfig.AppSwitcher) {
+    private static func skipSection(_ lines: [String], from i: inout Int, parentIndent: Int) {
         while i < lines.count {
-            let line = lines[i]
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty || trimmed.hasPrefix("#") { i += 1; continue }
-            let (ind, key, val) = tokenize(line)
-            if ind <= parentIndent { return }
-            switch key {
-            case "enabled": switcher.enabled = boolVal(val) ?? switcher.enabled
-            case "style": switcher.style = stringVal(val) ?? switcher.style
-            case "fingers": switcher.fingers = intVal(val) ?? switcher.fingers
-            case "skip_windowless_finder": switcher.skipWindowlessFinder = boolVal(val) ?? switcher.skipWindowlessFinder
-            case "restore_minimized_on_commit": switcher.restoreMinimizedOnCommit = boolVal(val) ?? switcher.restoreMinimizedOnCommit
-            case "animations_enabled": switcher.animationsEnabled = boolVal(val) ?? switcher.animationsEnabled
-            default: break
-            }
-            i += 1
-        }
-    }
-
-    private static func parseTrackPoint(_ lines: [String], from i: inout Int, parentIndent: Int, into point: inout GlideConfig.TrackPoint) {
-        while i < lines.count {
-            let line = lines[i]
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty || trimmed.hasPrefix("#") { i += 1; continue }
-            let (ind, key, val) = tokenize(line)
-            if ind <= parentIndent { return }
-            switch key {
-            case "enabled":             point.enabled            = boolVal(val)   ?? point.enabled
-            case "activation_mode":     point.activationMode     = stringVal(val) ?? point.activationMode
-            case "zone":                point.zone               = stringVal(val) ?? point.zone
-            case "zone_size":           point.zoneSize           = floatVal(val)  ?? point.zoneSize
-            case "activation_delay":    point.activationDelay    = doubleVal(val) ?? point.activationDelay
-            case "activation_movement": point.activationMovement = floatVal(val)  ?? point.activationMovement
-            case "double_tap_window":   point.doubleTapWindow    = doubleVal(val) ?? point.doubleTapWindow
-            case "dead_zone":           point.deadZone           = floatVal(val)  ?? point.deadZone
-            case "push_range":          point.pushRange          = floatVal(val)  ?? point.pushRange
-            case "max_speed":           point.maxSpeed           = floatVal(val)  ?? point.maxSpeed
-            case "acceleration":        point.acceleration       = floatVal(val)  ?? point.acceleration
-            case "haptic_feedback":     point.hapticFeedback     = boolVal(val)   ?? point.hapticFeedback
-            case "scroll_enabled":      point.scrollEnabled      = boolVal(val)   ?? point.scrollEnabled
-            case "scroll_speed":        point.scrollSpeed        = floatVal(val)  ?? point.scrollSpeed
-            case "invert_scroll":       point.invertScroll       = boolVal(val)   ?? point.invertScroll
-            case "smoothing":           point.smoothing          = floatVal(val)  ?? point.smoothing
-            default: break
-            }
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty && !trimmed.hasPrefix("#") && tokenize(lines[i]).0 <= parentIndent { return }
             i += 1
         }
     }

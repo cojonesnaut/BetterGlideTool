@@ -365,8 +365,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("[TEST-EDGE] Commit hysteresis (loose to keep, strict to start) passed.")
 
         // 2d. Corners belong to no edge. With any real margin the four zones overlap
-        // there, so a corner touch has no correct owner — and it is also where the
-        // TrackPoint's corner activation lives.
+        // there, so a corner touch has no correct owner.
         let cornerEngine = EdgeGestureEngine(config: EdgeGestureEngine.Configuration(
             isEnabled: true,
             topAction: .volume, bottomAction: .volume, leftAction: .volume, rightAction: .volume,
@@ -384,30 +383,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(cornerEngine.activeEdge == .right, "Mid-edge touches must still be accepted")
         cornerEngine.consume(touch: nil, contacts: 0, timestamp: now + 1.04)
 
-        // With TrackPoint corner activation in use, the exclusion has to grow to
-        // cover its zone: 0.198 of the 97.8mm short axis is 19.4mm, so a touch 15.6mm
-        // up the right edge clears the 12mm floor but still lands in the corner zone.
-        func rightEdgeAccepted(cornerZone: Double, y: Float, id: Int32) -> Bool {
-            let engine = EdgeGestureEngine(config: EdgeGestureEngine.Configuration(
-                isEnabled: true,
-                topAction: .none, bottomAction: .none, leftAction: .none, rightAction: .volume,
-                marginMm: 12.0,
-                activationTravelMm: 4.0,
-                trackPointCornerZone: cornerZone
-            ))
-            let touch = GLDTouchPoint(identifier: id, state: 3, x: 0.99, y: y, vx: 0, vy: 0, size: 1)
-            engine.consume(touch: touch, contacts: 1, timestamp: now + 1.06)
-            let accepted = engine.activeEdge == .right
-            engine.consume(touch: nil, contacts: 0, timestamp: now + 1.08)
-            return accepted
-        }
-        assert(rightEdgeAccepted(cornerZone: 0, y: 0.16, id: 42),
-               "15.6mm up the edge is fine when TrackPoint has no corner zone")
-        assert(!rightEdgeAccepted(cornerZone: 0.198, y: 0.16, id: 43),
-               "The same spot must be refused when it falls inside the TrackPoint corner zone")
-        assert(rightEdgeAccepted(cornerZone: 0.198, y: 0.5, id: 44),
-               "The middle of the edge stays available regardless of the corner zone")
-        print("[TEST-EDGE] Corner exclusion (edge overlap + TrackPoint zone) passed.")
+        // Just past the 12mm corner floor is edge territory again: 15.6mm up the edge.
+        let nearCornerTouch = GLDTouchPoint(identifier: 42, state: 3, x: 0.99, y: 0.16, vx: 0, vy: 0, size: 1)
+        cornerEngine.consume(touch: nearCornerTouch, contacts: 1, timestamp: now + 1.06)
+        assert(cornerEngine.activeEdge == .right, "15.6mm up the edge clears the corner exclusion")
+        cornerEngine.consume(touch: nil, contacts: 0, timestamp: now + 1.08)
+        print("[TEST-EDGE] Corner exclusion passed.")
 
         // 2e. Committing must undo the pointer drift the pre-commit travel caused.
         // Suppression only stops drift from the commit onward; the events that moved
@@ -618,15 +599,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("[TEST-EDGE] Activation travel persistence and clamping passed.")
 
         // 8. Verify the scroll action and its tuning survive a YAML round-trip.
-        // `edge_controls` and `track_point` both carry scroll_speed / invert_scroll,
-        // so this also guards against the two sections bleeding into each other.
         var scrollConfig = GlideConfig()
         scrollConfig.edgeControls.rightEdge = "scroll"
         scrollConfig.edgeControls.scrollSpeed = 37.5
         scrollConfig.edgeControls.invertScroll = true
         scrollConfig.edgeControls.scrollMomentum = false
-        scrollConfig.trackPoint.scrollSpeed = 1234
-        scrollConfig.trackPoint.invertScroll = false
 
         guard let scrollParsed = GlideConfigParser.parse(yaml: GlideConfigSerializer.serialize(scrollConfig)) else {
             fatalError("Failed to parse emitted YAML with edge scroll settings")
@@ -635,8 +612,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(abs(scrollParsed.edgeControls.scrollSpeed - 37.5) < 0.01, "edge scroll_speed must round-trip")
         assert(scrollParsed.edgeControls.invertScroll == true, "edge invert_scroll must round-trip")
         assert(scrollParsed.edgeControls.scrollMomentum == false, "edge scroll_momentum must round-trip")
-        assert(abs(scrollParsed.trackPoint.scrollSpeed - 1234) < 0.01, "track_point scroll_speed must stay independent")
-        assert(scrollParsed.trackPoint.invertScroll == false, "track_point invert_scroll must stay independent")
+        // Files from before 2.11.0 still carry a retired `trackpoint:` block with its
+        // own scroll_speed / invert_scroll. It must import, and must not bleed into
+        // edge controls.
+        let legacyYAML = GlideConfigSerializer.serialize(scrollConfig).replacingOccurrences(
+            of: "  edge_controls:",
+            with: "  trackpoint:\n    enabled: true\n    scroll_speed: 1234.0\n    invert_scroll: false\n\n  edge_controls:")
+        guard let legacyParsed = GlideConfigParser.parse(yaml: legacyYAML) else {
+            fatalError("A config with a retired trackpoint block must still import")
+        }
+        assert(abs(legacyParsed.edgeControls.scrollSpeed - 37.5) < 0.01, "retired trackpoint scroll_speed must not leak")
+        assert(legacyParsed.edgeControls.invertScroll == true, "retired trackpoint invert_scroll must not leak")
 
         let mapped = scrollParsed.toEdgeControls()
         assert(mapped.rightEdge == .scroll, "\"scroll\" must map onto EdgeAction.scroll")

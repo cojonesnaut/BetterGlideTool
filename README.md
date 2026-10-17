@@ -1,6 +1,6 @@
 # BetterGlideTool
 
-A renamed fork of [Glide by Vatsal057](https://github.com/Vatsal057/Glide): a native macOS utility for trackpad and Magic Mouse gestures, window management, edge sliders, TrackPoint mode, and global shortcuts.
+A renamed fork of [Glide by Vatsal057](https://github.com/Vatsal057/Glide): a native macOS utility for trackpad and Magic Mouse gestures, window management, edge sliders, and global shortcuts.
 
 BetterGlideTool retains Glide's gesture engine and uses its own app name, bundle identifier (`com.betterglidetool.app`), configuration directory, and release artifacts. The original MIT license and copyright are preserved in [LICENSE](LICENSE). The upstream history, changelog, artwork, and internal implementation names are retained for attribution and easier upstream merges.
 
@@ -42,7 +42,7 @@ Drag the app into Applications and grant **BetterGlideTool** Accessibility acces
 - Magic Mouse regional taps and one- through four-finger swipes, with middle-click, window, app, and media actions.
 - Window snapping, maximizing, restoring, and a spatial app switcher.
 - Trackpad edge controls for volume, brightness, and scrolling.
-- TrackPoint pointer mode and global keyboard shortcuts.
+- Global keyboard shortcuts.
 - Native preferences, configuration import/export, and launch at login.
 
 Open the menu bar hand icon for preferences. See the [usage manual](USAGE.md) and [detailed guides](docs/).
@@ -79,7 +79,7 @@ Open **Preferences → device dropdown → Magic Mouse**. Support is enabled by 
 
 The new input provider, recognizer, settings, and preferences are Swift. It reuses the existing action engine and shared multitouch ABI, adds no third-party libraries, and uses IOKit device notifications instead of a new polling timer. Recognition runs on incoming touch frames; only completed actions cross to the main queue. Mouse and trackpad state stay separate.
 
-See [Magic Mouse setup and behavior](docs/13-magic-mouse.md). Force-click, haptics, TrackPoint, and trackpad edge sliders remain trackpad features.
+See [Magic Mouse setup and behavior](docs/13-magic-mouse.md). Force-click, haptics, and trackpad edge sliders remain trackpad features.
 
 ## Verification
 
@@ -93,7 +93,7 @@ The checks cover touch recognition, accidental-click rejection, device isolation
 
 Choose **Trackpad** or **Magic Mouse** from the top-left preferences dropdown. Device controls are separate; keyboard shortcuts and app-wide settings are under Shared. Both devices use the same gesture list and editor, with separate rules. Single- and two-finger taps and directional swipes are available on both devices. Filter to **1** or **2**, choose **Add Gesture**, and assign an action. New bindings remain inactive until configured.
 
-Low-finger trackpad actions are discrete and leave native pointing, scrolling, and tap-to-click intact. Use a modifier on custom swipes to distinguish them from ordinary movement. TrackPoint and active edge controls take priority. No new polling timer is used; the trackpad only enables low-contact recognition when a matching rule is active.
+Low-finger trackpad actions are discrete and leave native pointing, scrolling, and tap-to-click intact. Use a modifier on custom swipes to distinguish them from ordinary movement. Active edge controls take priority. No new polling timer is used; the trackpad only enables low-contact recognition when a matching rule is active.
 
 ## Local version 2.6.0
 

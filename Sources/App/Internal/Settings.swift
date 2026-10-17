@@ -654,222 +654,20 @@ struct EdgeMargin: Codable, Equatable {
     static let range: ClosedRange<Float> = 0.0...0.20
 }
 
-enum AppSwitcherStyle: String, Codable, CaseIterable, Identifiable {
-    case newer = "newer"
-    case legacy = "legacy"
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .newer:
-            return "Newer (App Switcher UI)"
-        case .legacy:
-            return "Legacy (Keyboard Shortcuts)"
-        }
-    }
-}
-
-/// Hold-to-browse app switcher with BetterGlideTool overlay and native fallback. Separate from the gesture rule list.
-struct AppSwitcherSettings: Codable, Equatable {
-    var enabled: Bool = true
-    var style: AppSwitcherStyle = .newer
-    /// Always 3 — horizontal swipes with three fingers are reserved for the switcher.
-    var fingers: Int = 3
+/// The app switcher's fixed behaviour. It used to be configurable from its own
+/// preferences page; that page is gone, and these are the values it shipped with.
+struct AppSwitcherSettings: Equatable {
+    /// Three-finger horizontal swipes are reserved for the switcher.
+    let enabled = true
+    let fingers = 3
     /// Skip Finder in the switcher when it has no open windows.
-    var skipWindowlessFinder: Bool = true
+    let skipWindowlessFinder = true
     /// Unminimize windows of the selected app when you release the gesture.
-    var restoreMinimizedOnCommit: Bool = true
-    /// Animate the custom overlay's selection changes. Off by default: a SwiftUI
-    /// spring re-renders the whole panel every display frame it runs, and because
-    /// selection steps arrive faster than a spring settles they overlap into a
-    /// continuous re-render for the length of a swipe — roughly doubling the CPU
-    /// the switcher costs. Only the newer overlay style animates; legacy is native.
-    var animationsEnabled: Bool = false
-
-    init(
-        enabled: Bool = true,
-        style: AppSwitcherStyle = .newer,
-        fingers: Int = 3,
-        skipWindowlessFinder: Bool = true,
-        restoreMinimizedOnCommit: Bool = true,
-        animationsEnabled: Bool = false
-    ) {
-        self.enabled = enabled
-        self.style = style
-        self.fingers = fingers
-        self.skipWindowlessFinder = skipWindowlessFinder
-        self.restoreMinimizedOnCommit = restoreMinimizedOnCommit
-        self.animationsEnabled = animationsEnabled
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
-        style = try c.decodeIfPresent(AppSwitcherStyle.self, forKey: .style) ?? .newer
-        fingers = try c.decodeIfPresent(Int.self, forKey: .fingers) ?? 3
-        skipWindowlessFinder = try c.decodeIfPresent(Bool.self, forKey: .skipWindowlessFinder) ?? true
-        restoreMinimizedOnCommit = try c.decodeIfPresent(Bool.self, forKey: .restoreMinimizedOnCommit) ?? true
-        animationsEnabled = try c.decodeIfPresent(Bool.self, forKey: .animationsEnabled) ?? false
-    }
-
-    static func normalized(_ s: AppSwitcherSettings) -> AppSwitcherSettings {
-        var n = s
-        n.fingers = 3
-        return n
-    }
-}
-
-/// Turns one corner of the trackpad into a pointing stick. Rest a finger in the
-/// zone, hold briefly to engage, then push: the offset from where the finger
-/// landed becomes cursor *velocity*, so the whole screen is reachable from a
-/// patch of trackpad the size of a fingertip. Separate from the gesture rule
-/// list — it reads a single contact, which no rule ever does.
-/// What a TrackPoint corner drives.
-enum TrackPointMode: String, Codable, CaseIterable {
-    case pointer
-    case scroll
-}
-
-enum TrackPointActivationMode: String, Codable, CaseIterable {
-    case twoFingerHold = "two_finger_hold"
-    case cornerZone    = "corner"
-    case anywhere      = "anywhere"
-    case doubleTapHold = "double_tap_hold"
-
-    var displayName: String {
-        switch self {
-        case .twoFingerHold: return "Two-Finger Hold"
-        case .cornerZone:    return "Corner Hold"
-        case .anywhere:      return "One-Finger Hold"
-        case .doubleTapHold: return "Double-Tap & Hold"
-        }
-    }
-}
-
-struct TrackPointSettings: Codable, Equatable {
-    /// On by default. It is the one thing here a trackpad cannot already do, so
-    /// leaving it switched off means most people never find out it exists —
-    /// and `doubleTapHold` is deliberate enough that nobody triggers it by
-    /// accident while they are still unaware of it.
-    var enabled: Bool = true
-    /// How TrackPoint is initiated: 2-finger hold anywhere, 1-finger corner hold,
-    /// 1-finger hold anywhere, or 1-finger double-tap-then-hold anywhere.
-    ///
-    /// Double-tap-and-hold is the default because it is the only mode that can't
-    /// be entered by resting a finger on the pad: every hold-only mode has to
-    /// choose between engaging too eagerly and feeling sluggish.
-    var activationMode: TrackPointActivationMode = .doubleTapHold
-    /// Which corner anchors the pointer stick (when activationMode is .cornerZone).
-    var zone: TrackpadZone = .bottomRight
-    /// Resting a second finger anywhere on the pad turns the engaged stick into a
-    /// scroller — the same role the middle button plays on a real TrackPoint.
-    /// A held finger rather than a toggle, so the mode can't be left on by
-    /// accident, and it costs no extra corner.
-    var scrollEnabled: Bool = true
-    /// Scroll speed in points/second at full push.
-    var scrollSpeed: Float = 1200
-    /// Reverses both scroll axes, matching what the system's natural-scrolling
-    /// switch does.
-    var invertScroll: Bool = false
-    /// Zone depth along each axis (normalized). 0.20 → outer 20% of both axes.
-    var zoneSize: Float = 0.198
-    /// Motionless time before the stick engages or arms. Keeps normal cursor
-    /// drags or scrolls from being hijacked.
-    var activationDelay: TimeInterval = 0.59
-    /// Push distance the finger travels before it must have committed — exceed
-    /// it during `activationDelay` and the touch is left to macOS.
-    var activationMovement: Float = 0.012
-    /// Longest gap between the first tap lifting and the second tap landing for
-    /// the pair to count as a double tap (`.doubleTapHold` only).
-    var doubleTapWindow: TimeInterval = 0.35
-    /// Push distance ignored around the anchor, so a resting finger doesn't drift.
-    var deadZone: Float = 0.006
-    /// Push distance that reaches `maxSpeed`. Smaller feels twitchier.
-    var pushRange: Float = 0.042
-    /// Cursor speed in points/second at full push.
-    var maxSpeed: Float = 3350
-    /// Response curve exponent. 1 is linear; higher trades top-end reach for
-    /// fine control near the anchor, which is what a pointing stick wants.
-    ///
-    /// Paired with a short `pushRange` and a high `maxSpeed`: a small push stays
-    /// slow enough to land on a pixel, and the whole screen is still one lean
-    /// away. A gentler curve at this top speed overshoots everything.
-    var acceleration: Float = 1.39
-    /// Time constant, in seconds, for easing the push toward what the finger is
-    /// actually doing.
-    ///
-    /// A stick works at deflections of a few millimetres, where finger tremor is a
-    /// large fraction of the signal. It shows up as speed jitter and, more
-    /// noticeably, as direction wander: a small absolute wobble swings the angle a
-    /// long way when the push is short.
-    ///
-    /// Measured against simulated 0.3mm tremor on a 0.020 push, the default cuts
-    /// direction wander from about 2.1° to 0.9° and speed jitter by a bit over half,
-    /// for roughly 28 ms to reach 63% of speed from rest. Returns diminish sharply
-    /// past ~25 ms while the lag keeps growing, which is why the default sits here
-    /// rather than higher. The speed a held push *settles* at is unchanged, so this
-    /// does not affect the other Feel settings. 0 restores the unfiltered behaviour
-    /// exactly.
-    var smoothing: Float = 0.022
-
-    /// Tap the Taptic Engine when the stick engages and releases.
-    var hapticFeedback: Bool = true
-
-    init() {}
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        enabled            = try c.decodeIfPresent(Bool.self,         forKey: .enabled)            ?? true
-        activationMode     = (try? c.decodeIfPresent(TrackPointActivationMode.self, forKey: .activationMode))
-                             .flatMap { $0 }                                                       ?? .doubleTapHold
-        zone               = (try? c.decodeIfPresent(TrackpadZone.self, forKey: .zone))
-                             .flatMap { $0 }                                                       ?? .bottomRight
-        scrollEnabled      = try c.decodeIfPresent(Bool.self,         forKey: .scrollEnabled)      ?? true
-        scrollSpeed        = try c.decodeIfPresent(Float.self,        forKey: .scrollSpeed)        ?? 1200
-        invertScroll       = try c.decodeIfPresent(Bool.self,         forKey: .invertScroll)       ?? false
-        zoneSize           = try c.decodeIfPresent(Float.self,        forKey: .zoneSize)           ?? 0.198
-        activationDelay    = try c.decodeIfPresent(TimeInterval.self, forKey: .activationDelay)    ?? 0.59
-        activationMovement = try c.decodeIfPresent(Float.self,        forKey: .activationMovement) ?? 0.012
-        doubleTapWindow    = try c.decodeIfPresent(TimeInterval.self, forKey: .doubleTapWindow)    ?? 0.35
-        deadZone           = try c.decodeIfPresent(Float.self,        forKey: .deadZone)           ?? 0.005
-        pushRange          = try c.decodeIfPresent(Float.self,        forKey: .pushRange)          ?? 0.055
-        maxSpeed           = try c.decodeIfPresent(Float.self,        forKey: .maxSpeed)           ?? 1500
-        acceleration       = try c.decodeIfPresent(Float.self,        forKey: .acceleration)       ?? 2.2
-        smoothing          = try c.decodeIfPresent(Float.self,        forKey: .smoothing)          ?? 0.022
-        hapticFeedback     = try c.decodeIfPresent(Bool.self,         forKey: .hapticFeedback)     ?? true
-    }
-
-    static let zoneSizeRange:        ClosedRange<Float>        = 0.08...0.35
-    static let activationDelayRange: ClosedRange<TimeInterval> = 0.0...1.0
-    static let doubleTapWindowRange: ClosedRange<TimeInterval> = 0.15...0.80
-    static let deadZoneRange:        ClosedRange<Float>        = 0.0...0.02
-    static let pushRangeRange:       ClosedRange<Float>        = 0.02...0.15
-    static let maxSpeedRange:        ClosedRange<Float>        = 200...4000
-    static let scrollSpeedRange:     ClosedRange<Float>        = 200...4000
-    static let accelerationRange:    ClosedRange<Float>        = 1.0...4.0
-    static let smoothingRange:       ClosedRange<Float>        = 0.0...0.12
-
-    static func normalized(_ s: TrackPointSettings) -> TrackPointSettings {
-        var n = s
-        if n.activationMode == .cornerZone && !TrackpadZone.cornerCases.contains(n.zone) {
-            n.zone = .bottomRight
-        }
-        n.scrollSpeed        = n.scrollSpeed.clamped(to: scrollSpeedRange)
-        n.zoneSize           = n.zoneSize.clamped(to: zoneSizeRange)
-        n.activationDelay    = n.activationDelay.clamped(to: activationDelayRange)
-        n.activationMovement = n.activationMovement.clamped(to: 0.004...0.05)
-        n.doubleTapWindow    = n.doubleTapWindow.clamped(to: doubleTapWindowRange)
-        n.deadZone           = n.deadZone.clamped(to: deadZoneRange)
-        n.pushRange          = n.pushRange.clamped(to: pushRangeRange)
-        n.maxSpeed           = n.maxSpeed.clamped(to: maxSpeedRange)
-        n.acceleration       = n.acceleration.clamped(to: accelerationRange)
-        n.smoothing          = n.smoothing.clamped(to: smoothingRange)
-        // The dead zone has to stay meaningfully inside the push range or every
-        // push is either ignored or instantly at full speed.
-        n.deadZone           = min(n.deadZone, n.pushRange * 0.6)
-        return n
-    }
+    let restoreMinimizedOnCommit = true
+    /// Animate the overlay's selection changes. Off: a SwiftUI spring re-renders
+    /// the whole panel every display frame it runs, and selection steps arrive
+    /// faster than a spring settles, roughly doubling the CPU the switcher costs.
+    let animationsEnabled = false
 }
 
 struct EdgeControlsSettings: Codable, Equatable {
@@ -1012,14 +810,12 @@ final class Settings {
     static let shared = Settings()
 
     private init() {
-        _rules = Self.normalizeRules(Self.defaultRules + MouseRuleBridge.migrate(MagicMouseSettings()), appSwitcher: _appSwitcher)
+        _rules = Self.normalizeRules(Self.defaultRules + MouseRuleBridge.migrate(MagicMouseSettings()), appSwitcher: appSwitcher)
     }
 
     // MARK: Backing stores
 
     private var _rules:           [GestureRule]
-    private var _appSwitcher:     AppSwitcherSettings = AppSwitcherSettings()
-    private var _trackPoint:      TrackPointSettings  = TrackPointSettings()
     private var _magicMouse = MagicMouseSettings()
     private var _deviceTuning = DeviceTuningSettings()
     var deviceTuning: DeviceTuningSettings {
@@ -1042,18 +838,10 @@ final class Settings {
 
     var rules: [GestureRule] {
         get { _rules }
-        set { _rules = Self.normalizeRules(newValue, appSwitcher: _appSwitcher); GlideConfigStore.shared.scheduleSave() }
+        set { _rules = Self.normalizeRules(newValue, appSwitcher: appSwitcher); GlideConfigStore.shared.scheduleSave() }
     }
 
-    var appSwitcher: AppSwitcherSettings {
-        get { _appSwitcher }
-        set { _appSwitcher = AppSwitcherSettings.normalized(newValue); GlideConfigStore.shared.scheduleSave() }
-    }
-
-    var trackPoint: TrackPointSettings {
-        get { _trackPoint }
-        set { _trackPoint = TrackPointSettings.normalized(newValue); GlideConfigStore.shared.scheduleSave() }
-    }
+    let appSwitcher = AppSwitcherSettings()
 
     var magicMouse: MagicMouseSettings {
         get { _magicMouse }
@@ -1110,13 +898,6 @@ final class Settings {
 
     func resetTuning() { tuning = GestureTuning() }
 
-    /// Keeps `enabled` — resetting the feel of the stick shouldn't switch it off.
-    func resetTrackPoint() {
-        var fresh = TrackPointSettings()
-        fresh.enabled = _trackPoint.enabled
-        trackPoint = fresh
-    }
-
     func resetEdgeControls() {
         var fresh = EdgeControlsSettings()
         fresh.enabled = _edgeControls.enabled
@@ -1126,18 +907,14 @@ final class Settings {
     // MARK: Batch load — bypasses per-field saves (called by GlideConfigStore.load)
 
     func apply(_ config: GlideConfig) {
-        var switcher = config.toAppSwitcher()
         var loadedRules = config.toRules()
         if config.gestureSchemaVersion == 0 && !loadedRules.contains(where: { $0.device == .magicMouse }) {
             loadedRules += MouseRuleBridge.migrate(config.magicMouse)
         }
-        Self.migrateLegacyAppSwitcherRules(into: &switcher, rules: &loadedRules)
-        _appSwitcher     = AppSwitcherSettings.normalized(switcher)
-        _trackPoint      = TrackPointSettings.normalized(config.toTrackPoint())
         _edgeControls    = EdgeControlsSettings.normalized(config.toEdgeControls())
         _magicMouse      = MagicMouseSettings.normalized(config.magicMouse)
         _deviceTuning = DeviceTuningSettings.normalized(config.deviceTuning)
-        _rules           = Self.normalizeRules(loadedRules, appSwitcher: _appSwitcher)
+        _rules           = Self.normalizeRules(loadedRules, appSwitcher: appSwitcher)
         let normalizedTuning = Self.normalizedTuning(config.toTuning())
         tuningLock.lock(); _tuning = normalizedTuning; tuningLock.unlock()
         _windowTargeting = WindowTargetingMode(rawValue: config.preferences.windowTargeting) ?? .focusedThenCursor
@@ -1158,13 +935,6 @@ final class Settings {
 
     static func isAppSwitcherAction(_ action: GestureAction) -> Bool {
         action == .appSwitcherNext || action == .appSwitcherPrev
-    }
-
-    /// Pulls legacy app-switcher gesture rules into `AppSwitcherSettings` and removes them from the list.
-    static func migrateLegacyAppSwitcherRules(into switcher: inout AppSwitcherSettings, rules: inout [GestureRule]) {
-        guard rules.contains(where: { isAppSwitcherAction($0.action) }) else { return }
-        if !switcher.enabled { switcher.enabled = true }
-        rules.removeAll { isAppSwitcherAction($0.action) }
     }
 
     /// Removes horizontal swipe rules that would conflict with the reserved app-switcher slot.
@@ -1274,8 +1044,6 @@ final class Settings {
     }
 
     // MARK: Defaults
-
-    static let defaultAppSwitcher = AppSwitcherSettings(enabled: true, fingers: 3)
 
     /// The gesture set a new install starts with, and what "Reset to Defaults"
     /// restores.

@@ -18,17 +18,16 @@ final class GestureInputManager {
     var clickObservationSource: CFRunLoopSource?
     var clickTapInstalled = false
 
-    var trackPointTap: CFMachPort?
-    var trackPointSource: CFRunLoopSource?
-    private(set) var trackPointSuppressionEnabled = false
+    var pointerSuppressionTap: CFMachPort?
+    var pointerSuppressionSource: CFRunLoopSource?
+    private(set) var pointerSuppressionEnabled = false
 
     /// Features that currently need native pointer motion swallowed. Held as a
-    /// set rather than a flag because two of them can overlap, and whichever
-    /// finished first would otherwise switch the tap off underneath the other.
+    /// set rather than a flag so a second feature can share the tap without one
+    /// finishing first and switching it off underneath the other.
     private var pointerSuppressionOwners: Set<PointerSuppressionOwner> = []
 
     enum PointerSuppressionOwner: Hashable {
-        case trackPoint
         case edgeControls
     }
 
@@ -44,14 +43,14 @@ final class GestureInputManager {
     func setupTaps() {
         setupSuppressionTap()
         setupClickObservationTap()
-        // The TrackPoint tap is created by setTrackPointSuppression the first time
-        // the stick engages — most users never own an event tap they never use.
+        // The pointer-suppression tap is created the first time a feature claims
+        // it — most users never own an event tap they never use.
     }
 
     func teardownTaps() {
         teardownSuppressionTap()
         teardownClickObservationTap()
-        teardownTrackPointTap()
+        teardownPointerSuppressionTap()
     }
 
     func setupSuppressionTap() {
@@ -129,37 +128,32 @@ final class GestureInputManager {
         suppressionEnabled = false
     }
 
-    // MARK: - TrackPoint suppression
+    // MARK: - Pointer suppression
     //
-    // While the corner TrackPoint drives the cursor, the finger holding the
-    // stick is still a finger on the trackpad — macOS reads its drift as
-    // ordinary pointer movement and fights the synthetic motion. This tap
-    // swallows native pointer movement for the duration, passing only the
-    // events CursorDriver posts (identified by their source user data).
-    //
-    // Scroll is suppressed for the same reason: a second resting finger is what
-    // puts the stick into scroll mode, and macOS reads that same pair of contacts
-    // as a two-finger scroll. Left unsuppressed, every stick scroll would arrive
-    // twice. Below two contacts macOS emits no scroll anyway, so covering it
-    // costs the pointer mode nothing.
+    // An edge control runs on a single finger, which macOS also reads as ordinary
+    // pointer movement. While one is active this tap swallows native pointer
+    // movement, passing only the events CursorDriver and ScrollDriver post
+    // (identified by their source user data). Scroll is covered too, so native
+    // momentum left over from a two-finger scroll cannot land on top of an edge
+    // scroll.
 
-    func setupTrackPointTap() {
+    func setupPointerSuppressionTap() {
         let mask = UInt64(1 << CGEventType.mouseMoved.rawValue)
                  | UInt64(1 << CGEventType.leftMouseDragged.rawValue)
                  | UInt64(1 << CGEventType.rightMouseDragged.rawValue)
                  | UInt64(1 << CGEventType.otherMouseDragged.rawValue)
                  | UInt64(1 << CGEventType.scrollWheel.rawValue)
 
-        trackPointTap = CGEvent.tapCreate(
+        pointerSuppressionTap = CGEvent.tapCreate(
             tap: .cghidEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, cgEvent, _ in
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                    if GestureEngine.shared.inputManager.trackPointSuppressionEnabled,
-                       let tap = GestureEngine.shared.inputManager.trackPointTap {
-                        AppLogger.debug("[Input] TrackPoint tap timed out — re-enabling")
+                    if GestureEngine.shared.inputManager.pointerSuppressionEnabled,
+                       let tap = GestureEngine.shared.inputManager.pointerSuppressionTap {
+                        AppLogger.debug("[Input] Pointer suppression tap timed out — re-enabling")
                         CGEvent.tapEnable(tap: tap, enable: true)
                     }
                     return nil
@@ -171,15 +165,11 @@ final class GestureInputManager {
             },
             userInfo: nil)
 
-        if let tap = trackPointTap {
-            trackPointSource = CFMachPortCreateRunLoopSource(nil, tap, 0)
-            CFRunLoopAddSource(CFRunLoopGetMain(), trackPointSource, .commonModes)
+        if let tap = pointerSuppressionTap {
+            pointerSuppressionSource = CFMachPortCreateRunLoopSource(nil, tap, 0)
+            CFRunLoopAddSource(CFRunLoopGetMain(), pointerSuppressionSource, .commonModes)
             CGEvent.tapEnable(tap: tap, enable: false)
         }
-    }
-
-    func setTrackPointSuppression(_ active: Bool) {
-        setPointerSuppression(active, owner: .trackPoint)
     }
 
     /// Claims or releases pointer suppression on behalf of one feature. The tap
@@ -194,21 +184,21 @@ final class GestureInputManager {
     }
 
     private func applyPointerSuppression(_ active: Bool) {
-        guard active != trackPointSuppressionEnabled else { return }
+        guard active != pointerSuppressionEnabled else { return }
         // Create on demand: the tap only exists once the feature is used.
-        if active && trackPointTap == nil { setupTrackPointTap() }
-        guard let tap = trackPointTap else { return }
-        trackPointSuppressionEnabled = active
+        if active && pointerSuppressionTap == nil { setupPointerSuppressionTap() }
+        guard let tap = pointerSuppressionTap else { return }
+        pointerSuppressionEnabled = active
         CGEvent.tapEnable(tap: tap, enable: active)
     }
 
-    func teardownTrackPointTap() {
-        if let tap = trackPointTap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let src = trackPointSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
-        if let tap = trackPointTap { CFMachPortInvalidate(tap) }
-        trackPointTap    = nil
-        trackPointSource = nil
-        trackPointSuppressionEnabled = false
+    func teardownPointerSuppressionTap() {
+        if let tap = pointerSuppressionTap { CGEvent.tapEnable(tap: tap, enable: false) }
+        if let src = pointerSuppressionSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
+        if let tap = pointerSuppressionTap { CFMachPortInvalidate(tap) }
+        pointerSuppressionTap    = nil
+        pointerSuppressionSource = nil
+        pointerSuppressionEnabled = false
         pointerSuppressionOwners.removeAll()
     }
 
@@ -319,16 +309,16 @@ final class GestureInputManager {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
         }
-        if let tap = trackPointTap {
+        if let tap = pointerSuppressionTap {
             if !CFMachPortIsValid(tap) {
                 // Teardown clears the owner set, so carry it across the rebuild —
-                // otherwise a live TrackPoint or edge scroll loses its claim and
-                // the native pointer starts fighting the synthetic events again.
+                // otherwise a live edge control loses its claim and the native
+                // pointer starts fighting the synthetic events again.
                 let owners = pointerSuppressionOwners
-                teardownTrackPointTap(); setupTrackPointTap()
+                teardownPointerSuppressionTap(); setupPointerSuppressionTap()
                 pointerSuppressionOwners = owners
                 applyPointerSuppression(!owners.isEmpty)
-            } else if !CGEvent.tapIsEnabled(tap: tap) && trackPointSuppressionEnabled {
+            } else if !CGEvent.tapIsEnabled(tap: tap) && pointerSuppressionEnabled {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
         }

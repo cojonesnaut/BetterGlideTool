@@ -342,8 +342,9 @@ struct ConfigurationTests {
         let threeDirections = GestureDirection.available(fingers: 3, device: .magicMouse)
         precondition(threeDirections.count == 12)
         precondition(threeDirections.allSatisfy { GestureDirection.available(fingers: 3, device: .trackpad).contains($0) })
-        let originalSwitcher = Settings.shared.appSwitcher
-        Settings.shared.appSwitcher.enabled = false
+        // Plain three-finger left/right on the trackpad always belongs to the App
+        // Switcher, so those three rules are expected to be dropped there.
+        let switcherReserved: Set<GestureDirection> = [.swipeLeft, .swipeRight, .swipeLeftRight]
         for device in [GestureDevice.trackpad, .magicMouse] {
             let rules = threeDirections.map { direction -> GestureRule in
                 var rule = GestureRule(fingers: 3, direction: direction, action: .showDesktop)
@@ -352,7 +353,8 @@ struct ConfigurationTests {
             }
             Settings.shared.rules = rules
             let roundtrip = GlideConfigParser.parse(yaml: GlideConfigSerializer.serialize(GlideConfig.fromSettings()))!.toRules()
-            precondition(Set(roundtrip.map(\.direction)) == Set(threeDirections))
+            let expected = device == .trackpad ? Set(threeDirections).subtracting(switcherReserved) : Set(threeDirections)
+            precondition(Set(roundtrip.map(\.direction)) == expected)
             precondition(roundtrip.allSatisfy { $0.device == device && $0.fingers == 3 })
             let recognition = MouseRuleBridge.recognitionSettings(rules: rules, device: device)
             for gesture in MagicMouseGesture.allCases where gesture.fingers == 3 {
@@ -360,7 +362,6 @@ struct ConfigurationTests {
                 precondition((recognition.action(for: gesture) != .none) == shouldRecognize, "Trackpad keeps existing three-finger click/swipe recognition without duplicating it")
             }
         }
-        Settings.shared.appSwitcher = originalSwitcher
         var scrollingConfig = GlideConfig()
         scrollingConfig.magicMouse.invertVerticalScrolling = true
         scrollingConfig.magicMouse.invertHorizontalScrolling = true

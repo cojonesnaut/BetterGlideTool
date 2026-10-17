@@ -51,8 +51,7 @@ final class EdgeAppSwitcherSession {
 
         Haptic.switcherOpen()
 
-        if Settings.shared.appSwitcher.style == .newer,
-           AppSwitcherOverlayController.shared.show(
+        if AppSwitcherOverlayController.shared.show(
             apps: customApps,
             windowsByApp: customWindows,
             selectedAppIndex: customIndex,

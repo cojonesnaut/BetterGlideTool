@@ -80,40 +80,6 @@ enum TouchTracker {
         _edgeMargin = edgeMargin
     }
 
-    fileprivate static var _trackPointEnabled: Bool = false
-    fileprivate static var _trackPointMode: TrackPointActivationMode = .twoFingerHold
-    /// The single corner that anchors the stick. Scrolling is a second finger on
-    /// the pad, not a second corner, so one zone covers both modes.
-    fileprivate static var _trackPointZone: TrackpadZone = .bottomRight
-    fileprivate static var _trackPointReach: Float = 0.16
-    /// Identifier of the contact the TrackPoint is following, or -1. Keeps frames
-    /// flowing for that one finger even after others join — so a second finger can
-    /// tap-to-click or scroll without dropping the session, and so the controller
-    /// still hears the lift of a contact it has already disqualified.
-    fileprivate static var _trackPointAnchoredID: Int32 = -1
-    fileprivate static var _trackPointStreaming: Bool = false
-
-    static func updateTrackPointCache(enabled: Bool,
-                                      mode: TrackPointActivationMode,
-                                      zone: TrackpadZone,
-                                      reach: Float) {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        _trackPointEnabled = enabled
-        _trackPointMode = mode
-        _trackPointZone = zone
-        _trackPointReach = reach
-        if !enabled {
-            _trackPointAnchoredID = -1
-            _trackPointStreaming = false
-        }
-    }
-
-    static var trackPointAnchoredID: Int32 {
-        get { stateLock.lock(); defer { stateLock.unlock() }; return _trackPointAnchoredID }
-        set { stateLock.lock(); defer { stateLock.unlock() }; _trackPointAnchoredID = newValue }
-    }
-
     fileprivate static var _edgeControlsEnabled: Bool = false
     fileprivate static var _edgeControlsStreaming: Bool = false
 
@@ -204,8 +170,6 @@ enum TouchTracker {
         _oldestFingerAge = 0
         _newestFingerAge = 0
         _lastFingerLiftTime = 0
-        _trackPointAnchoredID = -1
-        _trackPointStreaming = false
         _edgeControlsStreaming = false
         stateLock.unlock()
 
@@ -217,7 +181,6 @@ enum TouchTracker {
 }
 let glideMTCallback: GLDTFrameCallback = { points, count, timestamp, context in
     let fixedFingerSession = LowFingerTrackpadInput.shared.receive(points, count: count, timestamp: timestamp)
-    feedTrackPoint(points, count)
     feedEdgeControls(points, count, timestamp)
 
     var activeTouches: [GLDTouchPoint] = []
@@ -354,85 +317,6 @@ let glideMTCallback: GLDTFrameCallback = { points, count, timestamp, context in
     let frameData = TouchFrameData(count: activeCount, cx: cx, cy: cy, spread: spread, coherence: coherence,
                                    timestamp: timestamp)
     TouchTracker.enqueueFrame(frameData)
-}
-
-/// Feeds the corner TrackPoint from the raw contact list, ahead of everything
-/// the gesture pipeline does with the same frame.
-///
-/// Deliberately independent of `TouchFrameData`: it reads a single contact,
-/// which no gesture rule ever matches, and it runs *before* the edge-margin
-/// palm rejection — a stick anchored in the corner of the pad would otherwise
-/// be filtered away by the very margin that protects swipes from stray thumbs.
-///
-/// Costs nothing when the feature is off, and nothing beyond a bounds check
-/// when it's on but no finger is in the zone.
-private func feedTrackPoint(_ points: UnsafePointer<GLDTouchPoint>?, _ count: Int32) {
-    TouchTracker.stateLock.lock()
-    let enabled      = TouchTracker._trackPointEnabled
-    let mode         = TouchTracker._trackPointMode
-    let zone         = TouchTracker._trackPointZone
-    let reach        = TouchTracker._trackPointReach
-    let anchoredID   = TouchTracker._trackPointAnchoredID
-    let wasStreaming = TouchTracker._trackPointStreaming
-    TouchTracker.stateLock.unlock()
-
-    guard enabled else { return }
-
-    var contacts = 0
-    var s1: TrackPointSample?
-    var s2: TrackPointSample?
-    var anchored: TrackPointSample?
-    if let points, count > 0 {
-        for index in 0..<Int(count) {
-            let touch = points[index]
-            guard touch.state >= 3 && touch.state <= 4 else { continue }
-            contacts += 1
-            let sample = TrackPointSample(touch)
-            if contacts == 1 { s1 = sample }
-            else if contacts == 2 { s2 = sample }
-            if touch.identifier == anchoredID { anchored = sample }
-        }
-    }
-
-    var candidate: TrackPointSample?
-    if contacts == 1, let s1 {
-        switch mode {
-        case .cornerZone:
-            if zone.contains(x: s1.x, y: s1.y, reach: reach) { candidate = s1 }
-        case .anywhere, .doubleTapHold:
-            candidate = s1
-        case .twoFingerHold:
-            candidate = nil
-        }
-    }
-
-    let streaming: Bool
-    if anchoredID >= 0 {
-        streaming = true
-    } else {
-        switch mode {
-        case .cornerZone, .anywhere, .doubleTapHold:
-            streaming = candidate != nil
-        case .twoFingerHold:
-            streaming = contacts == 2 || (wasStreaming && contacts == 1)
-        }
-    }
-
-    guard streaming || wasStreaming else { return }
-
-    TouchTracker.stateLock.lock()
-    TouchTracker._trackPointStreaming = streaming
-    TouchTracker.stateLock.unlock()
-
-    DispatchQueue.main.async {
-        TrackPointController.shared.ingest(
-            candidate: candidate,
-            tracked: anchored,
-            sample1: s1,
-            sample2: s2,
-            contacts: contacts
-        )
-    }
 }
 
 /// Feeds Edge Controls from raw single-finger contact frames, ahead of

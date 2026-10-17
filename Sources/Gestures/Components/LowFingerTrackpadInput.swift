@@ -176,8 +176,8 @@ final class LowFingerTrackpadInput: ObservableObject {
             guard valid else { return }
             self.lastGesture = gesture.title
             guard GestureEngine.shared.isRunning else { self.actionStatus = "Gestures are paused"; return }
-            guard !TrackPointController.shared.isEngaged, EdgeControlsController.shared.activeEdge == nil else {
-                self.actionStatus = "TrackPoint or an edge control is active"; return
+            guard EdgeControlsController.shared.activeEdge == nil else {
+                self.actionStatus = "An edge control is active"; return
             }
             guard let rule = MouseRuleBridge.resolve(gesture, device: .trackpad, modifiers: modifiers, location: location) else {
                 self.actionStatus = "Recognized, but no rule matches this app, modifiers and window state"; return

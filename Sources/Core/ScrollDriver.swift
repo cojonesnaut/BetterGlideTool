@@ -5,13 +5,12 @@ import CoreGraphics
 // MARK: - ScrollDriver
 // ─────────────────────────────────────────────
 
-/// Emits scroll wheel events for the TrackPoint's scroll stick.
+/// Emits trackpad-style scroll events for edge scrolling.
 ///
-/// Pixel units rather than lines, so slow pushes scroll smoothly instead of
-/// jumping a line at a time. Wheel deltas are integers, so the fractional part
-/// of each step is carried forward — without that, any push whose per-tick
-/// distance rounds below one pixel would scroll nothing at all, and the slow end
-/// of the range would be dead.
+/// Wheel deltas are integers, so the fractional part of each step is carried
+/// forward into the integer fields — without that, any step below one pixel
+/// would scroll nothing for apps that read them. The point deltas carry the
+/// exact value regardless.
 final class ScrollDriver {
 
     static let shared = ScrollDriver()
@@ -25,30 +24,6 @@ final class ScrollDriver {
     func begin() {
         residualVertical = 0
         residualHorizontal = 0
-    }
-
-    /// - Parameters:
-    ///   - vertical: points to scroll, positive scrolls toward the start of the document.
-    ///   - horizontal: points to scroll, positive scrolls toward the left.
-    func scroll(vertical: Double, horizontal: Double) {
-        residualVertical += vertical
-        residualHorizontal += horizontal
-
-        let stepVertical = residualVertical.rounded(.towardZero)
-        let stepHorizontal = residualHorizontal.rounded(.towardZero)
-        guard stepVertical != 0 || stepHorizontal != 0 else { return }
-        residualVertical -= stepVertical
-        residualHorizontal -= stepHorizontal
-
-        guard let source = eventSource ?? CGEventSource(stateID: .hidSystemState),
-              let event = CGEvent(scrollWheelEvent2Source: source,
-                                  units: .pixel,
-                                  wheelCount: 2,
-                                  wheel1: Int32(stepVertical),
-                                  wheel2: Int32(stepHorizontal),
-                                  wheel3: 0) else { return }
-        event.setIntegerValueField(.eventSourceUserData, value: CursorDriver.syntheticMarker)
-        event.post(tap: .cghidEventTap)
     }
 
     // MARK: - Trackpad-style scrolling
@@ -80,7 +55,7 @@ final class ScrollDriver {
 
     /// Posts one scroll event shaped like the trackpad's own.
     ///
-    /// The plain wheel path above reads to apps as a mouse wheel: whole pixels, no
+    /// A plain wheel event reads to apps as a mouse wheel: whole pixels, no
     /// phases. Many apps then run their own wheel smoothing or line acceleration on
     /// top, and finger-driven travel arrives quantised, so a steady slide comes out
     /// in uneven steps. Flagging the event continuous and giving it scroll and

@@ -4,8 +4,6 @@ import AppKit
 enum PrefsTab: String, CaseIterable, Identifiable {
     case gestures      = "Gestures"
     case keyboard      = "Keyboard"
-    case appSwitcher   = "App Switcher"
-    case trackPoint    = "TrackPoint"
     case edgeControls  = "Edge Controls"
     case tuning        = "Tuning"
     case inputMonitoring = "Input Monitoring"
@@ -16,8 +14,6 @@ enum PrefsTab: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .appSwitcher:   return "rectangle.2.swap"
-        case .trackPoint:    return "dot.circle.and.hand.point.up.left.fill"
         case .edgeControls:  return "rectangle.inset.filled"
         case .gestures:      return "hand.draw"
         case .keyboard:      return "keyboard"
@@ -35,7 +31,7 @@ enum PreferencesDevice: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var icon: String { self == .trackpad ? "rectangle.and.hand.point.up.left" : "magicmouse" }
     var tabs: [PrefsTab] {
-        self == .trackpad ? [.gestures, .appSwitcher, .trackPoint, .edgeControls, .tuning, .inputMonitoring] : [.gestures, .tuning, .inputMonitoring]
+        self == .trackpad ? [.gestures, .edgeControls, .tuning, .inputMonitoring] : [.gestures, .tuning, .inputMonitoring]
     }
 }
 
@@ -96,8 +92,6 @@ struct PreferencesWindow: View {
         } detail: {
             Group {
                 switch selectedTab {
-                case .appSwitcher:   AppSwitcherTab()
-                case .trackPoint:    TrackPointTab()
                 case .edgeControls:  EdgeControlsTab()
                 case .gestures:
                     GesturesTab(device: navigator.device == .trackpad ? .trackpad : .magicMouse)
@@ -116,7 +110,7 @@ struct PreferencesWindow: View {
         }
         .frame(minWidth: 760, minHeight: 520)
         .onChange(of: navigator.tab) { tab in
-            if [.appSwitcher, .trackPoint, .edgeControls].contains(tab) { navigator.device = .trackpad }
+            if tab == .edgeControls { navigator.device = .trackpad }
         }
         .onAppear {
             NSApp.setActivationPolicy(.regular)

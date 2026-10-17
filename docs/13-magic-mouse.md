@@ -56,7 +56,7 @@ Connection and sensitivity settings live under `touchpad.magic_mouse` in `config
 
 Mouse recognition is separate for each detected device, so contacts from two devices cannot combine. Pausing gestures, switching mouse support off, sleeping, or disconnecting discards pending actions. Bluetooth connection changes trigger a debounced device refresh; wake recovery uses the existing engine lifecycle. There is no new repeating polling loop and no third-party runtime dependency.
 
-The mouse uses the same private macOS multitouch framework as the trackpad. Known Magic Mouse device families are selected explicitly; an external Magic Trackpad is not treated as a mouse. Missing system APIs disable mouse support gracefully. TrackPoint, physical edge sliders, pressure/force-click, and haptic feedback remain trackpad-only features.
+The mouse uses the same private macOS multitouch framework as the trackpad. Known Magic Mouse device families are selected explicitly; an external Magic Trackpad is not treated as a mouse. Missing system APIs disable mouse support gracefully. Physical edge sliders, pressure/force-click, and haptic feedback remain trackpad-only features.
 
 ## Validation scope
 

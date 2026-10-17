@@ -9,7 +9,7 @@
 - **4 Finger Tap / 4 Finger Double Tap:** four contacts landing together; the double-tap interval remains 300 ms. Existing four-finger physical click, FORCE Click and directional swipes keep their original engine.
 - **TipTap Left / Right (3 Fingers Fix):** rest three fingers, tap a fourth to their left/right, then lift the tapping finger while every anchor remains down. All fingers must lift before repeating.
 
-TrackPoint, edge controls, App Switcher and macOS gestures can own overlapping inputs. Disable a conflicting assignment for a clean physical test. No system gesture setting is changed automatically.
+Edge controls, App Switcher and macOS gestures can own overlapping inputs. Disable a conflicting assignment for a clean physical test. No system gesture setting is changed automatically.
 
 ## TipTaps in each device's Tuning page
 

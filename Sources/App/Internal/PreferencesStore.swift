@@ -28,8 +28,8 @@ final class PreferencesStore: ObservableObject {
             persistRules()
         }
     }
-    @Published private(set) var appSwitcher: AppSwitcherSettings = .init()
-    @Published private(set) var trackPoint: TrackPointSettings = .init()
+    /// Fixed, not user-editable; exposed here so views keep one source.
+    var appSwitcher: AppSwitcherSettings { Settings.shared.appSwitcher }
     @Published private(set) var magicMouse = MagicMouseSettings()
     @Published private(set) var deviceTuning = DeviceTuningSettings()
     @Published private(set) var edgeControls: EdgeControlsSettings = .init()
@@ -51,9 +51,6 @@ final class PreferencesStore: ObservableObject {
     func reload() {
         let s = Settings.shared
         rules = s.rules.map(sanitizedRule)
-        appSwitcher = s.appSwitcher
-        trackPoint = s.trackPoint
-        TrackPointController.shared.applySettings()
         magicMouse = s.magicMouse
         deviceTuning = s.deviceTuning
         if GestureEngine.shared.isRunning { NativePointerSpeed.shared.apply() }
@@ -132,23 +129,6 @@ final class PreferencesStore: ObservableObject {
         Settings.shared.magicMouse = value
         magicMouse = Settings.shared.magicMouse
         MagicMouseInput.shared.applySettings()
-    }
-
-    func updateAppSwitcher(_ mutate: (inout AppSwitcherSettings) -> Void) {
-        var copy = appSwitcher
-        mutate(&copy)
-        copy = AppSwitcherSettings.normalized(copy)
-        let fingersChanged = copy.enabled && copy.fingers != appSwitcher.fingers
-        let turnedOn = copy.enabled && !appSwitcher.enabled
-        if copy.enabled && (turnedOn || fingersChanged) {
-            var updatedRules = rules
-            Settings.stripReservedHorizontalSwipes(from: &updatedRules, fingerCount: copy.fingers)
-            rules = updatedRules.map(sanitizedRule)
-        }
-        Settings.shared.appSwitcher = copy
-        appSwitcher = Settings.shared.appSwitcher
-        SystemGestureManager.reconcileIfAutoEnabled()
-        refreshNativeConflicts()
     }
 
     /// Horizontal swipes reserved for app switcher on this finger count (when enabled).
@@ -243,24 +223,6 @@ final class PreferencesStore: ObservableObject {
         Settings.shared.resetTuning()
         tuning = Settings.shared.tuning
         TouchTracker.updateTuningCache(edgeMarginEnabled: tuning.edgeMarginEnabled, edgeMargin: tuning.edgeMargin)
-    }
-
-    func updateTrackPoint(_ mutate: (inout TrackPointSettings) -> Void) {
-        var copy = trackPoint
-        mutate(&copy)
-        Settings.shared.trackPoint = copy       // TrackPointSettings.normalized runs here + saves
-        trackPoint = Settings.shared.trackPoint // read back the clamped value
-        TrackPointController.shared.applySettings()
-        // Edge Controls size their corner exclusion from the TrackPoint's zone, so
-        // they have to be rebuilt when it moves or the two can overlap again.
-        EdgeControlsController.shared.applySettings()
-    }
-
-    func resetTrackPoint() {
-        Settings.shared.resetTrackPoint()
-        trackPoint = Settings.shared.trackPoint
-        TrackPointController.shared.applySettings()
-        EdgeControlsController.shared.applySettings()
     }
 
     func updateEdgeControls(_ mutate: (inout EdgeControlsSettings) -> Void) {

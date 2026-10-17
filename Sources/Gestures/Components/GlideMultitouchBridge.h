@@ -79,7 +79,7 @@ void GLDTStop(void);
 /// Fewest simultaneous contacts a frame must carry to be forwarded to Swift.
 /// Defaults to 3, which keeps unconfigured one- and
 /// two-finger cursor work entirely out of the app. Features that need sparser
-/// contact (low-finger rules, TrackPoint, and Edge Controls) lower it to 1 while
+/// contact (low-finger rules, Edge Controls, and Live Contacts) lower it to 1 while
 /// they are enabled. Clamped to 1...32; safe to call from any thread.
 void GLDTSetMinimumContactCount(int32_t count);
 // Preserve stationary anchors and contact-size changes for supplemental taps.

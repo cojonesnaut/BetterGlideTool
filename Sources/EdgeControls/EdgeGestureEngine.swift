@@ -58,11 +58,6 @@ final class EdgeGestureEngine {
         var rightAction: EdgeAction = .volume
         var marginMm: Double = 12.0
         var activationTravelMm: Double = 4.0
-
-        /// Fraction of each axis the TrackPoint's corner zone claims, or 0 when
-        /// TrackPoint is not corner-activated. Edge gestures keep clear of it so the
-        /// two features can't both lay claim to the same touch.
-        var trackPointCornerZone: Double = 0
     }
 
     private struct ActiveGesture {
@@ -394,7 +389,7 @@ final class EdgeGestureEngine {
         // one is what the user sees.
         AppLogger.debug("[Edge] committed on \(activeEdge?.rawValue ?? "?") — "
                         + "manager: \(manager == nil ? "MISSING" : "ok"), "
-                        + "tap active: \(manager?.trackPointSuppressionEnabled ?? false)")
+                        + "tap active: \(manager?.pointerSuppressionEnabled ?? false)")
     }
 
     /// Hands the pointer back and lets any scroll coast out. Suppression is dropped
@@ -468,8 +463,8 @@ final class EdgeGestureEngine {
     /// Picks the edge a touch belongs to, or nil if it belongs to none.
     ///
     /// Corners are where the trouble is: with any meaningful margin the four zones
-    /// overlap there, "which edge is this?" has no right answer, and it is also where
-    /// the TrackPoint's corner activation lives. So corners are refused outright, and
+    /// overlap there, and "which edge is this?" has no right answer. So corners are
+    /// refused outright, and
     /// because the exclusion is never shallower than the margin that alone guarantees
     /// at most one edge can qualify. Picking the nearest is then just a deterministic
     /// tie-break rather than the thing doing the work.
@@ -501,14 +496,10 @@ final class EdgeGestureEngine {
     /// The floor is `depth` itself, which is what makes the edge zones provably
     /// disjoint: a point within `depth` of one edge and at least `depth` from that
     /// edge's ends cannot also be within `depth` of a perpendicular edge. On top of
-    /// that sits an absolute minimum, and the TrackPoint's corner reach along this
-    /// edge's own axis when corner activation is in use.
+    /// that sits an absolute minimum.
     private func cornerExclusionMm(for edge: TrackpadPhysicalEdge, depth: Double) -> Double {
         let alongLength = edge.isHorizontal ? surfaceSize.width : surfaceSize.height
-        var exclusion = max(Self.minCornerExclusionMm, depth)
-        if config.trackPointCornerZone > 0 {
-            exclusion = max(exclusion, config.trackPointCornerZone * alongLength)
-        }
+        let exclusion = max(Self.minCornerExclusionMm, depth)
         // Never eat the whole edge, however the settings are combined.
         return min(exclusion, alongLength * 0.4)
     }

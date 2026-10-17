@@ -6,13 +6,9 @@ enum ConfigAuditTests {
     static func run() {
         var seed = GlideConfig()
         seed.gestureSchemaVersion = 1
-        seed.appSwitcher.enabled = false
         seed.speed.swipeThreshold = 0.014123456
         seed.speed.fastVelocityThreshold = 0.009123456
         seed.speed.slowVelocityThreshold = 0.005123456
-        seed.trackPoint.activationDelay = 0.591234567
-        seed.trackPoint.maxSpeed = 3350.125
-        seed.trackPoint.smoothing = 0.022123456
         seed.edgeControls.marginMm = 12.123456789
         seed.tuning.continuousDebounce = 0.081234567
         seed.tuning.appSwitcherDebounce = 0.051234567
@@ -97,7 +93,7 @@ enum ConfigAuditTests {
         let yaml = GlideConfigSerializer.serialize(baseline)
         guard let decoded = GlideConfigParser.parse(yaml: yaml) else { fatalError("Full export must be importable") }
         precondition(decoded.speed.swipeThreshold == baseline.speed.swipeThreshold, "Float precision must survive")
-        precondition(decoded.trackPoint.activationDelay == baseline.trackPoint.activationDelay, "Double precision must survive")
+        precondition(decoded.tuning.continuousDebounce == baseline.tuning.continuousDebounce, "Double precision must survive")
         precondition(decoded.edgeControls.marginMm == baseline.edgeControls.marginMm)
         Settings.shared.apply(decoded)
         let actualRules = Settings.shared.rules

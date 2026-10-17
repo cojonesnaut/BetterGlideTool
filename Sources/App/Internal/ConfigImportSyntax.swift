@@ -45,7 +45,26 @@ enum ConfigImportSyntax {
             if value.isEmpty { parents.append((indent, path)) }
         }
         result["touchpad.gesture_schema_version"] = .integer
-        result["touchpad.app_switcher.fingers"] = .integer
+        // Retired sections. The App Switcher's settings page and the TrackPoint were
+        // removed in 2.11.0; files exported before that still carry these blocks and
+        // must keep importing. The parser skips them.
+        let retired: [String: [String: Kind]] = [
+            "app_switcher": [
+                "enabled": .boolean, "style": .text, "fingers": .integer, "skip_windowless_finder": .boolean,
+                "restore_minimized_on_commit": .boolean, "animations_enabled": .boolean
+            ],
+            "trackpoint": [
+                "enabled": .boolean, "activation_mode": .text, "zone": .text, "zone_size": .number,
+                "activation_delay": .number, "activation_movement": .number, "double_tap_window": .number,
+                "dead_zone": .number, "push_range": .number, "max_speed": .number, "acceleration": .number,
+                "haptic_feedback": .boolean, "scroll_enabled": .boolean, "scroll_speed": .number,
+                "invert_scroll": .boolean, "smoothing": .number
+            ]
+        ]
+        for (section, fields) in retired {
+            result["touchpad.\(section)"] = .object
+            for (key, kind) in fields { result["touchpad.\(section).\(key)"] = kind }
+        }
         result["touchpad.tuning.candidate_frames"] = .integer
         result["touchpad.speed.speed_sample_count"] = .integer // retired legacy field
         result["touchpad.tuning.force_click_corner_margin"] = .number

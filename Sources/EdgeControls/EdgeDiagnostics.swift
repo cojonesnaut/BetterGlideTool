@@ -10,7 +10,7 @@ import Foundation
 //
 // It observes the live pipeline rather than driving a private engine of its own.
 // That distinction matters — an earlier version injected touches into its own
-// EdgeGestureEngine, which meant TrackPoint, the gesture engine and the real
+// EdgeGestureEngine, which meant the gesture engine and the real
 // event taps never participated, so it happily reported everything healthy while
 // the pointer misbehaved in normal use. Anything that can only go wrong with the
 // whole system running has to be measured with the whole system running.
@@ -30,17 +30,11 @@ enum EdgeDiagnostics {
         /// Pixels the cursor moved while held. This is the reported symptom, measured.
         var driftPx = 0.0
         var worstJumpPx = 0.0
-        /// Samples where the TrackPoint was also engaged. It drives the cursor with
-        /// events marked synthetic, which the suppression tap passes through by
-        /// design — so if it engages during an edge slide the pointer moves and
-        /// suppression is entirely innocent.
-        var trackPointEngaged = 0
         var releases = 0
     }
 
     static func run(seconds: Double) {
         let settings = Settings.shared.edgeControls
-        let trackPoint = Settings.shared.trackPoint
 
         print("""
         ─────────────────────────────────────────────────────────────
@@ -49,8 +43,6 @@ enum EdgeDiagnostics {
          Margin / activation : \(String(format: "%.1f mm / %.1f mm", settings.marginMm, settings.activationTravelMm))
          Edge assignments    : top=\(settings.topEdge.rawValue) bottom=\(settings.bottomEdge.rawValue) \
         left=\(settings.leftEdge.rawValue) right=\(settings.rightEdge.rawValue)
-         TrackPoint          : \(trackPoint.enabled ? "ENABLED" : "off"), \
-        mode=\(trackPoint.activationMode.rawValue), zone=\(trackPoint.zone.rawValue)
          Trackpad surface    : measured after the device opens (see below)
         ─────────────────────────────────────────────────────────────
         """)
@@ -93,8 +85,7 @@ enum EdgeDiagnostics {
             results[edge] = observe(edge: edge, seconds: perEdge)
             let o = results[edge]!
             print("   held \(o.held)/\(o.samples) samples, tap on \(o.tapEnabled), "
-                  + "cursor moved \(Int(o.driftPx)) px while held"
-                  + (o.trackPointEngaged > 0 ? ", TRACKPOINT ENGAGED \(o.trackPointEngaged)x" : ""))
+                  + "cursor moved \(Int(o.driftPx)) px while held")
         }
 
         GestureEngine.shared.stop()
@@ -120,8 +111,7 @@ enum EdgeDiagnostics {
 
             if held {
                 o.held += 1
-                if manager?.trackPointSuppressionEnabled == true { o.tapEnabled += 1 }
-                if TrackPointController.shared.isEngaged { o.trackPointEngaged += 1 }
+                if manager?.pointerSuppressionEnabled == true { o.tapEnabled += 1 }
                 // Only across consecutive held samples, so the deliberate restore-warp
                 // fired on commit is not counted as drift.
                 if wasHeld, let now = cursor, let prev = lastCursor {
@@ -161,8 +151,6 @@ enum EdgeDiagnostics {
                 verdict = "NEVER ENGAGED"
             } else if o.tapEnabled < o.held {
                 verdict = "TAP NOT ACTIVE while held"
-            } else if o.trackPointEngaged > 0 {
-                verdict = "TRACKPOINT is driving the cursor"
             } else if o.driftPx > 12 {
                 verdict = String(format: "POINTER MOVED %.0f px anyway", o.driftPx)
             } else {
@@ -180,10 +168,8 @@ enum EdgeDiagnostics {
 
         let engaged = [TrackpadPhysicalEdge.bottom, .top, .left, .right]
             .compactMap { results[$0] }.filter { $0.held > 0 }
-        let tpEdges = [TrackpadPhysicalEdge.bottom, .top, .left, .right]
-            .filter { (results[$0]?.trackPointEngaged ?? 0) > 0 }
         let driftEdges = [TrackpadPhysicalEdge.bottom, .top, .left, .right]
-            .filter { (results[$0]?.driftPx ?? 0) > 12 && (results[$0]?.trackPointEngaged ?? 0) == 0 }
+            .filter { (results[$0]?.driftPx ?? 0) > 12 }
         let tapGap = [TrackpadPhysicalEdge.bottom, .top, .left, .right]
             .filter { let o = results[$0]; return (o?.held ?? 0) > 0 && (o?.tapEnabled ?? 0) < (o?.held ?? 0) }
         let flapping = [TrackpadPhysicalEdge.bottom, .top, .left, .right]
@@ -194,14 +180,9 @@ enum EdgeDiagnostics {
             print(" • Nothing engaged at all — check the edges are assigned and enabled.")
         }
         if !tapGap.isEmpty {
-            print(" • \(tpEdges.isEmpty ? "" : "")Suppression was requested but the tap was off on: "
+            print(" • Suppression was requested but the tap was off on: "
                   + tapGap.map(\.rawValue).joined(separator: ", "))
             print("   → the tap is failing to enable, not the gesture failing to commit.")
-        }
-        if !tpEdges.isEmpty {
-            print(" • TrackPoint engaged during: " + tpEdges.map(\.rawValue).joined(separator: ", "))
-            print("   → it drives the cursor with events the suppression tap passes on purpose,")
-            print("     so it moves the pointer straight through the freeze. This is the cause.")
         }
         if !driftEdges.isEmpty {
             print(" • Pointer moved despite an active tap on: "
@@ -214,7 +195,7 @@ enum EdgeDiagnostics {
             print("   → each release frees the cursor briefly; likely the contact being")
             print("     re-identified mid-slide, or the gesture restarting.")
         }
-        if tapGap.isEmpty && tpEdges.isEmpty && driftEdges.isEmpty && !engaged.isEmpty {
+        if tapGap.isEmpty && driftEdges.isEmpty && !engaged.isEmpty {
             print(" • Every engaged edge held the pointer still. The problem is not here.")
         }
         print("─────────────────────────────────────────────────────────────")

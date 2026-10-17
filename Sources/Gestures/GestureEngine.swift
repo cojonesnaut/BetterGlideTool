@@ -90,7 +90,6 @@ final class GestureEngine {
 
         TouchTracker.updateTuningCache(edgeMarginEnabled: Settings.shared.tuning.edgeMarginEnabled,
                                         edgeMargin: Settings.shared.tuning.edgeMargin)
-        TrackPointController.shared.applySettings()
         EdgeControlsController.shared.applySettings()
         LowFingerTrackpadInput.shared.start()
         MultitouchBridge.shared.updateMinimumContactCount()
@@ -126,7 +125,6 @@ final class GestureEngine {
         LowFingerTrackpadInput.shared.stop()
         MagicMouseInput.shared.stop()
         NativePointerSpeed.shared.apply(restoring: true)
-        TrackPointController.shared.engineWillStop()
         EdgeControlsController.shared.reset()
         MultitouchBridge.shared.stop()
         inputManager.teardownTaps()
@@ -419,8 +417,7 @@ final class GestureEngine {
         clearReciprocalToken()
         Haptic.switcherOpen()
 
-        if Settings.shared.appSwitcher.style == .newer,
-           AppSwitcherOverlayController.shared.show(
+        if AppSwitcherOverlayController.shared.show(
             apps: customApps,
             windowsByApp: customWindows,
             selectedAppIndex: customIndex,

@@ -43,8 +43,8 @@ static float last_forwarded_y[32];
 static float last_forwarded_size[32];
 static bool contact_details_enabled = false;
 static GLDTStatus last_start_status = GLDTStatusStartFailed;
-// Primary gesture rules need 3+ contacts. Supplemental taps, TrackPoint and
-// edge controls lower the floor when they need fewer fingers.
+// Primary gesture rules need 3+ contacts. Supplemental taps, edge controls and
+// live contact monitoring lower the floor when they need fewer fingers.
 static int32_t minimum_contact_count = 3;
 
 // MultitouchSupport can deliver substantially faster than the app can display or act on.
@@ -55,14 +55,14 @@ static const double gesture_frame_interval = 1.0 / 60.0;
 // against the last delivered positions so genuine slow movement still accumulates.
 static const float gesture_position_delta = 0.0015f;
 
-// Sparse frames — fewer contacts than any gesture rule needs — exist only for the
-// TrackPoint, which integrates a direction continuously rather than matching a
-// discrete gesture, and so wants every sample the hardware produces.
+// Sparse frames — fewer contacts than any gesture rule needs — feed features that
+// follow one finger continuously, such as edge scrolling, rather than matching a
+// discrete gesture, and so want every sample the hardware produces.
 //
 // The ceiling matters more than it looks: capping at 60 Hz against a trackpad that
 // reports at ~82 Hz beats down to 41 Hz, because every second frame lands inside the
 // interval and is dropped. That is fine for gesture matching and visibly steppy for
-// a pointing stick. Well under the hardware period, so no frame is ever skipped, and
+// continuous motion. Well under the hardware period, so no frame is ever skipped, and
 // the gesture path keeps its own ceiling untouched.
 static const double sparse_frame_interval = 1.0 / 240.0;
 static const float sparse_position_delta = 0.0004f;
@@ -367,7 +367,7 @@ bool GLDTStart(GLDTFrameCallback callback, void *context) {
         return false;
     }
 
-    // Never feed mouse touches into trackpad-only edge/TrackPoint recognizers.
+    // Never feed mouse touches into trackpad-only edge recognizers.
     typedef int32_t (*GetFamilyFunction)(MTDeviceRef, int32_t *);
     GetFamilyFunction get_family = (GetFamilyFunction)dlsym(handle, "MTDeviceGetFamilyID");
     int32_t family = 0;
