@@ -1,5 +1,15 @@
 # Changelog
 
+## BetterGlideTool 2.11.3 (local)
+
+- Fix 2.11.2's tap-to-click filter, which stopped working within seconds. It compared clicks with touches through a fixed offset between the multitouch frame clock and system uptime, but the two run at different rates (0.989× measured on a MacBook Air), so the error grew by about 10 ms a second and every tip lift soon looked too old to match. Clicks are now placed on the frame clock using the most recent frame. A recorded session puts every TipTap's click 6–26 ms after its tip lifts this way; 2.11.2's estimate passed the 250 ms window within about 30 seconds.
+
+## BetterGlideTool 2.11.2 (local)
+
+- Swallow the tap-to-click macOS generates for a TipTap's tapping finger. It arrives 30–90 ms after the tip lifts while the resting fingers stay down; left through, it clicked whatever was under the pointer (pausing videos, following links) and fired matching click rules. It is identical to a physical click in every event field, so it is told apart by timing against the touch data. A press with a finger held down, a click well after the lift, or one with no resting TipTap session still goes through untouched.
+- Stop that click from cancelling the next TipTap. The recognizer read it as a physical press, so rapid taps were dropped or needed the resting fingers lifted. Replaying the recorded 2.10.24 session now fires seven TipTaps instead of six.
+- Compare native button events with touch frames on one clock. The multitouch frame clock and system uptime have different origins, so the rearm-after-button recovery never matched and a TipTap could stay blocked until every finger lifted.
+
 ## BetterGlideTool 2.11.1 (local)
 
 - Remove TrackPoint entirely: its preferences page, settings, touch feed, engine, cursor integrator, guide and illustrations. One-finger frames now reach the app only when edge controls, low-finger rules or Live Contacts need them, so ordinary cursor work stays inside the multitouch bridge again. Edge corners no longer widen around a TrackPoint zone.

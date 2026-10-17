@@ -143,6 +143,42 @@ struct MagicMouseRecognizer {
     private var circle = CirclePathRecognizer()
     private var pendingTapGesture: MagicMouseGesture = .twoFingerTap
     var ownsFixedFingerSession: Bool { oneFixed.claimed || twoFixed.claimed || threeFixed.claimed }
+
+    /// How long after a TipTap tip lifts a trackpad button-down still counts as
+    /// macOS's tap-to-click for that tip. Recorded sessions put it 30–90 ms after
+    /// the lift, lasting 60–100 ms.
+    static let tapClickEchoWindow = 0.25
+    /// A tip that landed this recently has not had time to press the pad down.
+    static let freshTipWindow = 0.10
+
+    /// Whether a trackpad button-down at `time` (frame clock) is the tap-to-click
+    /// macOS synthesises for the tip of a TipTap, rather than a physical press.
+    ///
+    /// The two are indistinguishable in the event itself — same fields, same
+    /// device, same pressure. Timing tells them apart: the synthesised click
+    /// arrives just after the tip lifts while the resting fingers stay down,
+    /// whereas a physical press arrives while a finger is still pushing.
+    /// What `isTapToClickEcho` saw at `time`, for diagnostics.
+    func echoDiagnostics(at time: Double) -> String {
+        let names = ["1-fix", "2-fix", "3-fix"]
+        let parts = zip(names, [oneFixed, twoFixed, threeFixed]).map { name, s in
+            let release = s.tipReleaseTime.map { String(format: "%+.3f", $0 - time) } ?? "none"
+            let down = s.tipDownSince.map { String(format: "%+.3f", $0 - time) } ?? "none"
+            return "\(name)[claimed=\(s.claimed) release=\(release) tipDown=\(down)]"
+        }
+        return "echo=\(isTapToClickEcho(at: time)) blocked=\(blocked) " + parts.joined(separator: " ")
+    }
+
+    func isTapToClickEcho(at time: Double) -> Bool {
+        let sessions = [oneFixed, twoFixed, threeFixed].filter(\.claimed)
+        guard !sessions.isEmpty,
+              let release = sessions.compactMap(\.tipReleaseTime).max(),
+              time >= release, time - release <= Self.tapClickEchoWindow else { return false }
+        // With fast tapping the next tip can already be down. Only one that has
+        // just landed is excused; one held longer could be pressing for real.
+        if let down = sessions.compactMap(\.tipDownSince).max(), time - down > Self.freshTipWindow { return false }
+        return true
+    }
     /// Read-only diagnostic roles; never changes arbitration or timing.
     var liveContactRoles: [Int32: String] {
         if blocked { return Dictionary(uniqueKeysWithValues: contacts.map { ($0.id, "Blocked") }) }
@@ -409,6 +445,9 @@ private struct FixedFingerRecognizer {
     }
 
     var isResting: Bool { claimed && !finished && moving == nil }
+    /// When the most recent tapping finger lifted, and when the current one landed.
+    var tipReleaseTime: Double? { lastRelease }
+    var tipDownSince: Double? { moving == nil ? nil : movingSince }
 
     func canBecomeAnchors(at timestamp: Double, settings: MagicMouseSettings) -> Bool {
         claimed && !finished && !strokeFinished && tapAllowed && moving != nil &&

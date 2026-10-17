@@ -82,7 +82,37 @@ struct TrackpadRepeatTests {
             expect(r.consume(replacement, timestamp: 10.04, settings: profile, physicalButtonDown: scenario == 0, allowsTrackpadButtonRecovery: true) == nil, "Recovery never emits an action")
             expect(r.liveContactRoles.values.contains("Blocked"), "Invalid recovery stays blocked: \(scenario)")
         }
+        // The button edges in this recording are macOS's tap-to-click for each tip.
+        // The click tap now swallows them before they reach apps or the recognizer,
+        // so replay the same contacts without them: every modeled down must read as
+        // an echo, and no TipTap may be lost to one.
+        var echo = primed(settings)
+        var echoOutputs: [Double] = []
+        for f in fixture.frames {
+            let time = 10 + f.time
+            if [0.144, 0.784, 1.136].contains(f.time) {
+                expect(echo.isTapToClickEcho(at: time), "Button-down at \(f.time)s, just after a tip lift, is that tip's tap-to-click")
+            }
+            if echo.consume(f.contacts.map(\.point), timestamp: time, settings: settings,
+                            allowsTrackpadButtonRecovery: true) != nil { echoOutputs.append(f.time) }
+        }
+        print("Replay with tap-to-click swallowed:", echoOutputs)
+        expect(Set(outputs.map(\.0)).isSubset(of: Set(echoOutputs)), "Every TipTap that fired before still fires")
+        expect(echoOutputs.count > outputs.count, "TipTaps previously lost to the tap-to-click now fire")
+
+        // Physical presses still count. A tip that has been down for a while, a
+        // press long after the last lift, or no resting session at all is real.
+        var press = MagicMouseRecognizer()
+        _ = press.consume([middle, right], timestamp: 30, settings: settings)
+        _ = press.consume([left, middle, right], timestamp: 30.3, settings: settings)
+        _ = press.consume([middle, right], timestamp: 30.42, settings: settings)
+        expect(press.isTapToClickEcho(at: 30.48), "Click 60 ms after the tip lifts is an echo")
+        expect(!press.isTapToClickEcho(at: 30.42 + MagicMouseRecognizer.tapClickEchoWindow + 0.05), "Click well after the lift is physical")
+        _ = press.consume([left, middle, right], timestamp: 30.5, settings: settings)
+        expect(!press.isTapToClickEcho(at: 30.5 + MagicMouseRecognizer.freshTipWindow + 0.02), "Click with a tip held down is physical")
+        expect(!MagicMouseRecognizer().isTapToClickEcho(at: 30.48), "No resting session, no echo")
+
         if !failures.isEmpty { failures.forEach { print("FAIL:", $0) }; exit(1) }
-        print("PASS: captured trackpad repeat regression and rotated-pair button recovery guards")
+        print("PASS: captured trackpad repeat regression, rotated-pair button recovery guards, and tap-to-click echo separation")
     }
 }

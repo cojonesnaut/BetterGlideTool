@@ -22,6 +22,16 @@ final class LowFingerTrackpadInput: ObservableObject {
     private var generation = 0
     private var activationObserver: NSObjectProtocol?
     private var modifiers = CapturedModifiers([])
+    /// Seconds to add to `systemUptime` to reach the multitouch frame clock, taken
+    /// from the most recent frame. The two clocks have different origins (the frame
+    /// clock keeps running through sleep) and different rates — measured at 0.989×
+    /// on a MacBook Air — so a fixed offset drifts about 10 ms every second. Native
+    /// events arrive within a few frames of the touch they belong to, so the latest
+    /// frame's offset is accurate to its delivery lag, a few milliseconds.
+    private var frameClockOffset: Double?
+    /// Trackpad buttons whose tap-to-click down was swallowed, with when it was.
+    /// The matching up is swallowed too, so apps never see half a click.
+    private var swallowedButtons: [Int: Double] = [:]
     private init() {}
 
     static func direction(for gesture: MagicMouseGesture) -> GestureDirection? {
@@ -58,16 +68,16 @@ final class LowFingerTrackpadInput: ObservableObject {
     func stop() {
         if let observer = activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         activationObserver = nil
-        lock.lock(); running = false; generation += 1; recognizer.reset(); lock.unlock()
+        lock.lock(); running = false; generation += 1; recognizer.reset(); swallowedButtons = [:]; lock.unlock()
         LiveContactsMonitor.shared.inputStopped()
     }
 
     func observeNativeEvent(_ type: CGEventType, confirmedTrackpad: Bool) {
         lock.lock()
-        guard running, settings.enabled else { lock.unlock(); return }
+        guard running, settings.enabled, let now = frameTime(ofUptime: ProcessInfo.processInfo.systemUptime) else { lock.unlock(); return }
         let token = generation, captured = modifiers
         let gesture = Self.handleNativeEvent(type, confirmedTrackpad: confirmedTrackpad,
-            timestamp: ProcessInfo.processInfo.systemUptime, recognizer: &recognizer)
+            timestamp: now, recognizer: &recognizer)
         lock.unlock()
         if let gesture { dispatch(gesture, token: token, modifiers: captured) }
     }
@@ -97,6 +107,46 @@ final class LowFingerTrackpadInput: ObservableObject {
         return recognizer.trackpadButtonChanged(button, isDown: down, timestamp: timestamp)
     }
 
+    /// Decides, synchronously from the click event tap, whether a native button
+    /// event must be swallowed: it is the tap-to-click macOS generates for a
+    /// TipTap's tapping finger. Left through, it lands as a stray click on whatever
+    /// is under the pointer, and the recognizer would read it as a physical press
+    /// and cancel the next tap. `isTrackpad` is only consulted for candidates,
+    /// since it costs a registry lookup.
+    func claimsNativeClick(_ type: CGEventType, uptime: Double, isTrackpad: () -> Bool) -> Bool {
+        let button: Int, down: Bool
+        switch type {
+        case .leftMouseDown: button = 0; down = true
+        case .leftMouseUp: button = 0; down = false
+        case .rightMouseDown: button = 1; down = true
+        case .rightMouseUp: button = 1; down = false
+        default: return false
+        }
+        lock.lock()
+        // Never hold one back for long: a lost up must not leave a button "down".
+        swallowedButtons = swallowedButtons.filter { uptime - $0.value < 1.0 }
+        if !down {
+            let claimed = swallowedButtons.removeValue(forKey: button) != nil
+            lock.unlock()
+            return claimed
+        }
+        guard running, settings.enabled, let now = frameTime(ofUptime: uptime),
+              recognizer.isTapToClickEcho(at: now) else { lock.unlock(); return false }
+        lock.unlock()
+        guard isTrackpad() else { return false }
+        lock.lock(); swallowedButtons[button] = uptime; lock.unlock()
+        return true
+    }
+
+    private func frameTime(ofUptime uptime: Double) -> Double? { frameClockOffset.map { uptime + $0 } }
+
+    /// How a button-down at `uptime` would be classified, for diagnostics.
+    func echoDiagnostics(uptime: Double) -> String {
+        lock.lock(); defer { lock.unlock() }
+        guard let now = frameTime(ofUptime: uptime) else { return "no frame clock yet" }
+        return "running=\(running) enabled=\(settings.enabled) " + recognizer.echoDiagnostics(at: now)
+    }
+
     func cancelCurrentGesture() {
         lock.lock(); generation += 1; recognizer.cancel(); lock.unlock()
     }
@@ -105,6 +155,7 @@ final class LowFingerTrackpadInput: ObservableObject {
     func receive(_ points: UnsafePointer<GLDTouchPoint>?, count: Int32, timestamp: Double) -> Bool {
         lock.lock()
         guard running, count >= 0, count <= 32 else { lock.unlock(); return false }
+        frameClockOffset = timestamp - ProcessInfo.processInfo.systemUptime
         if count != lastContactCount || timestamp - lastInputReport >= 0.5 {
             lastContactCount = count; lastInputReport = timestamp
             let token = generation
@@ -128,8 +179,9 @@ final class LowFingerTrackpadInput: ObservableObject {
             modifiers = CapturedModifiers(NSEvent.ModifierFlags(rawValue: UInt(CGEventSource.flagsState(.combinedSessionState).rawValue)))
         }
         if contacts.count > 4 { recognizer.cancel() }
-        let pressed = CGEventSource.buttonState(.combinedSessionState, button: .left) ||
-            CGEventSource.buttonState(.combinedSessionState, button: .right)
+        // A swallowed tap-to-click is not a held button, whatever the session state says.
+        let pressed = swallowedButtons.isEmpty && (CGEventSource.buttonState(.combinedSessionState, button: .left) ||
+            CGEventSource.buttonState(.combinedSessionState, button: .right))
         let previousDeadline = recognizer.pendingTapDeadline
         let gesture = recognizer.consume(contacts, timestamp: timestamp, settings: settings, physicalButtonDown: pressed, allowsTrackpadButtonRecovery: true)
         let feedback = pressed ? "Mouse button is down; lift it before attempting a TipTap." : recognizer.tipTapFeedback

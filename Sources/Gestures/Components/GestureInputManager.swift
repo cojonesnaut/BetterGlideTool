@@ -206,10 +206,12 @@ final class GestureInputManager {
         guard !clickTapInstalled else { return }
         let mask = [CGEventType.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp, .scrollWheel]
             .reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
+        // An active tap rather than listen-only: it has to be able to drop the
+        // tap-to-click that macOS generates for a TipTap's tapping finger.
         clickObservationTap = CGEvent.tapCreate(
             tap: .cghidEventTap,
             place: .headInsertEventTap,
-            options: .listenOnly,
+            options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, event, _ in
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
@@ -219,7 +221,14 @@ final class GestureInputManager {
                     return nil
                 }
                 guard event.getIntegerValueField(.eventSourceUserData) != SyntheticMouseInput.tag else { return Unmanaged.passUnretained(event) }
-                LowFingerTrackpadInput.shared.observeNativeEvent(type, confirmedTrackpad: GestureEngine.shared.inputManager.eventIdentity.isTrackpad(event))
+                let identity = GestureEngine.shared.inputManager.eventIdentity
+                if LowFingerTrackpadInput.shared.claimsNativeClick(type, uptime: ProcessInfo.processInfo.systemUptime,
+                                                                   isTrackpad: { identity.isTrackpad(event) }) {
+                    // Swallowed whole: no app click, no click rule, no recognizer
+                    // cancel. The TipTap already acted on the same finger.
+                    return nil
+                }
+                LowFingerTrackpadInput.shared.observeNativeEvent(type, confirmedTrackpad: identity.isTrackpad(event))
                 guard type == .leftMouseDown else { return Unmanaged.passUnretained(event) }
                 let count = TouchTracker.getThreeFingerCount()
                 let peak = TouchTracker.getSessionPeakActiveTouches()
