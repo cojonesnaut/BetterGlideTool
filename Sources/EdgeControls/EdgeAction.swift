@@ -65,6 +65,16 @@ enum EdgeAction: String, Codable, CaseIterable, Identifiable {
 
     /// Whether a haptic tick should fire as the action advances. Notched controls
     /// feel better with one; a continuous action would vibrate every frame.
+    /// Driven in the system's quarter steps rather than full notches.
+    var usesFineSteps: Bool {
+        switch self {
+        case .volume, .brightness, .keyboardBacklight:
+            return true
+        default:
+            return false
+        }
+    }
+
     var wantsHapticTicks: Bool {
         switch self {
         case .appSwitcher, .scroll, .none:

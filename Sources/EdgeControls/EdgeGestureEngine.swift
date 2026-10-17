@@ -75,6 +75,10 @@ final class EdgeGestureEngine {
         let accumulator: TickAccumulator
         var switcherSession: EdgeAppSwitcherSession?
 
+        /// Fine ticks since the last haptic, so quarter-step sliders still click
+        /// once per full system notch rather than buzzing on every quarter.
+        var fineTicksSinceHaptic = 0
+
         /// Where the cursor sat when the finger landed, so the drift it picks up
         /// before the gesture is recognised can be undone on commit.
         let cursorOrigin: CGPoint?
@@ -102,6 +106,9 @@ final class EdgeGestureEngine {
     /// straight slide along the edge, and the cost of being wrong has flipped — a
     /// gesture dropped halfway is worse than one held a little too long.
     private static let postCommitSlackMm = 10.0
+
+    /// Quarter steps per full system notch for volume and brightness.
+    static let fineStepsPerNotch = 4
 
     var config: Configuration
     var surfaceSize: TrackpadSurfaceSize = .default
@@ -349,7 +356,15 @@ final class EdgeGestureEngine {
                 dispatchAction(updated.action, directionPositive: isPositive, session: updated.switcherSession)
             }
             if updated.action.wantsHapticTicks {
-                HapticEngine.shared.play(outcome.isAttenuated ? .softTick : .tap)
+                var playHaptic = true
+                if updated.action.usesFineSteps {
+                    updated.fineTicksSinceHaptic += outcome.count
+                    playHaptic = updated.fineTicksSinceHaptic >= Self.fineStepsPerNotch
+                    if playHaptic { updated.fineTicksSinceHaptic %= Self.fineStepsPerNotch }
+                }
+                if playHaptic {
+                    HapticEngine.shared.play(outcome.isAttenuated ? .softTick : .tap)
+                }
             }
         }
 
@@ -430,11 +445,11 @@ final class EdgeGestureEngine {
             // Continuous: applied in `advance` without passing through ticks.
             break
         case .volume:
-            SystemActions.sendMediaKey(directionPositive ? .volumeUp : .volumeDown)
+            SystemActions.sendMediaKey(directionPositive ? .volumeUp : .volumeDown, fine: true)
         case .brightness:
-            SystemActions.sendMediaKey(directionPositive ? .brightnessUp : .brightnessDown)
+            SystemActions.sendMediaKey(directionPositive ? .brightnessUp : .brightnessDown, fine: true)
         case .keyboardBacklight:
-            SystemActions.sendMediaKey(directionPositive ? .illuminationUp : .illuminationDown)
+            SystemActions.sendMediaKey(directionPositive ? .illuminationUp : .illuminationDown, fine: true)
         case .appSwitcher:
             session?.step(forward: directionPositive)
         case .microphone:
@@ -528,7 +543,16 @@ final class EdgeGestureEngine {
     private func makeTickConfiguration(for action: EdgeAction) -> TickConfiguration {
         var cfg = TickConfiguration.default
         switch action {
-        case .volume, .brightness, .keyboardBacklight, .microphone:
+        case .volume, .brightness, .keyboardBacklight:
+            // Same ~70 mm for the full range as before, but in the system's quarter
+            // steps: 64 levels at ~1.1 mm each, so the level follows the finger
+            // instead of jumping a notch at a time. The rate ceiling and per-frame
+            // cap scale with it, or a brisk slide would hit them and fall behind.
+            cfg.stepSize = 4.5 / Double(Self.fineStepsPerNotch)
+            cfg.maximumTickRate = 24.0 * Double(Self.fineStepsPerNotch)
+            cfg.maximumTicksPerSample = 2 * Self.fineStepsPerNotch
+            cfg.attenuationVelocity = 160.0
+        case .microphone:
             // ~70mm travel for 16 notches => ~4.375mm per tick
             cfg.stepSize = 4.5
             cfg.maximumTickRate = 24.0

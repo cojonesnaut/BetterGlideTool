@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8,9 +9,13 @@ import Foundation
 // Multitouch frames arrive at uneven intervals and each position carries a
 // little sensor noise, so posting every frame's travel straight to the scroll
 // wheel reads as judder even though the finger moved evenly. Travel is buffered
-// here and released on a steady 120 Hz clock instead, then the gesture coasts on
-// whatever velocity the finger had at release so a flick keeps gliding the way
-// native trackpad scrolling does.
+// here and released in step with the display's refresh instead, then the gesture
+// coasts on whatever velocity the finger had at release so a flick keeps gliding
+// the way native trackpad scrolling does.
+//
+// Output is shaped like a two-finger trackpad scroll rather than a mouse wheel:
+// one began → changed → ended run while the finger is down, then a separate
+// momentum run for the coast. See `ScrollDriver.scrollContinuous` for why.
 //
 // Total distance is preserved: smoothing only redistributes travel in time, so
 // the Scroll Speed setting still means exactly what it says. Momentum is the one
@@ -25,8 +30,6 @@ final class EdgeScrollSession {
     private init() {}
 
     // MARK: - Tuning
-
-    private static let tickInterval = 1.0 / 120.0
 
     /// Ceiling on a single integration step, so a stalled main thread cannot
     /// discharge its whole backlog into one jump.
@@ -46,7 +49,11 @@ final class EdgeScrollSession {
     private static let velocityTau = 0.045
 
     /// Time constant for momentum decay once the finger is gone.
-    private static let momentumTau = 0.25
+    ///
+    /// A decay of time constant `tau` carries a flick `v * tau` further. At 0.25 s
+    /// the coast was over before it registered as a glide; 0.4 s sits close to the
+    /// distance a native two-finger flick travels.
+    private static let momentumTau = 0.4
 
     /// Decay used instead of momentum — just long enough to hand over the buffered
     /// remainder without a visible step.
@@ -68,8 +75,18 @@ final class EdgeScrollSession {
 
     // MARK: - State
 
-    private var timer: DispatchSourceTimer?
+    private let clock = ScrollClock()
     private var lastTick: TimeInterval = 0
+
+    /// Which phase run the posted events belong to, and whether that run has
+    /// emitted its opening event yet. Apps track a scroll by these phases, so every
+    /// run that opens is closed with its own end event.
+    private enum Output: Equatable {
+        case idle
+        case scrolling(opened: Bool)
+        case momentum(opened: Bool)
+    }
+    private var output = Output.idle
 
     /// Travel handed over but not yet emitted, in scroll points.
     private var pending = 0.0
@@ -88,7 +105,7 @@ final class EdgeScrollSession {
     private var pointsPerMm = 26.0
 
     /// Whether the drive clock is running, either releasing travel or coasting.
-    var isRunning: Bool { timer != nil }
+    var isRunning: Bool { clock.isRunning }
 
     /// Whether the gesture is gliding on earned momentum, as opposed to the brief
     /// settle that hands over the buffered remainder. Both decay; only this one is
@@ -103,6 +120,8 @@ final class EdgeScrollSession {
     /// Starts a fresh gesture, dropping anything left over from the last one.
     func begin(pointsPerMm: Double) {
         stopTimer()
+        closeOutput()
+        output = .scrolling(opened: false)
         pending = 0
         velocity = 0
         isCoasting = false
@@ -116,6 +135,10 @@ final class EdgeScrollSession {
         // New input always wins over a coast still in flight — a finger back on
         // the edge is steering again, not watching the last flick play out.
         isCoasting = false
+        if case .scrolling = output {} else {
+            closeOutput()
+            output = .scrolling(opened: false)
+        }
         pending += points
         startTimer()
     }
@@ -133,7 +156,7 @@ final class EdgeScrollSession {
     /// decays slowly, giving the glide. Otherwise there is no carried velocity and
     /// a much shorter decay, so scrolling settles at once instead of coasting.
     func end(momentum: Bool) {
-        guard timer != nil || abs(pending) > Self.minPendingPoints else {
+        guard clock.isRunning || abs(pending) > Self.minPendingPoints else {
             finish()
             return
         }
@@ -147,6 +170,15 @@ final class EdgeScrollSession {
             finish()
             return
         }
+
+        // The finger's run ends here; whatever is still travelling is momentum.
+        // A run that never emitted still opens first, so the momentum that follows
+        // belongs to a scroll the app has actually seen begin.
+        if case .scrolling(let opened) = output {
+            if !opened { post(0, .began) }
+            post(0, .ended)
+        }
+        output = .momentum(opened: false)
         isCoasting = true
         startTimer()
     }
@@ -198,11 +230,37 @@ final class EdgeScrollSession {
 
     private func emit(_ points: Double) {
         guard points != 0 else { return }
-        ScrollDriver.shared.scroll(vertical: points, horizontal: 0)
+        switch output {
+        case .idle, .scrolling(opened: false):
+            output = .scrolling(opened: true)
+            post(points, .began)
+        case .scrolling(opened: true):
+            post(points, .changed)
+        case .momentum(opened: false):
+            output = .momentum(opened: true)
+            post(points, .momentumBegan)
+        case .momentum(opened: true):
+            post(points, .momentumChanged)
+        }
+    }
+
+    private func post(_ points: Double, _ phase: ScrollDriver.Phase) {
+        ScrollDriver.shared.scrollContinuous(vertical: points, horizontal: 0, phase: phase)
+    }
+
+    /// Ends whichever run is open with its terminating event.
+    private func closeOutput() {
+        switch output {
+        case .scrolling(opened: true): post(0, .ended)
+        case .momentum(opened: true):  post(0, .momentumEnded)
+        case .idle, .scrolling(opened: false), .momentum(opened: false): break
+        }
+        output = .idle
     }
 
     private func finish() {
         stopTimer()
+        closeOutput()
         pending = 0
         velocity = 0
         isCoasting = false
@@ -212,21 +270,76 @@ final class EdgeScrollSession {
     // MARK: - Clock
 
     private func startTimer() {
-        guard timer == nil else { return }
+        guard !clock.isRunning else { return }
         // Reset the integration clock on every restart, or the first step after a
         // pause would bill itself for the whole idle interval.
         lastTick = ProcessInfo.processInfo.systemUptime
+        clock.start { [weak self] in self?.tick() }
+    }
+
+    private func stopTimer() {
+        clock.stop()
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - ScrollClock
+//
+// Fires once per refresh of the display under the pointer.
+//
+// A fixed 120 Hz timer beats against any display that is not exactly 120 Hz: on
+// a 60 Hz screen two ticks land in some frames and none in others, so content
+// alternates between moving one step and two — the judder this whole session
+// exists to remove. Ticking on the display's own refresh gives every frame one
+// step. macOS 13 has no per-screen display link, so it keeps the timer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+private final class ScrollClock: NSObject {
+
+    private static let fallbackInterval = 1.0 / 120.0
+
+    private var handler: (() -> Void)?
+    private var displayLink: AnyObject?
+    private var timer: DispatchSourceTimer?
+
+    var isRunning: Bool { handler != nil }
+
+    func start(_ handler: @escaping () -> Void) {
+        stop()
+        self.handler = handler
+
+        if #available(macOS 14.0, *), let screen = Self.screenUnderPointer() {
+            let link = screen.displayLink(target: self, selector: #selector(fire))
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+            return
+        }
+
         let source = DispatchSource.makeTimerSource(queue: .main)
-        source.schedule(deadline: .now() + Self.tickInterval,
-                        repeating: Self.tickInterval,
+        source.schedule(deadline: .now() + Self.fallbackInterval,
+                        repeating: Self.fallbackInterval,
                         leeway: .milliseconds(1))
-        source.setEventHandler { [weak self] in self?.tick() }
+        source.setEventHandler { [weak self] in self?.fire() }
         timer = source
         source.resume()
     }
 
-    private func stopTimer() {
+    func stop() {
+        if #available(macOS 14.0, *), let link = displayLink as? CADisplayLink {
+            link.invalidate()
+        }
+        displayLink = nil
         timer?.cancel()
         timer = nil
+        handler = nil
+    }
+
+    @objc private func fire() {
+        handler?()
+    }
+
+    private static func screenUnderPointer() -> NSScreen? {
+        let location = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(location, $0.frame, false) } ?? NSScreen.main
     }
 }

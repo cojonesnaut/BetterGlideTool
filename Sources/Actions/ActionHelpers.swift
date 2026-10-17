@@ -133,9 +133,13 @@ enum SystemActions {
         case illuminationDown = 22 // NX_KEYTYPE_ILLUMINATION_DOWN
     }
 
-    static func sendMediaKey(_ key: MediaKey) {
+    /// - Parameter fine: holds Option+Shift on the key, which macOS treats as a
+    ///   quarter step for volume, display and keyboard brightness — 64 levels
+    ///   instead of 16, still shown on the system's own indicator.
+    static func sendMediaKey(_ key: MediaKey, fine: Bool = false) {
         func post(down: Bool) {
-            let flags = NSEvent.ModifierFlags(rawValue: down ? 0xA00 : 0xB00)
+            var flags = NSEvent.ModifierFlags(rawValue: down ? 0xA00 : 0xB00)
+            if fine { flags.formUnion([.option, .shift]) }
             let data1 = Int((key.rawValue << 16) | ((down ? 0xA : 0xB) << 8))
             guard let event = NSEvent.otherEvent(with: .systemDefined, location: .zero,
                                                  modifierFlags: flags, timestamp: 0,

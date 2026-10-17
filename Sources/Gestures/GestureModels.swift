@@ -11,6 +11,12 @@ struct TouchFrameData {
     let cy: Float
     let spread: Float
     let coherence: Float
+    /// The trackpad's own timestamp for this frame, in seconds. Velocities are
+    /// measured on this rather than on when the frame reached the main thread:
+    /// that arrival time jitters with main-thread load and frame coalescing, and
+    /// the jitter lands directly in every speed the recognizer computes. Zero
+    /// for synthetic frames, which fall back to arrival time.
+    var timestamp: TimeInterval = 0
 }
 
 // ─────────────────────────────────────────────
@@ -42,6 +48,8 @@ struct CandidateData {
     var lastFrameTime: TimeInterval
     var gestureKind: GestureKind = .unknown
     var classificationFrameDelay: Int = 0
+    /// When the contact count first fell below `fingers`, while it stays below.
+    var fingerDropoutStart: TimeInterval?
 }
 
 struct SwipeTrackData {

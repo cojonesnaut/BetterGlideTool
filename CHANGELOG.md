@@ -1,5 +1,13 @@
 # Changelog
 
+## BetterGlideTool 2.11.0 (local)
+
+- Post edge scrolling as trackpad-style scroll events instead of mouse-wheel events: flagged continuous, with began/changed/ended phases while the finger is down and a separate momentum run for the coast. Point deltas carry exact fractional travel, so apps apply it as-is with their native rubber-banding instead of re-smoothing whole-pixel wheel steps. TrackPoint scrolling keeps the wheel path.
+- Drive edge-scroll output from the display's own refresh (macOS 14+) instead of a fixed 120 Hz timer, which beat against 60 Hz and other non-120 Hz displays. macOS 13 keeps the timer. Lengthen the momentum coast from 0.25 s to 0.4 s, close to a native two-finger flick.
+- Move volume, display brightness and keyboard backlight edge sliders in the system's quarter steps (64 levels instead of 16), still shown on the native indicator. Haptics fire once per full notch. Microphone and Night Shift steps are unchanged.
+- Measure swipe speed on the trackpad's hardware frame timestamps rather than main-thread arrival time. Skip frames where one finger briefly drops out (up to 50 ms) instead of discarding the swipe; a sustained drop now re-targets the lower finger count when it has swipe rules. Only frames with real movement count toward the direction-coherence veto, so noise from resting fingers no longer blocks the swipe that follows.
+- A swipe frame that falls below three contacts still ends the touch session as before. Live feel on physical hardware still needs a hands-on check.
+
 ## BetterGlideTool 2.10.28 (local)
 
 - Focus Stage Manager member windows through the existing exact-window WindowServer bridge, followed by AX focus/raise, instead of activating the entire application. Keep focus confirmation; API acceptance alone is not success.

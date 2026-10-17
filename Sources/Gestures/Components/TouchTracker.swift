@@ -351,7 +351,8 @@ let glideMTCallback: GLDTFrameCallback = { points, count, timestamp, context in
         }
     }
 
-    let frameData = TouchFrameData(count: activeCount, cx: cx, cy: cy, spread: spread, coherence: coherence)
+    let frameData = TouchFrameData(count: activeCount, cx: cx, cy: cy, spread: spread, coherence: coherence,
+                                   timestamp: timestamp)
     TouchTracker.enqueueFrame(frameData)
 }
 
