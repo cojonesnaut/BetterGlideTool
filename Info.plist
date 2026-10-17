@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.betterglidetool.app</string>
     <key>CFBundleVersion</key>
-    <string>2.11.0</string>
+    <string>2.11.1</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.11.0</string>
+    <string>2.11.1</string>
     <key>CFBundleExecutable</key>
     <string>BetterGlideTool</string>
     <key>CFBundlePackageType</key>

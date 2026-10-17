@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## BetterGlideTool 2.11.1 (local)
 
 - Remove TrackPoint entirely: its preferences page, settings, touch feed, engine, cursor integrator, guide and illustrations. One-finger frames now reach the app only when edge controls, low-finger rules or Live Contacts need them, so ordinary cursor work stays inside the multitouch bridge again. Edge corners no longer widen around a TrackPoint zone.
 - Remove the App Switcher preferences page and its settings. The switcher itself stays, fixed at the defaults it shipped with: three-finger left/right swipes are always reserved for it, Finder without windows is skipped, minimized windows are restored on release, and selection changes are not animated. It is still assignable to a trackpad edge. Step distance and debounce remain in `tuning` in the config file. The native ⌘Tab path is kept as the fallback when the overlay cannot be shown.
