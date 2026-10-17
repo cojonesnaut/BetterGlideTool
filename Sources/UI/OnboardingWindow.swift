@@ -59,10 +59,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         UserDefaults.standard.set(true, forKey: Self.completedKey)
         window = nil
         NSApp.setActivationPolicy(.accessory)
-        if !AXIsProcessTrusted() {
-            let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
-        }
+        AccessibilityPermission.requestAutomaticallyIfNeeded()
     }
 }
 
@@ -282,8 +279,7 @@ private struct PermissionStepView: View {
                 .padding(.vertical, 4)
 
                 Button {
-                    let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
-                    AXIsProcessTrustedWithOptions(options)
+                    AccessibilityPermission.request()
                     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                         NSWorkspace.shared.open(url)
                     }

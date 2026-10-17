@@ -47,16 +47,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        NativePointerSpeed.shared.apply(restoring: true)
         GlideConfigStore.shared.flushPendingSave()
     }
 
     private func checkAccessibilityPermission() {
-        if AXIsProcessTrusted() { return }
-
-        // Prompt the user — passing `kAXTrustedCheckOptionPrompt` shows the
-        // native macOS dialog and opens Accessibility in System Settings.
-        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
+        AccessibilityPermission.requestAutomaticallyIfNeeded()
     }
 
     @MainActor
@@ -679,10 +675,13 @@ struct GestureApp: App {
     @StateObject private var engineBridge = EngineBridge.shared
 
     var body: some Scene {
-        MenuBarExtra("BetterGlideTool", systemImage: "hand.draw") {
+        MenuBarExtra {
             MenuBarView()
                 .environmentObject(preferencesStore)
                 .environmentObject(engineBridge)
+        } label: {
+            Image(nsImage: MenuBarIcon.image)
+                .accessibilityLabel("BetterGlideTool")
         }
         .menuBarExtraStyle(.menu)
 
@@ -858,6 +857,16 @@ final class EngineBridge: ObservableObject {
         }
     }
 
+    func recheckAccessibilityPermission() {
+        PreferencesStore.shared.refreshAccessibilityStatus()
+        if AccessibilityPermission.isGranted {
+            if isEnabled { GestureEngine.shared.start() }
+        } else {
+            GestureEngine.shared.stop()
+        }
+        syncTapHealthTimer()
+    }
+
     private func startAccessibilityMonitoring() {
         guard !AXIsProcessTrusted() else {
             PreferencesStore.shared.refreshAccessibilityStatus()
@@ -921,7 +930,8 @@ final class EngineBridge: ObservableObject {
     }
 
     private func resumeEngineIfAccessibilityGranted() {
-        guard AXIsProcessTrusted() else { return }
+        PreferencesStore.shared.refreshAccessibilityStatus()
+        guard AccessibilityPermission.isGranted else { return }
 
         stopAccessibilityMonitoring()
         PreferencesStore.shared.refreshAccessibilityStatus()

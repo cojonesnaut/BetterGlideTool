@@ -4,7 +4,35 @@ import Cocoa
 // MARK: - Enums
 // ─────────────────────────────────────────────
 
+enum GestureDevice: String, Codable, CaseIterable { case trackpad, magicMouse }
+
 enum GestureDirection: String, Codable, CaseIterable {
+    case tapTop          = "Tap Top"
+    case tapBottom       = "Tap Bottom"
+    case circleClockwise = "Circle Clockwise"
+    case circleCounterClockwise = "Circle Counter-Clockwise"
+    case cornerBottomLeft = "Corner Click Bottom Left"
+    case cornerBottomRight = "Corner Click Bottom Right"
+    case cornerTopLeft = "Corner Click Top Left"
+    case cornerTopRight = "Corner Click Top Right"
+    case tipTapThreeLeft = "TipTap Left (3 Fingers Fix)"
+    case tipTapThreeRight = "TipTap Right (3 Fingers Fix)"
+    case tipSwipeLeftLeft = "TipSwipe Left Finger Left (2 Fingers Fix)"
+    case tipSwipeLeftRight = "TipSwipe Left Finger Right (2 Fingers Fix)"
+    case tap             = "Tap"
+    case doubleTap       = "Double-Tap"
+    case tipTapLeft      = "TipTap Left (1 Finger Fix)"
+    case tipTapRight     = "TipTap Right (1 Finger Fix)"
+    case tipTapTwoLeft   = "TipTap Left (2 Fingers Fix)"
+    case tipTapTwoMiddle = "TipTap Middle (2 Fingers Fix)"
+    case tipTapTwoRight  = "TipTap Right (2 Fingers Fix)"
+    case tipSwipeLeftUp  = "TipSwipe Left Finger Up (2 Fingers Fix)"
+    case tipSwipeLeftDown = "TipSwipe Left Finger Down (2 Fingers Fix)"
+    case middleTap       = "Tap Middle"
+    case aboveAppleTap   = "Tap Above Apple"
+    case middleClick     = "Middle Click"
+    case leftTap         = "Tap Left Side"
+    case rightTap        = "Tap Right Side"
     case click           = "Click"
     case forceClick      = "Force Click"
     case tapHold         = "Tap & Hold"
@@ -17,7 +45,36 @@ enum GestureDirection: String, Codable, CaseIterable {
 
     /// True for tap-style gestures (normal click, force click, tap & hold) that
     /// have no axis, speed, reciprocal or continuous behaviour.
-    var isClickLike: Bool { self == .click || self == .forceClick || self == .tapHold }
+    var usesTwoFixedFingers: Bool { [.tipTapTwoLeft, .tipTapTwoMiddle, .tipTapTwoRight, .tipSwipeLeftUp, .tipSwipeLeftDown, .tipSwipeLeftLeft, .tipSwipeLeftRight].contains(self) }
+    var usesThreeFixedFingers: Bool { self == .tipTapThreeLeft || self == .tipTapThreeRight }
+    var isCornerClick: Bool { [.cornerBottomLeft, .cornerBottomRight, .cornerTopLeft, .cornerTopRight].contains(self) }
+    var isCircle: Bool { self == .circleClockwise || self == .circleCounterClockwise }
+    var isClickLike: Bool { usesTwoFixedFingers || usesThreeFixedFingers || isCornerClick || isCircle || self == .tapTop || self == .tapBottom || [.tap, .doubleTap, .tipTapLeft, .tipTapRight, .leftTap, .rightTap, .middleTap, .aboveAppleTap, .middleClick, .click, .forceClick, .tapHold].contains(self) }
+
+    static func available(fingers: Int, device: GestureDevice = .trackpad) -> [Self] {
+        if fingers == 4 && device == .magicMouse { return [.click, .swipeUp, .swipeDown, .swipeLeft, .swipeRight] }
+        if fingers == 4 && device == .trackpad {
+            return [.tap, .doubleTap, .click, .forceClick, .swipeUp, .swipeDown, .swipeLeft, .swipeRight,
+                    .tipTapThreeLeft, .tipTapThreeRight, .tapHold, .swipeLeftRight, .swipeUpDown]
+        }
+        if fingers == 3 {
+            let shared: [Self] = [.tap, .doubleTap, .click, .swipeUp, .swipeDown, .swipeLeft, .swipeRight,
+                .tipTapTwoLeft, .tipTapTwoMiddle, .tipTapTwoRight, .tipSwipeLeftUp, .tipSwipeLeftDown]
+            return shared + (device == .trackpad ? [.tapTop, .tapBottom, .tipSwipeLeftLeft, .tipSwipeLeftRight, .forceClick, .tapHold, .swipeLeftRight, .swipeUpDown] : [])
+        }
+        if fingers == 2 { return [.tap, .doubleTap, .tipTapLeft, .tipTapRight, .click, .swipeLeft, .swipeRight, .swipeUp, .swipeDown] }
+        if fingers == 1 { return (device == .magicMouse ? [.tap, .leftTap, .rightTap, .middleClick, .middleTap, .aboveAppleTap] : [.tap, .circleClockwise, .circleCounterClockwise, .cornerBottomLeft, .cornerBottomRight, .cornerTopLeft, .cornerTopRight]) + [.swipeLeft, .swipeRight, .swipeUp, .swipeDown] }
+        if device == .magicMouse { return [.tap] }
+        return [.click, .forceClick, .tapHold, .swipeLeftRight, .swipeUpDown, .swipeLeft, .swipeRight, .swipeUp, .swipeDown]
+    }
+    func title(fingers: Int) -> String {
+        if usesTwoFixedFingers || usesThreeFixedFingers || isCornerClick || self == .tipTapLeft || self == .tipTapRight { return rawValue }
+        if fingers == 4 && self == .doubleTap { return "4 Finger Double Tap" }
+        if fingers == 4 && self == .forceClick { return "4 Finger FORCE Click" }
+        if self == .leftTap { return "\(fingers) Finger Tap Left" }
+        if self == .rightTap { return "\(fingers) Finger Tap Right" }
+        return "\(fingers) Finger \(rawValue)"
+    }
 
     /// Directions with a movement axis — the only ones with speed tiers.
     var hasSpeed: Bool { !isClickLike }
@@ -169,6 +226,18 @@ enum WindowStateFilter: String, Codable, CaseIterable {
 }
 
 enum GestureAction: String, Codable, CaseIterable {
+    case spaceLeftInstant = "Move Left a Space (Without Animation)"
+    case spaceRightInstant = "Move Right a Space (Without Animation)"
+    case windowSpaceLeft = "Move Window One Space/Desktop Left"
+    case windowSpaceRight = "Move Window One Space/Desktop Right"
+    case stagePosition = "Stage Manager: Activate Stage by Position"
+    case stageNext = "Stage Manager: Cycle Through Stages (Forward)"
+    case stagePrevious = "Stage Manager: Cycle Through Stages (Backwards)"
+    case stageMatching = "Stage Manager: Activate Stage Containing Specific Apps / Windows"
+    case stageMenu = "Stage Manager: Show in Context Menu"
+    case stageToggle = "Stage Manager: Turn On/Off"
+    case stageRecentToggle = "Stage Manager: Turn Recent Apps On/Off"
+    case leftClick = "Left Click", rightClick = "Right Click", middleClick = "Middle Click"
     case quitApp          = "Quit App Under Cursor"
     case forceQuitApp     = "Force Quit App Under Cursor"
     case quitFrontmost    = "Quit Frontmost App"
@@ -237,6 +306,8 @@ enum GestureAction: String, Codable, CaseIterable {
                      .restoreWindow, .closeWindow, .enterFullscreen, .exitFullscreen, .toggleFullscreen,
                      .cycleWindows, .snapLeft, .snapRight, .snapTopLeft, .snapTopRight,
                      .snapBottomLeft, .snapBottomRight, .centerWindow, .moveNextDisplay]),
+        ("Spaces", [.spaceLeftInstant, .spaceRightInstant, .windowSpaceLeft, .windowSpaceRight]),
+        ("Stage Manager", [.stagePosition, .stageNext, .stagePrevious, .stageMatching, .stageMenu, .stageToggle, .stageRecentToggle]),
         ("Screenshots", [.screenshotArea, .screenshotFull, .screenshotAreaClipboard,
                          .screenshotFullClipboard, .screenshotToolbar]),
         ("Media", [.playPause, .nextTrack, .previousTrack, .volumeUp, .volumeDown,
@@ -250,6 +321,12 @@ enum GestureAction: String, Codable, CaseIterable {
 
     var inverseAction: GestureAction? {
         switch self {
+        case .spaceLeftInstant: return .spaceRightInstant
+        case .spaceRightInstant: return .spaceLeftInstant
+        case .windowSpaceLeft: return .windowSpaceRight
+        case .windowSpaceRight: return .windowSpaceLeft
+        case .stageNext: return .stagePrevious
+        case .stagePrevious: return .stageNext
         case .missionControl:    return .missionControl
         case .appExpose:         return .appExpose
         case .showDesktop:       return .showDesktop
@@ -279,6 +356,8 @@ enum GestureAction: String, Codable, CaseIterable {
         }
     }
 
+    var isStageAction: Bool { [.stagePosition, .stageNext, .stagePrevious, .stageMatching, .stageMenu, .stageToggle, .stageRecentToggle].contains(self) }
+
     var supportsReciprocal: Bool { inverseAction != nil }
 }
 
@@ -288,17 +367,20 @@ enum GestureAction: String, Codable, CaseIterable {
 
 /// Identifies rules that compete for the same gesture slot (latest in the list wins).
 struct GestureMatchSignature: Hashable {
+    let device: GestureDevice
     let fingers: Int
     let direction: GestureDirection
     let zone: TrackpadZone
     let speed: GestureSpeed
-    let appFilter: String?
+    let appFilters: [String]
     let windowStateFilter: WindowStateFilter
     let modifierFilter: ModifierFilter
 }
 
 struct GestureRule: Codable, Identifiable, Equatable {
     var id        = UUID()
+    var device: GestureDevice = .trackpad
+    var appFilters: [String] = []
     /// Optional user-given label ("Zoom out in Photos"). Empty/nil → auto label.
     var name:      String?
     var fingers:   Int              = 3
@@ -308,6 +390,7 @@ struct GestureRule: Codable, Identifiable, Equatable {
     var zone:      TrackpadZone     = .any
     var speed:     GestureSpeed     = .normal
     var action:    GestureAction    = .doNothing
+    var desktopOptions = DesktopActionOptions()
     var appPath:   String?
     /// Bundle ID (e.g. `com.apple.Safari`) — not window-state keywords.
     var appFilter: String?
@@ -382,6 +465,7 @@ struct GestureRule: Codable, Identifiable, Equatable {
                 || Self.actionIsConfigured(continuousEndAction, shortcut: continuousEndShortcut, keyboard: continuousEndKeyboard)
         }
         if action == .doNothing { return false }
+        if action == .stageMatching { return !desktopOptions.stageApps.isEmpty || !desktopOptions.windowTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         if action == .customMenuItem {
             return menuItemPath != nil && (menuItemPath?.count ?? 0) >= 2
         }
@@ -420,14 +504,22 @@ struct GestureRule: Codable, Identifiable, Equatable {
 
     var matchSignature: GestureMatchSignature {
         GestureMatchSignature(
+            device: device,
             fingers: fingers,
             direction: direction,
             zone: direction == .forceClick ? zone : .any,
             speed: (speed == .any || !direction.hasSpeed) ? .normal : speed,
-            appFilter: appFilter,
+            appFilters: effectiveAppFilters,
             windowStateFilter: windowStateFilter,
             modifierFilter: modifierFilter
         )
+    }
+
+    var effectiveAppFilters: [String] {
+        Array(Set((appFilters.isEmpty ? appFilter.map { [$0] } ?? [] : appFilters).filter { !$0.isEmpty })).sorted()
+    }
+    func matchesApp(_ bundleID: String?) -> Bool {
+        effectiveAppFilters.isEmpty || bundleID.map { effectiveAppFilters.contains($0) } == true
     }
 
     static func newDraft() -> GestureRule {
@@ -501,11 +593,14 @@ struct GestureRule: Codable, Identifiable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id        = (try? c.decodeIfPresent(UUID.self,          forKey: .id))        ?? UUID()
+        device = (try? c.decodeIfPresent(GestureDevice.self, forKey: .device)) ?? .trackpad
+        appFilters = (try? c.decodeIfPresent([String].self, forKey: .appFilters)) ?? []
         name      = try? c.decodeIfPresent(String.self,         forKey: .name)
         fingers   = (try? c.decode(Int.self,                    forKey: .fingers))   ?? 3
         direction = (try? c.decode(GestureDirection.self,       forKey: .direction)) ?? .click
         speed     = (try? c.decodeIfPresent(GestureSpeed.self,  forKey: .speed))     ?? .normal
         action    = (try? c.decode(GestureAction.self,          forKey: .action))    ?? .doNothing
+        desktopOptions = (try? c.decodeIfPresent(DesktopActionOptions.self, forKey: .desktopOptions)) ?? DesktopActionOptions()
         appPath   = try? c.decodeIfPresent(String.self,         forKey: .appPath)
         appFilter = try? c.decodeIfPresent(String.self,         forKey: .appFilter)
         windowStateFilter = (try? c.decodeIfPresent(WindowStateFilter.self, forKey: .windowStateFilter)) ?? .any
@@ -917,7 +1012,7 @@ final class Settings {
     static let shared = Settings()
 
     private init() {
-        _rules = Self.normalizeRules(Self.defaultRules, appSwitcher: _appSwitcher)
+        _rules = Self.normalizeRules(Self.defaultRules + MouseRuleBridge.migrate(MagicMouseSettings()), appSwitcher: _appSwitcher)
     }
 
     // MARK: Backing stores
@@ -926,6 +1021,11 @@ final class Settings {
     private var _appSwitcher:     AppSwitcherSettings = AppSwitcherSettings()
     private var _trackPoint:      TrackPointSettings  = TrackPointSettings()
     private var _magicMouse = MagicMouseSettings()
+    private var _deviceTuning = DeviceTuningSettings()
+    var deviceTuning: DeviceTuningSettings {
+        get { _deviceTuning }
+        set { _deviceTuning = DeviceTuningSettings.normalized(newValue); GlideConfigStore.shared.scheduleSave() }
+    }
     private var _edgeControls:    EdgeControlsSettings = EdgeControlsSettings()
     /// Guards `_tuning` — the only setting read off the main thread (the MT
     /// callback reads edge margins every frame).
@@ -1028,11 +1128,15 @@ final class Settings {
     func apply(_ config: GlideConfig) {
         var switcher = config.toAppSwitcher()
         var loadedRules = config.toRules()
+        if config.gestureSchemaVersion == 0 && !loadedRules.contains(where: { $0.device == .magicMouse }) {
+            loadedRules += MouseRuleBridge.migrate(config.magicMouse)
+        }
         Self.migrateLegacyAppSwitcherRules(into: &switcher, rules: &loadedRules)
         _appSwitcher     = AppSwitcherSettings.normalized(switcher)
         _trackPoint      = TrackPointSettings.normalized(config.toTrackPoint())
         _edgeControls    = EdgeControlsSettings.normalized(config.toEdgeControls())
         _magicMouse      = MagicMouseSettings.normalized(config.magicMouse)
+        _deviceTuning = DeviceTuningSettings.normalized(config.deviceTuning)
         _rules           = Self.normalizeRules(loadedRules, appSwitcher: _appSwitcher)
         let normalizedTuning = Self.normalizedTuning(config.toTuning())
         tuningLock.lock(); _tuning = normalizedTuning; tuningLock.unlock()
@@ -1067,7 +1171,7 @@ final class Settings {
     /// Removes horizontal swipe rules that would conflict with app switcher (plain swipes only).
     static func stripReservedHorizontalSwipes(from rules: inout [GestureRule], fingerCount: Int) {
         rules.removeAll {
-            $0.fingers == fingerCount &&
+            $0.device == .trackpad && $0.fingers == fingerCount &&
             ($0.direction == .swipeLeft || $0.direction == .swipeRight || $0.direction == .swipeLeftRight) &&
             !$0.modifierFilter.requiresModifierHeld
         }
@@ -1086,7 +1190,18 @@ final class Settings {
 
     static func normalizedRule(_ rule: GestureRule) -> GestureRule {
         var r = GestureRule.migratingLegacyAppFilter(rule)
-        r.fingers = min(max(r.fingers, 2), 5)
+        r.fingers = min(max(r.fingers, 1), 5)
+        r.desktopOptions.stagePosition = min(32, max(1, r.desktopOptions.stagePosition))
+        r.desktopOptions.stageApps = Array(Set(r.desktopOptions.stageApps.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }.filter { !$0.isEmpty })).sorted()
+        r.desktopOptions.windowTitle = r.desktopOptions.windowTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if r.fingers <= 2 || r.device == .magicMouse {
+            // Low-finger gestures are discrete; native physical clicks remain native.
+            r.speed = .normal
+            r.continuous = false
+            r.reciprocalEnabled = false
+        }
         r.speed   = (r.speed == .any || !r.direction.hasSpeed) ? .normal : r.speed
         if r.direction.isClickLike {
             r.reciprocalEnabled = false
@@ -1575,20 +1690,17 @@ struct KeyboardInputStep: Codable, Equatable, Hashable, Identifiable {
     }
 
     var token: String {
-        let key = KeyCodeLabels.tokenName(for: keyCode)
+        var parts: [String] = []
+        if command { parts.append("leftcmd") }
+        if shift { parts.append("leftshift") }
+        if control { parts.append("leftctrl") }
+        if option { parts.append("leftalt") }
+        parts.append(KeyCodeLabels.tokenName(for: keyCode))
+        let key = parts.joined(separator: "+")
         switch event {
-        case .hold:
-            return "+\(key)"
-        case .release:
-            return "-\(key)"
-        case .tap:
-            var parts: [String] = []
-            if command { parts.append("leftcmd") }
-            if shift { parts.append("leftshift") }
-            if control { parts.append("leftctrl") }
-            if option { parts.append("leftalt") }
-            parts.append(key)
-            return parts.joined(separator: "+")
+        case .hold: return "+\(key)"
+        case .release: return "-\(key)"
+        case .tap: return key
         }
     }
 }

@@ -1,95 +1,108 @@
 import AppKit
 
-// Glide app icon — calm "gesture ripple": soft lavender squircle, white rings
-// spreading from an off-center fingertip touch.
-
-func hex(_ s: String) -> NSColor {
-    var h = s; if h.hasPrefix("#") { h.removeFirst() }
-    let v = UInt32(h, radix: 16) ?? 0
-    return NSColor(srgbRed: CGFloat((v>>16)&0xff)/255, green: CGFloat((v>>8)&0xff)/255,
-                   blue: CGFloat(v&0xff)/255, alpha: 1)
+// Reproducible native-symbol artwork. The sRGB violet stops are sampled from
+// https://macosicons.com/?icon=Z6DW2YmoxD (background only; no reference artwork).
+// The flattened ICNS is the compatibility icon. Separate, unmasked 1024px
+// foreground/background layers are also exported for Apple's Icon Composer.
+func color(_ value: UInt32) -> NSColor {
+    NSColor(srgbRed: CGFloat((value >> 16) & 255) / 255,
+            green: CGFloat((value >> 8) & 255) / 255,
+            blue: CGFloat(value & 255) / 255, alpha: 1)
 }
+let topColor = color(0xA28AF5)
+let bottomColor = color(0x9871F7)
 
-let topColor    = hex("#C9BEEA")   // soft lilac
-let bottomColor = hex("#9481C9")   // muted violet
-let ringColor   = NSColor.white
-
-func render(size: CGFloat) -> Data {
-    let px = Int(size)
-    let cs = CGColorSpaceCreateDeviceRGB()
-    let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
-                        space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-    ctx.interpolationQuality = .high
-    ctx.setAllowsAntialiasing(true)
-
-    // Squircle background (Big Sur continuous corner ≈ 22.37% of side).
-    let inset = size * 0.055
-    let side  = size - 2*inset
-    let rect  = CGRect(x: inset, y: inset, width: side, height: side)
-    let radius = side * 0.2237
-    let bg = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
-
-    ctx.saveGState()
-    ctx.addPath(bg); ctx.clip()
-
-    // Gradient fill.
-    let grad = CGGradient(colorsSpace: cs, colors: [topColor.cgColor, bottomColor.cgColor] as CFArray,
-                          locations: [0, 1])!
-    ctx.drawLinearGradient(grad, start: CGPoint(x: 0, y: size), end: CGPoint(x: 0, y: 0), options: [])
-
-    // Gentle top light for soft depth.
-    let light = CGGradient(colorsSpace: cs,
-                           colors: [NSColor(white: 1, alpha: 0.16).cgColor,
-                                    NSColor(white: 1, alpha: 0).cgColor] as CFArray,
-                           locations: [0, 1])!
-    ctx.drawRadialGradient(light,
-                           startCenter: CGPoint(x: size*0.5, y: size*0.9), startRadius: 0,
-                           endCenter: CGPoint(x: size*0.5, y: size*0.9), endRadius: size*0.7, options: [])
-
-    // Ripple from an off-center touch point (lower-left). Rings spread outward,
-    // fading and thinning; the squircle clips the far arcs like a real ripple.
-    let c = CGPoint(x: size*0.37, y: size*0.40)
-    let ringRadii: [CGFloat] = [0.13, 0.27, 0.42, 0.58, 0.74].map { $0 * side }
-    for (i, r) in ringRadii.enumerated() {
-        let t = CGFloat(i) / CGFloat(ringRadii.count - 1)
-        let alpha = 0.92 * (1 - t*0.66)
-        ctx.setStrokeColor(ringColor.withAlphaComponent(alpha).cgColor)
-        ctx.setLineWidth(size * (0.021 - 0.008*t))
-        ctx.addArc(center: c, radius: r, startAngle: 0, endAngle: .pi*2, clockwise: false)
-        ctx.strokePath()
+func render(size: Int, layer: String = "composite") -> Data {
+    let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: size, pixelsHigh: size,
+                                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                 isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+    let context = NSGraphicsContext.current!.cgContext
+    context.scaleBy(x: CGFloat(size) / 1024, y: CGFloat(size) / 1024)
+    let nativeLayer = layer != "composite"
+    let rect = nativeLayer ? CGRect(x: 0, y: 0, width: 1024, height: 1024)
+        : CGRect(x: 100, y: 100, width: 824, height: 824)
+    let background = NSBezierPath(roundedRect: rect, xRadius: 184, yRadius: 184)
+    if layer != "foreground" {
+        if !nativeLayer {
+            context.saveGState()
+            context.setShadow(offset: CGSize(width: 0, height: -8), blur: 18,
+                              color: NSColor.black.withAlphaComponent(0.22).cgColor)
+            bottomColor.setFill()
+            background.fill()
+            context.restoreGState()
+        }
+        context.saveGState()
+        if !nativeLayer { background.addClip() }
+        NSGradient(starting: bottomColor, ending: topColor)!.draw(in: rect, angle: 90)
+        if !nativeLayer {
+            // Static compatibility artwork; the native layered icon must let
+            // Icon Composer supply its own dynamic lighting instead.
+            let highlight = NSGradient(starting: NSColor.white.withAlphaComponent(0.14),
+                                       ending: NSColor.white.withAlphaComponent(0))!
+            highlight.draw(fromCenter: NSPoint(x: 510, y: 1000), radius: 0,
+                           toCenter: NSPoint(x: 510, y: 1000), radius: 830, options: [])
+            NSColor.white.withAlphaComponent(0.30).setStroke()
+            background.lineWidth = 3
+            background.stroke()
+        }
+        context.restoreGState()
     }
-    // Fingertip touch dot.
-    ctx.setFillColor(ringColor.cgColor)
-    ctx.addArc(center: c, radius: size*0.045, startAngle: 0, endAngle: .pi*2, clockwise: false)
-    ctx.fillPath()
-
-    ctx.restoreGState()
-
-    let img = ctx.makeImage()!
-    return NSBitmapImageRep(cgImage: img).representation(using: .png, properties: [:])!
+    if layer != "background" {
+        let symbol = NSImage(systemSymbolName: "hand.draw", accessibilityDescription: nil)!
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 512, weight: .regular))!
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [.white]))!
+        // Same glyph placement for compatibility and future layered builds.
+        let width: CGFloat = 556
+        let height = width * symbol.size.height / symbol.size.width
+        let glyphRect = CGRect(x: (1024 - width) / 2, y: (1024 - height) / 2 + 8, width: width, height: height)
+        context.saveGState()
+        if !nativeLayer {
+            context.setShadow(offset: CGSize(width: 0, height: -6), blur: 10,
+                              color: color(0x49228C).withAlphaComponent(0.24).cgColor)
+        }
+        symbol.draw(in: glyphRect)
+        context.restoreGState()
+    }
+    NSGraphicsContext.restoreGraphicsState()
+    return bitmap.representation(using: .png, properties: [:])!
 }
 
-// Args: <outDir> [preview|iconset]
-let outDir = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "."
-let mode   = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "preview"
-
-func write(_ size: CGFloat, _ name: String) {
-    let url = URL(fileURLWithPath: outDir).appendingPathComponent(name)
-    try! render(size: size).write(to: url)
+let outDir = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ".")
+let mode = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "preview"
+try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+func write(_ size: Int, _ name: String, layer: String = "composite") throws {
+    try render(size: size, layer: layer).write(to: outDir.appendingPathComponent(name), options: .atomic)
 }
-
 if mode == "iconset" {
-    // Apple .iconset required set.
-    let specs: [(CGFloat, String)] = [
-        (16,  "icon_16x16.png"),    (32,  "icon_16x16@2x.png"),
-        (32,  "icon_32x32.png"),    (64,  "icon_32x32@2x.png"),
-        (128, "icon_128x128.png"),  (256, "icon_128x128@2x.png"),
-        (256, "icon_256x256.png"),  (512, "icon_256x256@2x.png"),
-        (512, "icon_512x512.png"),  (1024,"icon_512x512@2x.png"),
+    for size in [16, 32, 128, 256, 512] {
+        try write(size, "icon_\(size)x\(size).png")
+        try write(size * 2, "icon_\(size)x\(size)@2x.png")
+    }
+} else if mode == "icns" {
+    // ICNS supports PNG payloads directly. Write the standard Retina and 1x
+    // chunks without depending on iconutil's installed image-conversion service.
+    func chunk(_ type: String, _ payload: Data) -> Data {
+        var length = UInt32(payload.count + 8).bigEndian
+        var data = Data(type.utf8)
+        data.append(Data(bytes: &length, count: 4))
+        data.append(payload)
+        return data
+    }
+    let entries: [(String, Int)] = [
+        ("icp4", 16), ("ic11", 32), ("icp5", 32), ("ic12", 64),
+        ("ic07", 128), ("ic13", 256), ("ic08", 256), ("ic14", 512),
+        ("ic09", 512), ("ic10", 1024)
     ]
-    for (s, n) in specs { write(s, n) }
-    print("iconset written to \(outDir)")
+    var payload = Data()
+    for (type, size) in entries { payload.append(chunk(type, render(size: size))) }
+    try chunk("icns", payload).write(to: outDir.appendingPathComponent("AppIcon.icns"), options: .atomic)
+} else if mode == "layers" {
+    try write(1024, "Hand.png", layer: "foreground")
+    try write(1024, "Background.png", layer: "background")
 } else {
-    write(256, "preview.png")
-    print("preview written")
+    try write(256, "preview.png")
+    try write(1024, "icon_source.png")
 }
+print("Icon artwork written to \(outDir.path)")

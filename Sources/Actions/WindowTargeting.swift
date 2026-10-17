@@ -92,6 +92,8 @@ final class WindowTargeting {
 
     // MARK: - Window targeting
 
+    func targetWindowForDesktopAction() -> AXUIElement? { targetWindow() }
+
     private func targetWindow() -> AXUIElement? {
         switch Settings.shared.windowTargetingMode {
         case .focusedThenCursor: return focusedWindow() ?? windowAtCursor()

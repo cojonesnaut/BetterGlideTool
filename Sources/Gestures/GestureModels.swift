@@ -105,6 +105,7 @@ enum GesturePhase {
 
 struct ReciprocalToken {
     let inverseAction: GestureAction
+    let desktopOptions: DesktopActionOptions
     let fingers: Int
     let direction: GestureDirection
     let sourceRuleID: UUID
@@ -131,7 +132,7 @@ extension GestureDirection {
             return self == .swipeLeft || self == .swipeRight
         case .swipeUp, .swipeDown, .swipeUpDown:
             return self == .swipeUp || self == .swipeDown
-        case .click, .forceClick, .tapHold:
+        case .tapTop, .tapBottom, .circleClockwise, .circleCounterClockwise, .cornerBottomLeft, .cornerBottomRight, .cornerTopLeft, .cornerTopRight, .tipTapThreeLeft, .tipTapThreeRight, .tipSwipeLeftLeft, .tipSwipeLeftRight, .tap, .doubleTap, .tipTapLeft, .tipTapRight, .tipTapTwoLeft, .tipTapTwoMiddle, .tipTapTwoRight, .tipSwipeLeftUp, .tipSwipeLeftDown, .leftTap, .rightTap, .middleTap, .aboveAppleTap, .middleClick, .click, .forceClick, .tapHold:
             return false
         }
     }

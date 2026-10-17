@@ -21,6 +21,9 @@ bool GLDWFocusWindow(pid_t process_id, uint32_t window_id);
 // Returns NULL when the private symbols are unavailable.
 CFArrayRef GLDWCopyWindowIDs(bool current_space_only, bool ordered_in_only);
 
+// Returns the owning display even while a stage is tucked offscreen. Zero means unknown.
+uint32_t GLDWDisplayForWindow(uint32_t window_id);
+
 // Returns the Space that owns a window, including the dedicated Space a
 // full-screen window always occupies. Returns 0 when unknown.
 uint64_t GLDWSpaceForWindow(uint32_t window_id);

@@ -263,12 +263,15 @@ final class GestureProcessor {
                 return .fired
             }
         } else if let switcherAction = GestureRuleResolver.appSwitcherAction(fingers: data.fingers, direction: direction, modifiers: updated.modifiersAtStart) {
+            LowFingerTrackpadInput.shared.cancelCurrentGesture()
             if let switcherData = engine?.beginAppSwitcher(
                 for: switcherAction,
                 refX: frame.cx,
                 refY: frame.cy,
                 fingerCount: data.fingers
             ) {
+                LiveContactsMonitor.shared.recordGesture(direction.title(fingers: data.fingers), action: switcherAction.rawValue,
+                    appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
                 return .switchingApps(switcherData)
             } else {
                 return .fired
@@ -303,7 +306,7 @@ final class GestureProcessor {
         if let rule = updated.continuousRule, direction.matchesAxis(of: rule.direction) {
             let action = engine?.continuousUpdateAction(for: direction, in: rule) ?? .doNothing
             if action != .doNothing {
-                engine?.executeContinuousAction(action, shortcut: engine?.continuousUpdateShortcut(for: direction, in: rule), keyboard: engine?.continuousUpdateKeyboard(for: direction, in: rule) ?? [])
+                engine?.executeContinuousAction(action, shortcut: engine?.continuousUpdateShortcut(for: direction, in: rule), keyboard: engine?.continuousUpdateKeyboard(for: direction, in: rule) ?? [], gesture: direction.title(fingers: data.fingers))
             }
             updated.lastContinuousActionTime = now
         }

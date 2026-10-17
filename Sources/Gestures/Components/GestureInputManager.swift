@@ -3,6 +3,7 @@ import ApplicationServices
 
 final class GestureInputManager {
     weak var engine: GestureEngine?
+    private let eventIdentity = MouseEventIdentity()
 
     var suppressionTap: CFMachPort?
     var suppressionSource: CFRunLoopSource?
@@ -213,7 +214,8 @@ final class GestureInputManager {
 
     func setupClickObservationTap() {
         guard !clickTapInstalled else { return }
-        let mask = CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
+        let mask = [CGEventType.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp, .scrollWheel]
+            .reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
         clickObservationTap = CGEvent.tapCreate(
             tap: .cghidEventTap,
             place: .headInsertEventTap,
@@ -226,6 +228,8 @@ final class GestureInputManager {
                     }
                     return nil
                 }
+                guard event.getIntegerValueField(.eventSourceUserData) != SyntheticMouseInput.tag else { return Unmanaged.passUnretained(event) }
+                LowFingerTrackpadInput.shared.observeNativeEvent(type, confirmedTrackpad: GestureEngine.shared.inputManager.eventIdentity.isTrackpad(event))
                 guard type == .leftMouseDown else { return Unmanaged.passUnretained(event) }
                 let count = TouchTracker.getThreeFingerCount()
                 let peak = TouchTracker.getSessionPeakActiveTouches()

@@ -3,12 +3,12 @@ import AppKit
 
 enum PrefsTab: String, CaseIterable, Identifiable {
     case gestures      = "Gestures"
-    case magicMouse    = "Magic Mouse"
     case keyboard      = "Keyboard"
     case appSwitcher   = "App Switcher"
     case trackPoint    = "TrackPoint"
     case edgeControls  = "Edge Controls"
     case tuning        = "Tuning"
+    case inputMonitoring = "Input Monitoring"
     case general       = "General"
     case configuration = "Configuration"
 
@@ -20,12 +20,22 @@ enum PrefsTab: String, CaseIterable, Identifiable {
         case .trackPoint:    return "dot.circle.and.hand.point.up.left.fill"
         case .edgeControls:  return "rectangle.inset.filled"
         case .gestures:      return "hand.draw"
-        case .magicMouse:    return "magicmouse"
         case .keyboard:      return "keyboard"
         case .tuning:        return "slider.horizontal.3"
+        case .inputMonitoring: return "waveform.path"
         case .general:       return "gearshape"
         case .configuration: return "doc.text"
         }
+    }
+}
+
+enum PreferencesDevice: String, CaseIterable, Identifiable {
+    case trackpad = "Trackpad"
+    case magicMouse = "Magic Mouse"
+    var id: String { rawValue }
+    var icon: String { self == .trackpad ? "rectangle.and.hand.point.up.left" : "magicmouse" }
+    var tabs: [PrefsTab] {
+        self == .trackpad ? [.gestures, .appSwitcher, .trackPoint, .edgeControls, .tuning, .inputMonitoring] : [.gestures, .tuning, .inputMonitoring]
     }
 }
 
@@ -40,6 +50,7 @@ final class PreferencesNavigator: ObservableObject {
     private init() {}
 
     @Published var tab: PrefsTab = .gestures
+    @Published var device: PreferencesDevice = .trackpad
 }
 
 struct PreferencesWindow: View {
@@ -51,12 +62,36 @@ struct PreferencesWindow: View {
 
     var body: some View {
         NavigationSplitView {
-            List(PrefsTab.allCases, selection: $navigator.tab) { tab in
-                Label(tab.rawValue, systemImage: tab.systemImage)
-                    .tag(tab)
+            List(selection: $navigator.tab) {
+                Section(navigator.device.rawValue) {
+                    ForEach(navigator.device.tabs) { tab in
+                        Label(tab.rawValue, systemImage: tab.systemImage).tag(tab)
+                    }
+                }
+                Section("Shared") {
+                    ForEach([PrefsTab.keyboard, .general, .configuration]) { tab in
+                        Label(tab.rawValue, systemImage: tab.systemImage).tag(tab)
+                    }
+                }
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 220)
+            .safeAreaInset(edge: .top) {
+                Picker("Input device", selection: Binding(
+                    get: { navigator.device },
+                    set: { navigator.device = $0; navigator.tab = .gestures }
+                )) {
+                    ForEach(PreferencesDevice.allCases) { device in
+                        Label(device.rawValue, systemImage: device.icon).tag(device)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .controlSize(.large)
+                .padding(12)
+                .accessibilityLabel("Input device")
+
+            }
             .safeAreaInset(edge: .bottom) { sidebarStatus }
         } detail: {
             Group {
@@ -64,20 +99,31 @@ struct PreferencesWindow: View {
                 case .appSwitcher:   AppSwitcherTab()
                 case .trackPoint:    TrackPointTab()
                 case .edgeControls:  EdgeControlsTab()
-                case .gestures:      GesturesTab()
-                case .magicMouse:    MagicMouseTab()
+                case .gestures:
+                    GesturesTab(device: navigator.device == .trackpad ? .trackpad : .magicMouse)
+                        .id(navigator.device)
                 case .keyboard:      KeyboardTab()
-                case .tuning:        TuningTab()
+                case .tuning:
+                    if navigator.device == .magicMouse { MagicMouseTab() } else { TuningTab() }
+                case .inputMonitoring:
+                    InputMonitoringTab(device: navigator.device == .trackpad ? .trackpad : .magicMouse)
+                        .id(navigator.device)
                 case .general:       GeneralTab()
                 case .configuration: ConfigurationTab()
                 }
             }
-            .navigationTitle(selectedTab.rawValue)
+            .navigationTitle(selectedTab == .gestures ? "\(navigator.device.rawValue) Gestures" : selectedTab.rawValue)
         }
         .frame(minWidth: 760, minHeight: 520)
+        .onChange(of: navigator.tab) { tab in
+            if [.appSwitcher, .trackPoint, .edgeControls].contains(tab) { navigator.device = .trackpad }
+        }
         .onAppear {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            engineBridge.recheckAccessibilityPermission()
         }
         .onDisappear {
             NSApp.setActivationPolicy(.accessory)

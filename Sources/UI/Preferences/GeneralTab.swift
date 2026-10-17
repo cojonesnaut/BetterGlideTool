@@ -73,16 +73,22 @@ struct GeneralTab: View {
                          : "BetterGlideTool needs Accessibility access to detect trackpad and Magic Mouse gestures. Click below to grant it.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                    if !store.accessibilityGranted {
+                        Text("Already enabled? Quit other copies. After replacing an ad-hoc build, remove its old Accessibility entry and add the running app again, then relaunch. macOS must approve the new build.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text("Running copy: \(Bundle.main.bundlePath)")
+                            .font(.caption2).textSelection(.enabled)
+                    }
                 }
 
                 Spacer()
 
-                if !store.accessibilityGranted {
-                    Button("Open System Settings") {
-                        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-                        NSWorkspace.shared.open(url)
+                VStack(spacing: 8) {
+                    Button("Recheck Permission") { EngineBridge.shared.recheckAccessibilityPermission() }
+                    if !store.accessibilityGranted {
+                        Button("Open System Settings") { AccessibilityPermission.openSettings() }
+                            .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
             }
             .padding(8)

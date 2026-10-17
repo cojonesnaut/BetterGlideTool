@@ -92,6 +92,8 @@ final class GestureEngine {
                                         edgeMargin: Settings.shared.tuning.edgeMargin)
         TrackPointController.shared.applySettings()
         EdgeControlsController.shared.applySettings()
+        LowFingerTrackpadInput.shared.start()
+        MultitouchBridge.shared.updateMinimumContactCount()
         inputManager.setupTaps()
         MultitouchBridge.shared.start(callback: glideMTCallback)
         inputManager.installMonitors()
@@ -99,6 +101,7 @@ final class GestureEngine {
 
         isRunning = true
         MagicMouseInput.shared.start()
+        NativePointerSpeed.shared.apply()
         updateObservableState()
         AppLogger.debug("[Engine] Started")
     }
@@ -110,6 +113,7 @@ final class GestureEngine {
         guard isRunning else { return }
         inputManager.checkHealth()
         MagicMouseInput.shared.checkHealth()
+        NativePointerSpeed.shared.apply()
         guard !MultitouchBridge.shared.isDeviceRunning else { return }
         AppLogger.debug("[Engine] Multitouch device not running — rebuilding")
         MultitouchBridge.shared.restart(callback: glideMTCallback)
@@ -119,7 +123,9 @@ final class GestureEngine {
         guard isRunning else { return }
 
         finishIfNeeded()
+        LowFingerTrackpadInput.shared.stop()
         MagicMouseInput.shared.stop()
+        NativePointerSpeed.shared.apply(restoring: true)
         TrackPointController.shared.engineWillStop()
         EdgeControlsController.shared.reset()
         MultitouchBridge.shared.stop()
@@ -210,7 +216,9 @@ final class GestureEngine {
 
         if TouchTracker.glideClickFingerCount >= 3 { return }
 
-        if let nextPhase = processor.handleTouches(frame, phase: phase, tuning: Settings.shared.tuning) {
+        var tuning = Settings.shared.tuning
+        tuning.initialThreshold *= Float(Settings.shared.deviceTuning.thresholdScale(for: .trackpad))
+        if let nextPhase = processor.handleTouches(frame, phase: phase, tuning: tuning) {
             phase = nextPhase
             updateObservableState()
         }
@@ -335,10 +343,12 @@ final class GestureEngine {
     }
 
     private func fireClickRule(_ rule: GestureRule, label: String, fingerCount n: Int) {
+        LowFingerTrackpadInput.shared.cancelCurrentGesture()
         AppLogger.debug("[Engine] \(label) — \(n) fingers → \(rule.action.rawValue)")
         clearReciprocalToken()
         phase = .fired
 
+        let monitoring = recordMonitoredGesture(rule)
         if rule.action == .quitApp {
             WindowTargeting.shared.quitAppAtCursor(NSEvent.mouseLocation)
         } else {
@@ -346,7 +356,7 @@ final class GestureEngine {
                                           menuItemPath: rule.menuItemPath, menuTargetBundleID: rule.appFilter,
                                           customShortcut: rule.customShortcut,
                                           advancedKeyboard: rule.advancedKeyboard,
-                                          shortcutName: rule.shortcutName, script: rule.script)
+                                          shortcutName: rule.shortcutName, script: rule.script, desktopOptions: rule.desktopOptions, monitoring: monitoring)
         }
         updateObservableState()
     }
@@ -547,16 +557,23 @@ final class GestureEngine {
 
     // MARK: - Reciprocal & Continuous
 
+    private func recordMonitoredGesture(_ rule: GestureRule) -> LiveActionContext? {
+        LiveContactsMonitor.forDevice(rule.device).recordGesture(rule.direction.title(fingers: rule.fingers),
+            action: rule.action.rawValue, appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
+    }
+
     func executeGestureRuleAction(_ rule: GestureRule) {
-        Haptic.forRule(rule)
+        let monitoring = recordMonitoredGesture(rule)
+        if rule.device == .trackpad { Haptic.forRule(rule) }
         ActionExecutor.shared.execute(rule.action, appPath: rule.appPath,
                                       menuItemPath: rule.menuItemPath, menuTargetBundleID: rule.appFilter,
                                       customShortcut: rule.customShortcut,
                                       advancedKeyboard: rule.advancedKeyboard,
-                                      shortcutName: rule.shortcutName, script: rule.script)
+                                      shortcutName: rule.shortcutName, script: rule.script, desktopOptions: rule.desktopOptions, monitoring: monitoring)
     }
 
     func executeSwipeRule(_ rule: GestureRule, fingers: Int, direction: GestureDirection) {
+        LowFingerTrackpadInput.shared.cancelCurrentGesture()
         executeGestureRuleAction(rule)
 
         // Track what just fired so we can detect back-to-back same-direction toggles.
@@ -594,8 +611,11 @@ final class GestureEngine {
         }
         clearReciprocalToken()
         lastFiredSwipe = nil   // reciprocal consumed — reset toggle tracking
+        LowFingerTrackpadInput.shared.cancelCurrentGesture()
         Haptic.reciprocal()
-        ActionExecutor.shared.execute(token.inverseAction)
+        let monitoring = LiveContactsMonitor.shared.recordGesture(direction.title(fingers: fingers), action: token.inverseAction.rawValue,
+            appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
+        ActionExecutor.shared.execute(token.inverseAction, desktopOptions: token.desktopOptions, monitoring: monitoring)
         return true
     }
 
@@ -607,21 +627,23 @@ final class GestureEngine {
         default: return nil
         }
         let inverse = rule.reciprocalAction ?? rule.action.inverseAction ?? .doNothing
-        return ReciprocalToken(inverseAction: inverse,
+        return ReciprocalToken(inverseAction: inverse, desktopOptions: rule.desktopOptions,
                                fingers: rule.fingers, direction: rev, sourceRuleID: rule.id,
                                expiresAt: ProcessInfo.processInfo.systemUptime + 1.5)
     }
 
     func clearReciprocalToken() { reciprocalToken = nil; isReciprocalActive = false }
 
-    func executeContinuousAction(_ action: GestureAction, shortcut: KeyboardShortcut? = nil, keyboard: [KeyboardInputStep] = []) {
+    func executeContinuousAction(_ action: GestureAction, shortcut: KeyboardShortcut? = nil, keyboard: [KeyboardInputStep] = [], gesture: String = "Continuous gesture") {
+        let monitoring = LiveContactsMonitor.shared.recordGesture(gesture, action: action.rawValue, appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
+        LowFingerTrackpadInput.shared.cancelCurrentGesture()
         Haptic.forAction(action)
-        ActionExecutor.shared.execute(action, customShortcut: shortcut, advancedKeyboard: keyboard)
+        ActionExecutor.shared.execute(action, customShortcut: shortcut, advancedKeyboard: keyboard, monitoring: monitoring)
     }
 
     func executeContinuousEndAction(for data: SwipeTrackData) {
         guard let rule = data.continuousRule else { return }
-        executeContinuousAction(rule.continuousEndAction, shortcut: rule.continuousEndShortcut, keyboard: rule.continuousEndKeyboard)
+        executeContinuousAction(rule.continuousEndAction, shortcut: rule.continuousEndShortcut, keyboard: rule.continuousEndKeyboard, gesture: "\(rule.direction.title(fingers: rule.fingers)) · End")
     }
 
     func continuousUpdateAction(for dir: GestureDirection, in rule: GestureRule) -> GestureAction {

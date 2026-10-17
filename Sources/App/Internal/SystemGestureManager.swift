@@ -129,7 +129,7 @@ enum SystemGestureManager {
         if appSwitcher.enabled {
             add(threeFingerHoriz, "App Switcher (3-finger swipe)")
         }
-        for rule in rules where rule.isActive {
+        for rule in rules where rule.isActive && rule.device == .trackpad {
             let label = rule.displayName
             switch (rule.fingers, rule.direction) {
             case (3, .swipeLeft), (3, .swipeRight), (3, .swipeLeftRight):
@@ -140,7 +140,7 @@ enum SystemGestureManager {
                 add(fourFingerHoriz, label)
             case (4, .swipeUp), (4, .swipeDown), (4, .swipeUpDown):
                 add(fourFingerVert, label)
-            case (3, .click), (3, .forceClick), (3, .tapHold):
+            case (3, .tap), (3, .doubleTap), (3, .click), (3, .forceClick), (3, .tapHold):
                 add(threeFingerTap, label)
             default:
                 break

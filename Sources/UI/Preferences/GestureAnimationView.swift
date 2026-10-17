@@ -20,6 +20,7 @@ import SwiftUI
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct GestureAnimationView: View {
+    var device: GestureDevice = .trackpad
     var direction: GestureDirection
     var fingerCount: Int
     var zone: TrackpadZone
@@ -32,7 +33,7 @@ struct GestureAnimationView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Dimensions calibrated to match macOS System Settings preview aspect ratio
-    private let trackpadWidth: CGFloat = 218
+    private var trackpadWidth: CGFloat { device == .magicMouse ? 100 : 218 }
     private let trackpadHeight: CGFloat = 138
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ struct GestureAnimationView: View {
         rule: GestureRule,
         showLabel: Bool = true
     ) {
+        self.device = rule.device
         self.direction = rule.direction
         self.fingerCount = rule.fingers
         self.zone = rule.zone
@@ -113,7 +115,7 @@ struct GestureAnimationView: View {
                 topBadgesOverlay
             }
             .frame(width: trackpadWidth, height: trackpadHeight)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: device == .magicMouse ? 45 : 12, style: .continuous))
 
             if showLabel {
                 gestureSummaryLabel
@@ -206,7 +208,7 @@ struct GestureAnimationView: View {
     private var trackpadChassis: some View {
         ZStack {
             // Trackpad glass surface with subtle native gradient
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: device == .magicMouse ? 45 : 12, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
@@ -219,7 +221,7 @@ struct GestureAnimationView: View {
                 )
 
             // Inner surface depth shadow
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: device == .magicMouse ? 45 : 12, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
 
             // Top highlight reflection
@@ -298,6 +300,25 @@ struct GestureAnimationView: View {
     }
 
     private var zoneCenterOffset: CGSize {
+        if device == .magicMouse && fingerCount == 1 {
+            switch direction {
+            case .leftTap: return CGSize(width: -trackpadWidth * 0.25, height: 0)
+            case .rightTap: return CGSize(width: trackpadWidth * 0.25, height: 0)
+            case .aboveAppleTap: return CGSize(width: 0, height: trackpadHeight * 0.225)
+            default: break
+            }
+        }
+        if device == .trackpad {
+            switch direction {
+            case .tapTop: return CGSize(width: 0, height: -trackpadHeight * 0.25)
+            case .tapBottom: return CGSize(width: 0, height: trackpadHeight * 0.25)
+            case .cornerBottomLeft: return CGSize(width: -trackpadWidth * 0.38, height: trackpadHeight * 0.35)
+            case .cornerBottomRight: return CGSize(width: trackpadWidth * 0.38, height: trackpadHeight * 0.35)
+            case .cornerTopLeft: return CGSize(width: -trackpadWidth * 0.38, height: -trackpadHeight * 0.35)
+            case .cornerTopRight: return CGSize(width: trackpadWidth * 0.38, height: -trackpadHeight * 0.35)
+            default: break
+            }
+        }
         let size = CGSize(width: trackpadWidth, height: trackpadHeight)
         let rect = zoneRect(in: size)
         return CGSize(
@@ -314,40 +335,60 @@ struct GestureAnimationView: View {
     private func animatedGestureContent(progress: Double) -> some View {
         let state = computeMotionState(progress: progress)
 
-        ZStack {
-            // Ripple effects for clicks and taps
-            if state.rippleRadius > 0 && state.rippleOpacity > 0 {
-                Circle()
-                    .stroke(Color.accentColor.opacity(state.rippleOpacity), lineWidth: 1.5)
-                    .frame(width: state.rippleRadius * 2, height: state.rippleRadius * 2)
+        if direction.usesTwoFixedFingers || direction.usesThreeFixedFingers {
+            fixedFingerContent(progress: progress)
+        } else {
+            ZStack {
+                // Ripple effects for clicks and taps
+                if state.rippleRadius > 0 && state.rippleOpacity > 0 {
+                    Circle()
+                        .stroke(Color.accentColor.opacity(state.rippleOpacity), lineWidth: 1.5)
+                        .frame(width: state.rippleRadius * 2, height: state.rippleRadius * 2)
+                        .offset(x: state.clusterOffset.width + zoneCenterOffset.width,
+                                y: state.clusterOffset.height + zoneCenterOffset.height)
+                }
+
+                if state.secondaryRippleRadius > 0 && state.secondaryRippleOpacity > 0 {
+                    Circle()
+                        .stroke(Color.accentColor.opacity(state.secondaryRippleOpacity), lineWidth: 2)
+                        .frame(width: state.secondaryRippleRadius * 2, height: state.secondaryRippleRadius * 2)
+                        .offset(x: state.clusterOffset.width + zoneCenterOffset.width,
+                                y: state.clusterOffset.height + zoneCenterOffset.height)
+                }
+
+                // High-speed ghost trails when moving fast
+                if speed == .fast && state.isMoving && direction.hasSpeed {
+                    ghostTrail(offset: state.clusterOffset, velocityVector: state.velocityVector, opacity: state.opacity)
+                        .offset(x: zoneCenterOffset.width, y: zoneCenterOffset.height)
+                }
+
+                // Finger dot cluster
+                fingerCluster(scale: state.dotScale, opacity: state.opacity)
                     .offset(x: state.clusterOffset.width + zoneCenterOffset.width,
                             y: state.clusterOffset.height + zoneCenterOffset.height)
             }
-
-            if state.secondaryRippleRadius > 0 && state.secondaryRippleOpacity > 0 {
-                Circle()
-                    .stroke(Color.accentColor.opacity(state.secondaryRippleOpacity), lineWidth: 2)
-                    .frame(width: state.secondaryRippleRadius * 2, height: state.secondaryRippleRadius * 2)
-                    .offset(x: state.clusterOffset.width + zoneCenterOffset.width,
-                            y: state.clusterOffset.height + zoneCenterOffset.height)
-            }
-
-            // High-speed ghost trails when moving fast
-            if speed == .fast && state.isMoving && direction.hasSpeed {
-                ghostTrail(offset: state.clusterOffset, velocityVector: state.velocityVector, opacity: state.opacity)
-                    .offset(x: zoneCenterOffset.width, y: zoneCenterOffset.height)
-            }
-
-            // Finger dot cluster
-            fingerCluster(scale: state.dotScale, opacity: state.opacity)
-                .offset(x: state.clusterOffset.width + zoneCenterOffset.width,
-                        y: state.clusterOffset.height + zoneCenterOffset.height)
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // MARK: - Motion State Computation
     // ─────────────────────────────────────────────────────────────────────────
+
+    private func fixedFingerContent(progress: Double) -> some View {
+        let count = direction.usesThreeFixedFingers ? 4 : 3
+        let movingIndex = direction == .tipTapTwoMiddle ? 1 : ((direction == .tipTapTwoRight || direction == .tipTapThreeRight) ? count - 1 : 0)
+        let vertical = direction == .tipSwipeLeftUp || direction == .tipSwipeLeftDown
+        let horizontal = direction == .tipSwipeLeftLeft || direction == .tipSwipeLeftRight
+        let motion = CGFloat(smoothStep((progress - 0.3) / 0.4)) * ((direction == .tipSwipeLeftUp || direction == .tipSwipeLeftLeft) ? -30 : 30)
+        let positions = fingerOffsets(count: count)
+        return ZStack {
+            ForEach(0..<count, id: \.self) { index in
+                singleFingerDot
+                    .opacity(index == movingIndex ? (progress >= 0.25 && progress < 0.75 ? 1 : 0) : (progress < 0.9 ? 1 : 0))
+                    .offset(x: positions[index].x + (horizontal && index == movingIndex ? motion : 0), y: positions[index].y + (vertical && index == movingIndex ? motion : 0))
+            }
+        }
+    }
 
     private struct MotionState {
         var clusterOffset: CGSize = .zero
@@ -369,7 +410,12 @@ struct GestureAnimationView: View {
         let verticalSpan: CGFloat = isZoned ? 10.0 : 22.0
 
         switch direction {
-        case .click:
+        case .circleClockwise, .circleCounterClockwise:
+            let angle = progress * .pi * 2 * (direction == .circleClockwise ? 1.0 : -1.0)
+            state.clusterOffset = CGSize(width: cos(angle) * 32, height: sin(angle) * 32)
+            state.opacity = progress < 0.9 ? 1 : (1 - progress) * 10
+        case .tapTop, .tapBottom, .cornerBottomLeft, .cornerBottomRight, .cornerTopLeft, .cornerTopRight, .tipTapThreeLeft, .tipTapThreeRight, .tipSwipeLeftLeft, .tipSwipeLeftRight, .tap, .doubleTap, .tipTapLeft, .tipTapRight, .tipTapTwoLeft, .tipTapTwoMiddle, .tipTapTwoRight, .tipSwipeLeftUp, .tipSwipeLeftDown, .leftTap, .rightTap, .middleTap, .aboveAppleTap, .middleClick, .click:
+            let progress = direction == .doubleTap ? (progress * 2).truncatingRemainder(dividingBy: 1) : progress
             if progress < 0.15 {
                 let p = progress / 0.15
                 state.opacity = p
@@ -646,6 +692,8 @@ struct GestureAnimationView: View {
     /// Ergonomic finger placement arcs resembling natural hand postures
     private func fingerOffsets(count: Int) -> [CGPoint] {
         switch count {
+        case 1: return [CGPoint(x: 0, y: 0)]
+        case 2: return [CGPoint(x: -10, y: 0), CGPoint(x: 10, y: 0)]
         case 3:
             return [
                 CGPoint(x: -18, y: 2),   // Index
@@ -742,7 +790,7 @@ struct GestureAnimationView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text("\(fingerCount)-finger \(direction.rawValue.lowercased())")
+                Text(direction.title(fingers: fingerCount))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
 

@@ -49,9 +49,8 @@ final class MultitouchBridge {
 
     // MARK: Frame gating
 
-    /// Fewest contacts a frame must carry to reach Swift. Defaults to 3 — every
-    /// gesture rule's floor — so one- and two-finger cursor work never crosses
-    /// the bridge. The corner TrackPoint and Edge Controls lower it to 1 while enabled.
+    /// Fewest contacts a frame must carry to reach Swift. Defaults to 3. Active low-finger rules, TrackPoint, or Edge Controls
+    /// lower it to 1; ordinary cursor work otherwise stays inside the C bridge.
     func setMinimumContactCount(_ count: Int) {
         GLDTSetMinimumContactCount(Int32(count))
     }
@@ -65,6 +64,9 @@ final class MultitouchBridge {
             Settings.shared.edgeControls.leftEdge != .none ||
             Settings.shared.edgeControls.rightEdge != .none
         )
-        setMinimumContactCount((trackPointActive || edgeControlsActive) ? 1 : 3)
+        let lowFingerActive = LowFingerTrackpadInput.recognitionSettings(rules: Settings.shared.rules).enabled
+        let liveContactsActive = LiveContactsMonitor.shared.isEnabled
+        GLDTSetContactDetailsEnabled(lowFingerActive || liveContactsActive)
+        setMinimumContactCount((trackPointActive || edgeControlsActive || lowFingerActive || liveContactsActive) ? 1 : 3)
     }
 }

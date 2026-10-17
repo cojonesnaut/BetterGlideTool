@@ -8,7 +8,7 @@ struct MagicMouseTab: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                TuningSection(title: "Magic Mouse", icon: "magicmouse") {
+                TuningSection(title: "Connection", icon: "magicmouse") {
                     VStack(alignment: .leading, spacing: 12) {
                         Toggle("Enable Magic Mouse gestures", isOn: Binding(
                             get: { settings.enabled }, set: { value in store.updateMagicMouse { $0.enabled = value } }))
@@ -19,21 +19,27 @@ struct MagicMouseTab: View {
                             Button("Reconnect") { input.reconnect() }
                                 .disabled(!settings.enabled)
                         }
-                        Text("Lift your fingers, then tap lightly without pressing the mouse button. Two-finger tap clicks the middle button by default; three-finger tap opens Mission Control. Physical clicks and one-finger scrolling keep working normally.")
+                        Text("Lift your fingers, then tap lightly without pressing the mouse button. Two-finger tap clicks the middle button by default; three-finger tap opens Mission Control. Unassigned physical clicks keep working normally. Unassigned swipes keep native scrolling.")
                             .font(.callout).foregroundStyle(.secondary)
                     }.padding(12)
                 }
+                DeviceTuningCard(device: .magicMouse)
+                TipTapTuningCard(device: .magicMouse)
+                TuningSection(title: "Scrolling", icon: "scroll") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Toggle("Invert vertical scrolling", isOn: Binding(
+                            get: { settings.invertVerticalScrolling }, set: { value in store.updateMagicMouse { $0.invertVerticalScrolling = value } }))
+                        Divider()
+                        Toggle("Invert horizontal scrolling", isOn: Binding(
+                            get: { settings.invertHorizontalScrolling }, set: { value in store.updateMagicMouse { $0.invertHorizontalScrolling = value } }))
+                        Divider()
+                        Text("Reverses the current macOS direction for Magic Mouse only, including momentum. Trackpad scrolling keeps its macOS setting. Enable Magic Mouse gestures above to use these options.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.padding(12)
+                }
                 if settings.enabled {
-                    TuningSection(title: "Tap actions", icon: "hand.tap") {
-                        assignments(swipes: false)
-                    }
-                    TuningSection(title: "Two-finger swipes", icon: "arrow.left.and.right") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Swipes are off by default. Assign actions below to use both fingers together. Turn off overlapping gestures in System Settings → Mouse → More Gestures to avoid a second macOS action.")
-                                .font(.callout).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.top, 12)
-                            assignments(swipes: true)
-                        }
-                    }
+                    Text("Swipes start off. A single-finger swipe shares the mouse's scrolling surface; assign it only if you want that motion to trigger an action. Turn off overlapping gestures in System Settings → Mouse → More Gestures.")
+                        .font(.callout).foregroundStyle(.secondary)
                     TuningSection(title: "Touch sensitivity", icon: "slider.horizontal.3") {
                         VStack(alignment: .leading, spacing: 14) {
                             slider("Maximum tap duration", value: binding(\.tapDuration), range: 0.10...0.45,
@@ -46,10 +52,11 @@ struct MagicMouseTab: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }.padding(12)
                     }
-                    Text("Trackpad gestures, TrackPoint, edge sliders, and force-click remain trackpad features. Magic Mouse has no pressure sensor or haptic motor.")
+                    Text("TrackPoint, edge sliders, and force-click remain trackpad features. Magic Mouse has no pressure sensor or haptic motor.")
                         .font(.callout).foregroundStyle(.secondary)
-                    Button("Reset Magic Mouse to Defaults") {
+                    Button("Reset Connection & Sensitivity") {
                         store.updateMagicMouse { $0 = MagicMouseSettings() }
+                        store.updateDeviceTuning { $0.mouseSensitivity = 0.5; $0.mouseTipTapMinimum = 0.08; $0.mouseTipTapAnchor = 0.25 }
                     }
                 }
             }.padding()
@@ -58,21 +65,6 @@ struct MagicMouseTab: View {
 
     private func binding(_ key: WritableKeyPath<MagicMouseSettings, Double>) -> Binding<Double> {
         Binding(get: { settings[keyPath: key] }, set: { value in store.updateMagicMouse { $0[keyPath: key] = value } })
-    }
-    private func assignments(swipes: Bool) -> some View {
-        VStack(spacing: 10) {
-            ForEach(MagicMouseGesture.allCases.filter { $0.isSwipe == swipes }) { gesture in
-                HStack {
-                    Text(gesture.title)
-                    Spacer()
-                    Picker(gesture.title, selection: Binding(
-                        get: { settings.action(for: gesture) },
-                        set: { action in store.updateMagicMouse { $0.bindings[gesture] = action } })) {
-                            ForEach(MagicMouseAction.allCases) { action in Text(action.rawValue).tag(action) }
-                        }.labelsHidden().frame(width: 230)
-                }
-            }
-        }.padding(12)
     }
     private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, display: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {

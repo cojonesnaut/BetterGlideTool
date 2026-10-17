@@ -216,6 +216,7 @@ enum TouchTracker {
     }
 }
 let glideMTCallback: GLDTFrameCallback = { points, count, timestamp, context in
+    let fixedFingerSession = LowFingerTrackpadInput.shared.receive(points, count: count, timestamp: timestamp)
     feedTrackPoint(points, count)
     feedEdgeControls(points, count, timestamp)
 
@@ -300,6 +301,12 @@ let glideMTCallback: GLDTFrameCallback = { points, count, timestamp, context in
     }
     TouchTracker.stateLock.unlock()
 
+    if fixedFingerSession {
+        // Preserve physical finger state for suppression, but do not interpret a
+        // single moving finger as a whole-hand swipe or Tap & Hold.
+        TouchTracker.enqueueFrame(TouchFrameData(count: 0, cx: 0, cy: 0, spread: 0, coherence: 1))
+        return
+    }
     if skipDispatch { return }
 
     var sumX: Float = 0, sumY: Float = 0
