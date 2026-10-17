@@ -22,7 +22,7 @@ From this repository's directory:
 open build/BetterGlideTool.app
 ```
 
-For an optimized universal app (Apple Silicon and Intel):
+For an optimized Apple Silicon app (Intel Macs are not supported):
 
 ```sh
 ./build.sh --release

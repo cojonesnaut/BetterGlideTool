@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────
 #  BetterGlideTool — build.sh
 #  Compiles all Swift sources and produces BetterGlideTool.app
-#  Compatible with macOS 13+ (Apple Silicon & Intel)
+#  Compatible with macOS 13+ on Apple Silicon
 #
 #  Usage:
 #    ./build.sh
@@ -16,10 +16,10 @@
 #        Skip compilation and launch the already-built app.
 #
 #    ./build.sh --release
-#        Build an optimized Universal (arm64 + x86_64) app.
+#        Build an optimized Apple Silicon (arm64) app.
 #
 #    ./build.sh --dmg
-#        Build an optimized Universal app and create a DMG.
+#        Build an optimized Apple Silicon app and create a DMG.
 #
 #    ./build.sh --help
 #        Show this usage information.
@@ -58,10 +58,10 @@ Usage:
       Skip compilation and restart the already-built app.
 
   ./build.sh --release
-      Build an optimized Universal (arm64 + x86_64) app.
+      Build an optimized Apple Silicon (arm64) app.
 
   ./build.sh --dmg
-      Build an optimized Universal app and create a DMG.
+      Build an optimized Apple Silicon app and create a DMG.
 
 Notes:
   - "restart" ALWAYS builds before restarting.
@@ -254,10 +254,11 @@ for arg in "$@"; do
 done
 
 if [[ "$IS_RELEASE" == 1 ]]; then
-    ARCHS=(arm64 x86_64)
+    # Apple Silicon only: release builds are not made for Intel Macs.
+    ARCHS=(arm64)
     SWIFT_OPT="-O"
 
-    echo "Mode: Release (Universal, Optimized)"
+    echo "Mode: Release (Apple Silicon, Optimized)"
 else
     ARCHS=($(uname -m))
     SWIFT_OPT="-Onone"
