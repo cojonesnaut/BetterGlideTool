@@ -120,6 +120,22 @@ struct ConfigurationTests {
         precondition(DesktopActions.displayForWindow(.zero, displays: displays) == nil)
         precondition(DesktopActions.focusedDisplay(window: CGRect(x: 9000, y: 0, width: 100, height: 100), pointer: .zero, displays: displays) == nil)
         precondition(DesktopActions.displayForWindow(CGRect(x: 1920, y: 10, width: 100, height: 100), displays: displays) == nil)
+        // A covered strip slides off the screen edge. Recorded on a 2752-wide main
+        // display: buttons at x = -240 overlap no display, or a neighbour's.
+        let hiddenButton = CGRect(x: -240, y: 221, width: 176, height: 107)
+        let mainSpace = DesktopActions.stageSpaceDisplay(identifier: "sm.space", role: "AXGroup",
+                                                         frame: mainDisplay.bounds, displays: displays)
+        precondition(mainSpace == 2, "The sm.space group stands for its display")
+        precondition(DesktopActions.stageDisplayID(buttonFrame: hiddenButton, space: mainSpace, displays: displays) == 2,
+                     "A hidden strip's stages still belong to the display of their space")
+        precondition(DesktopActions.stageDisplayID(buttonFrame: CGRect(x: -240, y: 30, width: 176, height: 107), space: mainSpace, displays: displays) == 2,
+                     "A hidden strip overlapping a neighbouring display stays with its own space")
+        precondition(DesktopActions.stageSpaceDisplay(identifier: nil, role: "AXGroup", frame: leftDisplay.bounds, displays: displays) == 1,
+                     "An unnamed group sized to a display is that display's space")
+        precondition(DesktopActions.stageSpaceDisplay(identifier: nil, role: "AXGroup", frame: CGRect(x: 0, y: 0, width: 300, height: 300), displays: displays) == nil)
+        precondition(DesktopActions.stageSpaceDisplay(identifier: nil, role: "AXList", frame: mainDisplay.bounds, displays: displays) == nil)
+        precondition(DesktopActions.stageDisplayID(buttonFrame: CGRect(x: 16, y: 218, width: 176, height: 107), space: nil, displays: displays) == 2,
+                     "Without a space container the button's own frame decides")
         let desktopNames = [GestureAction.spaceLeftInstant, .spaceRightInstant, .windowSpaceLeft, .windowSpaceRight,
                             .stagePosition, .stageNext, .stagePrevious, .stageMatching, .stageMenu, .stageToggle, .stageRecentToggle]
         precondition(Set(desktopNames).count == 11)
@@ -342,9 +358,8 @@ struct ConfigurationTests {
         let threeDirections = GestureDirection.available(fingers: 3, device: .magicMouse)
         precondition(threeDirections.count == 12)
         precondition(threeDirections.allSatisfy { GestureDirection.available(fingers: 3, device: .trackpad).contains($0) })
-        // Plain three-finger left/right on the trackpad always belongs to the App
-        // Switcher, so those three rules are expected to be dropped there.
-        let switcherReserved: Set<GestureDirection> = [.swipeLeft, .swipeRight, .swipeLeftRight]
+        // Nothing reserves three-finger left/right any more: all twelve survive on
+        // both devices.
         for device in [GestureDevice.trackpad, .magicMouse] {
             let rules = threeDirections.map { direction -> GestureRule in
                 var rule = GestureRule(fingers: 3, direction: direction, action: .showDesktop)
@@ -353,8 +368,7 @@ struct ConfigurationTests {
             }
             Settings.shared.rules = rules
             let roundtrip = GlideConfigParser.parse(yaml: GlideConfigSerializer.serialize(GlideConfig.fromSettings()))!.toRules()
-            let expected = device == .trackpad ? Set(threeDirections).subtracting(switcherReserved) : Set(threeDirections)
-            precondition(Set(roundtrip.map(\.direction)) == expected)
+            precondition(Set(roundtrip.map(\.direction)) == Set(threeDirections))
             precondition(roundtrip.allSatisfy { $0.device == device && $0.fingers == 3 })
             let recognition = MouseRuleBridge.recognitionSettings(rules: rules, device: device)
             for gesture in MagicMouseGesture.allCases where gesture.fingers == 3 {

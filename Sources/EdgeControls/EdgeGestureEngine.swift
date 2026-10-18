@@ -41,7 +41,7 @@ struct TrackpadSurfaceSize: Equatable {
 //
 // Detects 1-finger edge scrubs along Top, Bottom, Left, and Right edges.
 // Uses TickAccumulator to quantize continuous finger travel into rate-limited,
-// velocity-smoothed ticks driving native OSD bezels or App Switcher.
+// velocity-smoothed ticks driving native OSD bezels.
 //
 // Continuous actions (scrolling) are the exception: they read finger travel
 // directly, bypassing the quantizer, and hold pointer suppression for the
@@ -68,7 +68,6 @@ final class EdgeGestureEngine {
         var lastPosition: CGPoint
         var isSwiping: Bool
         let accumulator: TickAccumulator
-        var switcherSession: EdgeAppSwitcherSession?
 
         /// Fine ticks since the last haptic, so quarter-step sliders still click
         /// once per full system notch rather than buzzing on every quarter.
@@ -137,9 +136,6 @@ final class EdgeGestureEngine {
 
     func reset() {
         endPointerSuppression()
-        if let current = activeGesture, current.isSwiping, current.action == .appSwitcher {
-            current.switcherSession?.cancel()
-        }
         activeGesture = nil
         activeEdge = nil
     }
@@ -156,12 +152,7 @@ final class EdgeGestureEngine {
         // Edge controls strictly require exactly 1 contact.
         // 2 contacts is scroll/pinch, 3+ contacts is Glide gesture.
         guard contacts == 1, let touch else {
-            if let current = activeGesture {
-                if current.isSwiping && current.action == .appSwitcher {
-                    current.switcherSession?.commit()
-                }
-                reset()
-            }
+            if activeGesture != nil { reset() }
             disqualifiedTouchIds.removeAll(keepingCapacity: true)
             return
         }
@@ -203,7 +194,6 @@ final class EdgeGestureEngine {
             lastPosition: currentPos,
             isSwiping: false,
             accumulator: accumulator,
-            switcherSession: nil,
             cursorOrigin: CGEvent(source: nil)?.location
         )
         activeEdge = edge
@@ -240,9 +230,6 @@ final class EdgeGestureEngine {
             ? config.marginMm + Self.postCommitSlackMm
             : config.marginMm
         guard isWithinEdge(currentPos, edge: current.edge, depth: retainDepth) else {
-            if current.isSwiping && current.action == .appSwitcher {
-                current.switcherSession?.commit()
-            }
             disqualifiedTouchIds.insert(touch.identifier)
             reset()
             return
@@ -314,13 +301,6 @@ final class EdgeGestureEngine {
                 CursorDriver.shared.warp(to: origin)
             }
 
-            if updated.action == .appSwitcher && updated.switcherSession == nil {
-                let switcher = EdgeAppSwitcherSession()
-                let movingForward = alongAxisMm > 0
-                if switcher.begin(movingForward: movingForward) {
-                    updated.switcherSession = switcher
-                }
-            }
             if updated.action == .scroll {
                 EdgeScrollSession.shared.begin(pointsPerMm: Settings.shared.edgeControls.scrollSpeed)
             }
@@ -348,7 +328,7 @@ final class EdgeGestureEngine {
         if outcome.count > 0 {
             let isPositive = travelMm > 0
             for _ in 0..<outcome.count {
-                dispatchAction(updated.action, directionPositive: isPositive, session: updated.switcherSession)
+                dispatchAction(updated.action, directionPositive: isPositive)
             }
             if updated.action.wantsHapticTicks {
                 var playHaptic = true
@@ -432,7 +412,7 @@ final class EdgeGestureEngine {
 
     // MARK: - Action Dispatch
 
-    private func dispatchAction(_ action: EdgeAction, directionPositive: Bool, session: EdgeAppSwitcherSession?) {
+    private func dispatchAction(_ action: EdgeAction, directionPositive: Bool) {
         switch action {
         case .none:
             break
@@ -445,8 +425,6 @@ final class EdgeGestureEngine {
             SystemActions.sendMediaKey(directionPositive ? .brightnessUp : .brightnessDown, fine: true)
         case .keyboardBacklight:
             SystemActions.sendMediaKey(directionPositive ? .illuminationUp : .illuminationDown, fine: true)
-        case .appSwitcher:
-            session?.step(forward: directionPositive)
         case .microphone:
             let mic = AudioDeviceVolume.defaultInput()
             if let current = mic.read() {
@@ -548,11 +526,6 @@ final class EdgeGestureEngine {
             cfg.stepSize = 4.5
             cfg.maximumTickRate = 24.0
             cfg.attenuationVelocity = 160.0
-        case .appSwitcher:
-            // ~12mm travel per app step for distinct, controllable scrubbing
-            cfg.stepSize = 12.0
-            cfg.maximumTickRate = 12.0
-            cfg.attenuationVelocity = 200.0
         case .nightShift:
             cfg.stepSize = 6.0
             cfg.maximumTickRate = 20.0

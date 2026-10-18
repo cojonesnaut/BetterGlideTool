@@ -91,7 +91,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let samples: [(name: String, dir: GestureDirection, fingers: Int, zone: TrackpadZone, mod: ModifierFilter, spd: GestureSpeed, cont: Bool, act: GestureAction)] = [
             ("preview_3finger_swipe_fast.png", .swipeRight, 3, .topLeft, .shiftHeld, .fast, false, .switchAppNext),
             ("preview_3finger_swipe_slow.png", .swipeLeft, 3, .any, .any, .slow, false, .missionControl),
-            ("preview_4finger_continuous.png", .swipeLeftRight, 4, .any, .noModifiers, .normal, true, .appSwitcherNext),
+            ("preview_4finger_continuous.png", .swipeLeftRight, 4, .any, .noModifiers, .normal, true, .switchAppNext),
             ("preview_4finger_forceclick.png", .forceClick, 4, .any, .noModifiers, .normal, false, .lockScreen)
         ]
 
@@ -142,7 +142,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 2. Verify Edge detection geometry
         let engine = EdgeGestureEngine(config: EdgeGestureEngine.Configuration(
             isEnabled: true,
-            topAction: .appSwitcher,
+            topAction: .nightShift,
             bottomAction: .keyboardBacklight,
             leftAction: .brightness,
             rightAction: .volume,
@@ -283,7 +283,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Every action, not just scroll — the cursor drifts the same way regardless.
-        for (index, action) in [EdgeAction.volume, .brightness, .scroll, .appSwitcher,
+        for (index, action) in [EdgeAction.volume, .brightness, .scroll,
                                 .keyboardBacklight, .nightShift].enumerated() {
             let engine = suppressionEngine(action)
             let id = Int32(50 + index)
@@ -429,12 +429,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("[TEST-EDGE] Pre-commit cursor drift is undone on commit.")
         }
 
-        // 3. Verify App Switcher customization on different edges
-        engine.config.topAction = .appSwitcher
+        // 3. Verify customization on different edges
+        engine.config.topAction = .nightShift
         let topEdgePoint = GLDTouchPoint(identifier: 3, state: 3, x: 0.5, y: 0.98, vx: 0, vy: 0, size: 1)
         engine.consume(touch: topEdgePoint, contacts: 1, timestamp: now + 0.20)
-        assert(engine.activeEdge == .top, "Top edge touch must start top edge gesture (App Switcher)")
-        print("[TEST-EDGE] Customizable App Switcher scrub on Top edge passed.")
+        assert(engine.activeEdge == .top, "Top edge touch must start top edge gesture")
+        print("[TEST-EDGE] Customizable action on Top edge passed.")
 
         // 4. Verify scroll direction mapping.
         // Two coordinate spaces meet here: trackpad travel is positive up/right,
@@ -471,7 +471,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(!EdgeAction.volume.isContinuous, "Notched actions must not be continuous")
         assert(!EdgeAction.scroll.wantsHapticTicks, "Scroll must not fire a haptic per frame")
         assert(EdgeAction.volume.wantsHapticTicks, "Volume must keep its haptic ticks")
-        assert(!EdgeAction.appSwitcher.wantsHapticTicks, "App Switcher keeps its own haptics")
         print("[TEST-EDGE] Continuous-action classification passed.")
 
         // 6. Verify a scroll gesture claims pointer suppression and hands it back.
@@ -554,7 +553,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 7. Verify YAML Serialization round-trip
         var testConfig = GlideConfig()
         testConfig.edgeControls.enabled = true
-        testConfig.edgeControls.topEdge = "app_switcher"
+        testConfig.edgeControls.topEdge = "night_shift"
         testConfig.edgeControls.bottomEdge = "keyboard_backlight"
         testConfig.edgeControls.leftEdge = "brightness"
         testConfig.edgeControls.rightEdge = "volume"
@@ -565,7 +564,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             fatalError("Failed to parse emitted YAML with edge_controls")
         }
         assert(parsed.edgeControls.enabled == true)
-        assert(parsed.edgeControls.topEdge == "app_switcher")
+        assert(parsed.edgeControls.topEdge == "night_shift")
+        // The retired App Switcher edge switches the edge off on import.
+        var retiredEdge = GlideConfig()
+        retiredEdge.edgeControls.leftEdge = "app_switcher"
+        assert(retiredEdge.toEdgeControls().leftEdge == EdgeAction.none, "A retired app_switcher edge must become None")
         assert(parsed.edgeControls.bottomEdge == "keyboard_backlight")
         assert(parsed.edgeControls.leftEdge == "brightness")
         assert(parsed.edgeControls.rightEdge == "volume")

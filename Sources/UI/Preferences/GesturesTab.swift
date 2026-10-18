@@ -342,9 +342,7 @@ struct RuleEditor: View {
     }
 
     private var categorizedActions: [(String, [GestureAction])] {
-        ([( "Mouse", [GestureAction.leftClick, .rightClick, .middleClick])] + GestureAction.catalog).map { category, actions in
-            (category, actions.filter { !Settings.isAppSwitcherAction($0) })
-        }
+        [( "Mouse", [GestureAction.leftClick, .rightClick, .middleClick])] + GestureAction.catalog
     }
 
     private var continuousActions: [(String, [GestureAction])] {
@@ -360,11 +358,6 @@ struct RuleEditor: View {
 
     private var supportsContinuousGestures: Bool {
         rule.direction == .swipeLeftRight || rule.direction == .swipeUpDown
-    }
-
-    private var reservedBanner: String? {
-        guard rule.device == .trackpad, store.appSwitcher.enabled else { return nil }
-        return "Plain 3-finger swipes left/right are reserved for App Switcher. Use a modifier key (e.g. Shift) here to assign a different action on the same swipe."
     }
 
     var body: some View {
@@ -418,21 +411,6 @@ struct RuleEditor: View {
 
             Divider()
 
-            // ── Reserved banner ──
-            if let banner = reservedBanner,
-               store.isDirectionReservedByAppSwitcher(fingers: rule.fingers, direction: rule.direction,
-                                                      modifierFilter: rule.modifierFilter) {
-                HStack(spacing: 8) {
-                    Image(systemName: "rectangle.2.swap").foregroundStyle(.orange)
-                    Text(banner).font(.caption).foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.orange.opacity(0.07))
-                Divider()
-            }
-
             // ── Trackpad gesture animation preview ──
             if !rule.isKeyboardBinding {
                 VStack(spacing: 0) {
@@ -468,10 +446,7 @@ struct RuleEditor: View {
                             }
                         }
                     } else {
-                        let availableDirections = GestureDirection.available(fingers: rule.fingers, device: rule.device).filter {
-                            (rule.device == .magicMouse || !store.isDirectionReservedByAppSwitcher(fingers: rule.fingers, direction: $0,
-                                                                    modifierFilter: rule.modifierFilter))
-                        }
+                        let availableDirections = GestureDirection.available(fingers: rule.fingers, device: rule.device)
 
                         Picker("Fingers", selection: $rule.fingers) {
                             ForEach(1...(rule.device == .magicMouse ? 4 : 5), id: \.self) { f in Text("\(f)").tag(f) }
@@ -482,20 +457,12 @@ struct RuleEditor: View {
                                 rule.direction = GestureDirection.available(fingers: rule.fingers, device: rule.device)[0]
                             }
                             if rule.fingers <= 2 || rule.device == .magicMouse { rule.speed = .normal; rule.continuous = false; rule.reciprocalEnabled = false }
-                            if rule.device == .trackpad && store.isDirectionReservedByAppSwitcher(fingers: rule.fingers, direction: rule.direction,
-                                                                      modifierFilter: rule.modifierFilter),
-                               let fallback = availableDirections.first { rule.direction = fallback }
                         }
 
                         Picker("Gesture", selection: $rule.direction) {
                             ForEach(availableDirections, id: \.self) { dir in
                                 Label(dir.title(fingers: rule.fingers), systemImage: dir.iconName).tag(dir)
                             }
-                        }
-                        .onChange(of: rule.modifierFilter) { _ in
-                            if rule.device == .trackpad && store.isDirectionReservedByAppSwitcher(fingers: rule.fingers, direction: rule.direction,
-                                                                      modifierFilter: rule.modifierFilter),
-                               let fallback = availableDirections.first { rule.direction = fallback }
                         }
                         .onChange(of: rule.direction) { _ in
                             if !supportsContinuousGestures { rule.continuous = false }
@@ -993,8 +960,6 @@ extension GestureAction {
         case .hideApp:            return "eye.slash"
         case .hideOthers:         return "eye.slash.fill"
         case .openApp:            return "app"
-        case .appSwitcherNext:    return "arrow.right.square"
-        case .appSwitcherPrev:    return "arrow.left.square"
         case .switchAppNext:      return "chevron.right.circle"
         case .switchAppPrev:      return "chevron.left.circle"
         case .customMenuItem:     return "list.bullet.rectangle"
@@ -1021,6 +986,8 @@ extension GestureAction {
         case .snapBottomLeft:     return "square.bottomthird.inset.filled"
         case .snapBottomRight:    return "square.leadingthird.inset.filled"
         case .centerWindow:       return "square.center.inset.filled"
+        case .tileFill:           return "rectangle.inset.filled"
+        case .tileRestore:        return "arrow.uturn.backward.square"
         case .moveNextDisplay:    return "display.2"
         // Mission Control
         case .missionControl:     return "rectangle.3.group"

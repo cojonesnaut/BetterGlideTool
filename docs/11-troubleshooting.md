@@ -14,9 +14,6 @@ Increase the **Edge Margins** under **Preferences → Tuning** along the corresp
 **A custom gesture conflicts with native macOS multi-touch swipes:**
 Inspect **Preferences → General → macOS Gesture Conflicts**. BetterGlideTool detects overlapping system gestures and can disable the native trigger directly, with options to re-enable at any time.
 
-**The app switcher displays application icons when window thumbnails are expected:**
-Screen Recording permission is required for live window thumbnails. To enable previews, grant BetterGlideTool access in **System Settings → Privacy & Security → Screen Recording**. Without it the switcher shows app icons instead.
-
 **Gatekeeper reports the application cannot be verified or is damaged:**
 This represents standard macOS Gatekeeper verification for independent open-source applications distributed outside the App Store. Right-click BetterGlideTool in Applications and choose **Open**, or clear the quarantine attribute via Terminal:
 

@@ -80,9 +80,6 @@ enum HapticEvent: String, CaseIterable {
     case destructiveAction = "destructive_action"   // quit, force-quit, close, empty trash
     case windowAction      = "window_action"        // snap, minimize, fullscreen, move…
     case otherAction       = "other_action"         // shortcuts, media, apps, everything else
-    case switcherOpen      = "switcher_open"
-    case switcherStep      = "switcher_step"
-    case switcherCommit    = "switcher_commit"
     case reciprocal        = "reciprocal"
 
     var displayName: String {
@@ -90,9 +87,6 @@ enum HapticEvent: String, CaseIterable {
         case .destructiveAction: return "Quit & Close Actions"
         case .windowAction:      return "Window Actions"
         case .otherAction:       return "Other Actions"
-        case .switcherOpen:      return "App Switcher Open"
-        case .switcherStep:      return "App Switcher Step"
-        case .switcherCommit:    return "App Switcher Commit"
         case .reciprocal:        return "Reciprocal Gesture"
         }
     }
@@ -104,9 +98,6 @@ enum HapticEvent: String, CaseIterable {
         case .destructiveAction: return .falling
         case .windowAction:      return .tap
         case .otherAction:       return .softTick
-        case .switcherOpen:      return .rising
-        case .switcherStep:      return .softTick
-        case .switcherCommit:    return .doubleTap
         case .reciprocal:        return .doubleTap
         }
     }

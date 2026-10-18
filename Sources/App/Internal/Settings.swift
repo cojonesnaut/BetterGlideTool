@@ -244,8 +244,6 @@ enum GestureAction: String, Codable, CaseIterable {
     case hideApp          = "Hide App Under Cursor"
     case hideOthers       = "Hide Other Apps"
     case openApp          = "Open App…"
-    case appSwitcherNext  = "Next App (App Switcher)"
-    case appSwitcherPrev  = "Previous App (App Switcher)"
     case switchAppNext    = "Activate Next App"
     case switchAppPrev    = "Activate Previous App"
     case minimizeWindow   = "Minimize Window"
@@ -265,6 +263,8 @@ enum GestureAction: String, Codable, CaseIterable {
     case snapBottomLeft   = "Snap: Bottom-Left"
     case snapBottomRight  = "Snap: Bottom-Right"
     case centerWindow     = "Center Window"
+    case tileFill         = "Fill Screen (macOS Tiling)"
+    case tileRestore      = "Restore Previous Size (macOS Tiling)"
     case moveNextDisplay  = "Move to Next Display"
     case missionControl   = "Mission Control"
     case appExpose        = "App Exposé"
@@ -305,7 +305,7 @@ enum GestureAction: String, Codable, CaseIterable {
         ("Windows", [.minimizeWindow, .minimizeAllApps, .restoreMinimizedApps, .maximizeWindow,
                      .restoreWindow, .closeWindow, .enterFullscreen, .exitFullscreen, .toggleFullscreen,
                      .cycleWindows, .snapLeft, .snapRight, .snapTopLeft, .snapTopRight,
-                     .snapBottomLeft, .snapBottomRight, .centerWindow, .moveNextDisplay]),
+                     .snapBottomLeft, .snapBottomRight, .centerWindow, .tileFill, .tileRestore, .moveNextDisplay]),
         ("Spaces", [.spaceLeftInstant, .spaceRightInstant, .windowSpaceLeft, .windowSpaceRight]),
         ("Stage Manager", [.stagePosition, .stageNext, .stagePrevious, .stageMatching, .stageMenu, .stageToggle, .stageRecentToggle]),
         ("Screenshots", [.screenshotArea, .screenshotFull, .screenshotAreaClipboard,
@@ -337,6 +337,8 @@ enum GestureAction: String, Codable, CaseIterable {
         case .exitFullscreen:        return .enterFullscreen
         case .maximizeWindow:        return .restoreWindow
         case .restoreWindow:         return .maximizeWindow
+        case .tileFill:              return .tileRestore
+        case .tileRestore:           return .tileFill
         case .minimizeWindow:        return .restoreWindow
         case .minimizeAllApps:       return .restoreMinimizedApps
         case .restoreMinimizedApps:  return .minimizeAllApps
@@ -654,22 +656,6 @@ struct EdgeMargin: Codable, Equatable {
     static let range: ClosedRange<Float> = 0.0...0.20
 }
 
-/// The app switcher's fixed behaviour. It used to be configurable from its own
-/// preferences page; that page is gone, and these are the values it shipped with.
-struct AppSwitcherSettings: Equatable {
-    /// Three-finger horizontal swipes are reserved for the switcher.
-    let enabled = true
-    let fingers = 3
-    /// Skip Finder in the switcher when it has no open windows.
-    let skipWindowlessFinder = true
-    /// Unminimize windows of the selected app when you release the gesture.
-    let restoreMinimizedOnCommit = true
-    /// Animate the overlay's selection changes. Off: a SwiftUI spring re-renders
-    /// the whole panel every display frame it runs, and selection steps arrive
-    /// faster than a spring settles, roughly doubling the CPU the switcher costs.
-    let animationsEnabled = false
-}
-
 struct EdgeControlsSettings: Codable, Equatable {
     var enabled: Bool = true
     var topEdge: EdgeAction = .none
@@ -732,10 +718,8 @@ enum SpeedLogic: String, Codable, CaseIterable {
 
 struct GestureTuning: Codable, Equatable {
     var initialThreshold:           Float        = 0.014
-    /// Small and short on purpose: the switcher is *browsed*, and a step that
-    /// lags behind the finger makes a three-app hop feel like guesswork.
-    var appSwitcherStepThreshold:   Float        = 0.002
-    var appSwitcherDebounce:        TimeInterval = 0.05
+    /// Small and short on purpose: a continuous gesture is *browsed*, and a step
+    /// that lags behind the finger makes a three-step hop feel like guesswork.
     var continuousStepThreshold:    Float        = 0.025
     var continuousDebounce:         TimeInterval = 0.08
     var fastVelocityThreshold:      Float        = 0.009
@@ -764,8 +748,6 @@ struct GestureTuning: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         initialThreshold          = try c.decodeIfPresent(Float.self,        forKey: .initialThreshold)          ?? 0.014
-        appSwitcherStepThreshold  = try c.decodeIfPresent(Float.self,        forKey: .appSwitcherStepThreshold)  ?? 0.002
-        appSwitcherDebounce       = try c.decodeIfPresent(TimeInterval.self, forKey: .appSwitcherDebounce)       ?? 0.05
         continuousStepThreshold   = try c.decodeIfPresent(Float.self,        forKey: .continuousStepThreshold)   ?? 0.025
         continuousDebounce        = try c.decodeIfPresent(TimeInterval.self, forKey: .continuousDebounce)        ?? 0.08
         fastVelocityThreshold     = try c.decodeIfPresent(Float.self,        forKey: .fastVelocityThreshold)     ?? 0.009
@@ -810,7 +792,7 @@ final class Settings {
     static let shared = Settings()
 
     private init() {
-        _rules = Self.normalizeRules(Self.defaultRules + MouseRuleBridge.migrate(MagicMouseSettings()), appSwitcher: appSwitcher)
+        _rules = Self.normalizeRules(Self.defaultRules + MouseRuleBridge.migrate(MagicMouseSettings()))
     }
 
     // MARK: Backing stores
@@ -838,10 +820,8 @@ final class Settings {
 
     var rules: [GestureRule] {
         get { _rules }
-        set { _rules = Self.normalizeRules(newValue, appSwitcher: appSwitcher); GlideConfigStore.shared.scheduleSave() }
+        set { _rules = Self.normalizeRules(newValue); GlideConfigStore.shared.scheduleSave() }
     }
-
-    let appSwitcher = AppSwitcherSettings()
 
     var magicMouse: MagicMouseSettings {
         get { _magicMouse }
@@ -914,7 +894,7 @@ final class Settings {
         _edgeControls    = EdgeControlsSettings.normalized(config.toEdgeControls())
         _magicMouse      = MagicMouseSettings.normalized(config.magicMouse)
         _deviceTuning = DeviceTuningSettings.normalized(config.deviceTuning)
-        _rules           = Self.normalizeRules(loadedRules, appSwitcher: appSwitcher)
+        _rules           = Self.normalizeRules(loadedRules)
         let normalizedTuning = Self.normalizedTuning(config.toTuning())
         tuningLock.lock(); _tuning = normalizedTuning; tuningLock.unlock()
         _windowTargeting = WindowTargetingMode(rawValue: config.preferences.windowTargeting) ?? .focusedThenCursor
@@ -931,31 +911,10 @@ final class Settings {
         _autoDisableNativeGestures = config.preferences.autoDisableNativeGestures
     }
 
-    // MARK: App Switcher ↔ gesture rules
-
-    static func isAppSwitcherAction(_ action: GestureAction) -> Bool {
-        action == .appSwitcherNext || action == .appSwitcherPrev
-    }
-
-    /// Removes horizontal swipe rules that would conflict with the reserved app-switcher slot.
-    /// Removes horizontal swipe rules that would conflict with app switcher (plain swipes only).
-    static func stripReservedHorizontalSwipes(from rules: inout [GestureRule], fingerCount: Int) {
-        rules.removeAll {
-            $0.device == .trackpad && $0.fingers == fingerCount &&
-            ($0.direction == .swipeLeft || $0.direction == .swipeRight || $0.direction == .swipeLeftRight) &&
-            !$0.modifierFilter.requiresModifierHeld
-        }
-    }
-
     // MARK: Rule normalization (duplicates are allowed — latest match wins at runtime)
 
-    private static func normalizeRules(_ rules: [GestureRule], appSwitcher: AppSwitcherSettings) -> [GestureRule] {
-        var copy = rules
-        copy.removeAll { isAppSwitcherAction($0.action) }
-        if appSwitcher.enabled {
-            stripReservedHorizontalSwipes(from: &copy, fingerCount: appSwitcher.fingers)
-        }
-        return copy.map { normalizedRule($0) }
+    private static func normalizeRules(_ rules: [GestureRule]) -> [GestureRule] {
+        rules.map { normalizedRule($0) }
     }
 
     static func normalizedRule(_ rule: GestureRule) -> GestureRule {
@@ -1016,8 +975,6 @@ final class Settings {
     static func normalizedTuning(_ t: GestureTuning) -> GestureTuning {
         var n = t
         n.initialThreshold         = max(0.005, n.initialThreshold)
-        n.appSwitcherStepThreshold = max(0.001, n.appSwitcherStepThreshold)
-        n.appSwitcherDebounce      = max(0.0,   n.appSwitcherDebounce)
         n.continuousStepThreshold  = max(0.005, min(n.continuousStepThreshold, 0.12))
         n.continuousDebounce       = max(0.0, min(n.continuousDebounce, 0.5))
         n.slowVelocityThreshold    = max(0.001, min(n.slowVelocityThreshold, 0.020))
@@ -1087,8 +1044,7 @@ final class Settings {
 
         return [
             // ── 3 fingers — the system layer ──
-            // Horizontal is absent on purpose: three-finger left/right is the
-            // App Switcher's reserved slot and is stripped from any rule list.
+            // Horizontal is left free for your own assignments.
             swipe(3, .swipeUp,   .missionControl,  haptic: .doubleTap),
             swipe(3, .swipeDown, .minimizeAllApps, haptic: .falling),
 

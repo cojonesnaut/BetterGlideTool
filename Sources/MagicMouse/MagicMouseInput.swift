@@ -61,6 +61,32 @@ final class MagicMouseInput: ObservableObject {
         var pointerOrigin: CGPoint?
         var contactCount = 0
         var modifiers = CapturedModifiers([])
+        /// Axes of a swipe that fired, held through the lift. Fingers rarely
+        /// leave together, and the one left behind starts a new native scroll;
+        /// scroll events also trail touch frames by about 10 ms, so a scroll can
+        /// begin just after the last finger lifts. Either would reach the app
+        /// with its momentum.
+        var firedSwipeAxes: MouseScrollAxes = []
+        /// Uptime of the full lift after a fired swipe; the axes stay held
+        /// for `firedSwipeGrace` after it, or until the next touch.
+        var firedSwipeLift: Double?
+        static let firedSwipeGrace = 0.25
+        /// Scrolling is withheld while two or more fingers are down, as
+        /// BetterTouchTool's "disable scrolling with 2+ fingers" does. A Tip
+        /// swipe's resting fingers start a new native scroll about 60 ms after
+        /// the swiping finger lifts, carrying that finger's momentum: measured
+        /// at 1,400–3,800 points reaching the app after every Tip swipe.
+        var multiFinger = false
+        var multiFingerEnded: Double?
+        func heldSwipeAxes(at uptime: Double) -> MouseScrollAxes {
+            var axes: MouseScrollAxes = []
+            if let lift = firedSwipeLift { if uptime - lift < Self.firedSwipeGrace { axes = firedSwipeAxes } }
+            else { axes = firedSwipeAxes }
+            if multiFinger, multiFingerEnded.map({ uptime - $0 < Self.firedSwipeGrace }) ?? true {
+                axes.formUnion([.vertical, .horizontal])
+            }
+            return axes
+        }
     }
     private var sessions: [UnsafeMutableRawPointer: Session] = [:]
     private var devices: [UnsafeMutableRawPointer] = []
@@ -74,6 +100,8 @@ final class MagicMouseInput: ObservableObject {
     private var eventTap: CFMachPort?
     private var eventSource: CFRunLoopSource?
     private let eventIdentity = MouseEventIdentity()
+    /// Keeps a swipe's scroll axes reserved through its lift and momentum.
+    private var scrollReservation = ScrollSequenceReservation()
     private static let syntheticTag: Int64 = 0x42474D4F555345
     private init() {}
 
@@ -282,8 +310,22 @@ final class MagicMouseInput: ObservableObject {
         let previousTipTapFeedback = session.recognizer.tipTapFeedback
         let gesture = session.recognizer.consume(contacts, timestamp: timestamp, settings: settings, physicalButtonDown: pressed)
         session.contactCount = contacts.count
-        sessions[device] = session
         let configured = gesture.map { settings.action(for: $0) != .none } ?? false
+        if contacts.isEmpty {
+            if !session.firedSwipeAxes.isEmpty && session.firedSwipeLift == nil { session.firedSwipeLift = now }
+        } else if session.firedSwipeLift != nil {
+            session.firedSwipeAxes = []; session.firedSwipeLift = nil
+        }
+        if contacts.count >= 2 && settings.holdsMultiFingerScroll {
+            session.multiFinger = true; session.multiFingerEnded = nil
+        } else if session.multiFinger {
+            if session.multiFingerEnded == nil { session.multiFingerEnded = now }
+            else if now - session.multiFingerEnded! >= Session.firedSwipeGrace { session.multiFinger = false; session.multiFingerEnded = nil }
+        }
+        if !contacts.isEmpty, configured, let gesture, gesture.isSwipe, !gesture.rawValue.hasPrefix("tip_") {
+            session.firedSwipeAxes.formUnion(settings.reservedScrollAxes(fingers: gesture.fingers))
+        }
+        sessions[device] = session
         let modifiers = session.modifiers, deadline = session.recognizer.pendingTapDeadline
         let feedback = session.recognizer.tipTapFeedback
         if monitoring {
@@ -315,7 +357,11 @@ final class MagicMouseInput: ObservableObject {
     }
 
     private func dispatch(_ gesture: MagicMouseGesture, token: Int, modifiers: CapturedModifiers, recognizedAt: Double, location: MouseContact? = nil) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + (gesture.isSwipe || gesture.isPhysicalClick ? 0 : 0.04)) { [weak self] in
+        // A physical click can land just after a whole-hand tap's release frame,
+        // so those wait 40 ms for it. A TipTap keeps a finger resting, and its
+        // click would arrive before the tip lifts: dispatch it at once.
+        let wait = gesture.isSwipe || gesture.isPhysicalClick || gesture.rawValue.hasPrefix("tip_") ? 0 : 0.04
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
             guard let self else { return }
             self.lock.lock()
             let valid = token == self.generation && (gesture.isPhysicalClick || self.lastPhysicalClick < recognizedAt - 0.08)
@@ -400,10 +446,17 @@ final class MagicMouseInput: ObservableObject {
             }
             return true
         }
-        let reservedAxes = sessions.values.reduce(into: MouseScrollAxes()) { axes, session in
+        let uptime = ProcessInfo.processInfo.systemUptime
+        let touchingAxes = sessions.values.reduce(into: MouseScrollAxes()) { axes, session in
             if session.recognizer.acceptsSwipe { axes.formUnion(settings.reservedScrollAxes(fingers: session.contactCount)) }
             axes.formUnion(session.recognizer.tipSwipeAxes)
+            axes.formUnion(session.heldSwipeAxes(at: uptime))
         }
+        let reservedAxes = scrollReservation.axes(
+            touching: touchingAxes,
+            scrollPhase: event.getIntegerValueField(.scrollWheelEventScrollPhase),
+            momentumPhase: event.getIntegerValueField(.scrollWheelEventMomentumPhase),
+            timestamp: uptime)
         let moved = event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1) != 0 ||
             event.getIntegerValueField(.scrollWheelEventPointDeltaAxis2) != 0
         if moved { for key in sessions.keys { sessions[key]?.recognizer.cancelTap() } }

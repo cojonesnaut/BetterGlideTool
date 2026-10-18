@@ -63,6 +63,19 @@ struct MagicMouseTests {
             expect(r.consume(points(2, x: 0.4 + dx, y: 0.5 + dy), timestamp: 1.3, settings: settings) == nil, "Swipe fires once")
             expect(r.consume([], timestamp: 1.4, settings: settings) == nil, "Swipe cannot also tap")
         }
+        var holdCheck = MagicMouseSettings(); holdCheck.bindings = [.oneFingerSwipeLeft: .snapLeft]
+        expect(!holdCheck.holdsMultiFingerScroll, "One-finger bindings leave two-finger scrolling alone")
+        holdCheck.bindings[.tipSwipeLeftUp] = .missionControl
+        expect(holdCheck.holdsMultiFingerScroll, "A Tip swipe binding withholds scrolling under two or more fingers")
+        holdCheck.enabled = false
+        expect(!holdCheck.holdsMultiFingerScroll, "Disabled input withholds nothing")
+        // Recorded thumb-arc swipe: up and to the right at 55° (ratio 1.42).
+        r.reset()
+        _ = r.consume(points(2, x: 0.4, y: 0.45), timestamp: 1, settings: settings)
+        expect(r.consume(points(2, x: 0.54, y: 0.65), timestamp: 1.12, settings: settings) == .swipeUp, "Diagonal thumb-arc swipe still reads as up")
+        r.reset()
+        _ = r.consume(points(2, x: 0.4, y: 0.45), timestamp: 1, settings: settings)
+        expect(r.consume(points(2, x: 0.58, y: 0.65), timestamp: 1.12, settings: settings) == nil, "A 48° swipe is too ambiguous to fire")
         r.reset()
         _ = r.consume(points(2, x: 0.4), timestamp: 1, settings: settings)
         expect(r.consume([MouseContact(id: 0, x: 0.15, y: 0.4), MouseContact(id: 1, x: 0.8, y: 0.4)], timestamp: 1.2, settings: settings) == nil, "Pinch cannot swipe")
@@ -1008,6 +1021,29 @@ struct MagicMouseTests {
                 }
                 expect(results == [expected, expected], "Trackpad bridge must deliver two separate \(expected) taps after long rests")
             }
+        }
+        // A swipe's scroll reservation lasts for the rest of that native scroll:
+        // through a finger lifting early and the momentum after it, and no longer.
+        do {
+            var r = ScrollSequenceReservation()
+            let began: Int64 = 1, changed: Int64 = 2, ended: Int64 = 4
+            expect(r.axes(touching: .horizontal, scrollPhase: began, momentumPhase: 0, timestamp: 10) == .horizontal, "Swipe reserves its axis")
+            expect(r.axes(touching: [], scrollPhase: changed, momentumPhase: 0, timestamp: 10.05) == .horizontal, "Remaining finger after a partial lift stays reserved")
+            expect(r.axes(touching: [], scrollPhase: ended, momentumPhase: 0, timestamp: 10.1) == .horizontal, "Scroll end stays reserved")
+            expect(r.axes(touching: [], scrollPhase: 0, momentumPhase: 1, timestamp: 10.15) == .horizontal, "Momentum start after the swipe is withheld")
+            expect(r.axes(touching: [], scrollPhase: 0, momentumPhase: 2, timestamp: 10.6) == .horizontal, "Momentum is withheld for its whole run")
+            expect(r.axes(touching: [], scrollPhase: 0, momentumPhase: 3, timestamp: 11.2) == .horizontal, "Momentum end is withheld")
+            expect(r.axes(touching: [], scrollPhase: began, momentumPhase: 0, timestamp: 11.3).isEmpty, "The next scroll is the user's")
+
+            var fresh = ScrollSequenceReservation()
+            _ = fresh.axes(touching: .vertical, scrollPhase: began, momentumPhase: 0, timestamp: 20)
+            expect(fresh.axes(touching: [], scrollPhase: began, momentumPhase: 0, timestamp: 20.2).isEmpty, "A newly begun scroll cuts a reservation short")
+            var stale = ScrollSequenceReservation()
+            _ = stale.axes(touching: .vertical, scrollPhase: began, momentumPhase: 0, timestamp: 30)
+            expect(stale.axes(touching: [], scrollPhase: 0, momentumPhase: 2, timestamp: 32).isEmpty, "A sequence that never ends expires")
+            var other = ScrollSequenceReservation()
+            expect(other.axes(touching: .horizontal, scrollPhase: began, momentumPhase: 0, timestamp: 40) == .horizontal, "Horizontal swipe reserves horizontal")
+            expect(!other.axes(touching: [], scrollPhase: 0, momentumPhase: 2, timestamp: 40.3).contains(.vertical), "Only the swipe's own axis is withheld")
         }
         print("PASS: \(checks) Magic Mouse recognition and normalization checks")
     }

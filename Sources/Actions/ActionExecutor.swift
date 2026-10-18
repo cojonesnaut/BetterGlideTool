@@ -37,8 +37,6 @@ final class ActionExecutor {
         case .openApp:           if let path = appPath { WindowTargeting.shared.openApp(path: path) }
 
         // App switching
-        case .appSwitcherNext:   KeyboardEmulator.shared.sendKey(0x30, .maskCommand)
-        case .appSwitcherPrev:   KeyboardEmulator.shared.sendKey(0x30, [.maskCommand, .maskShift])
         case .switchAppNext:     WindowTargeting.shared.activateAdjacentApp(forward: true)
         case .switchAppPrev:     WindowTargeting.shared.activateAdjacentApp(forward: false)
 
@@ -62,6 +60,8 @@ final class ActionExecutor {
         case .snapBottomLeft:   WindowTargeting.shared.snap(CGRect(x: 0,   y: 0,   width: 0.5, height: 0.5))
         case .snapBottomRight:  WindowTargeting.shared.snap(CGRect(x: 0.5, y: 0,   width: 0.5, height: 0.5))
         case .centerWindow:     WindowTargeting.shared.centerWindow()
+        case .tileFill:         if !WindowTargeting.shared.nativeTile(.fill) { WindowTargeting.shared.maximize() }
+        case .tileRestore:      if !WindowTargeting.shared.nativeTile(.restorePrevious) { WindowTargeting.shared.restore() }
         case .moveNextDisplay:  WindowTargeting.shared.moveToNextDisplay()
 
         // System

@@ -28,8 +28,6 @@ final class PreferencesStore: ObservableObject {
             persistRules()
         }
     }
-    /// Fixed, not user-editable; exposed here so views keep one source.
-    var appSwitcher: AppSwitcherSettings { Settings.shared.appSwitcher }
     @Published private(set) var magicMouse = MagicMouseSettings()
     @Published private(set) var deviceTuning = DeviceTuningSettings()
     @Published private(set) var edgeControls: EdgeControlsSettings = .init()
@@ -129,14 +127,6 @@ final class PreferencesStore: ObservableObject {
         Settings.shared.magicMouse = value
         magicMouse = Settings.shared.magicMouse
         MagicMouseInput.shared.applySettings()
-    }
-
-    /// Horizontal swipes reserved for app switcher on this finger count (when enabled).
-    func isDirectionReservedByAppSwitcher(fingers: Int, direction: GestureDirection,
-                                          modifierFilter: ModifierFilter = .any) -> Bool {
-        guard appSwitcher.enabled, fingers == appSwitcher.fingers else { return false }
-        guard direction == .swipeLeft || direction == .swipeRight || direction == .swipeLeftRight else { return false }
-        return !modifierFilter.requiresModifierHeld
     }
 
     func updateRule(_ r: GestureRule) {
@@ -415,8 +405,7 @@ final class PreferencesStore: ObservableObject {
     // MARK: Native gesture conflicts
 
     func refreshNativeConflicts() {
-        nativeConflicts = SystemGestureManager.currentConflicts(rules: Settings.shared.rules,
-                                                                appSwitcher: Settings.shared.appSwitcher)
+        nativeConflicts = SystemGestureManager.currentConflicts(rules: Settings.shared.rules)
         disabledNativeGestures = SystemGestureManager.disabledByGlide()
     }
 

@@ -118,6 +118,42 @@ struct MouseScrollAxes: OptionSet {
     static let vertical = Self(rawValue: 2)
 }
 
+/// Carries a swipe's scroll reservation through the rest of that native scroll.
+///
+/// A swipe reserves its axes only while the recognizer accepts it, which ends the
+/// moment one finger starts to lift. macOS's scroll does not end there: the
+/// remaining finger keeps scrolling, and after the lift a momentum run keeps the
+/// page moving for up to a second or more. Left through, the page scrolls after
+/// the gesture is done. So once an axis has been reserved, it stays reserved for
+/// the same sequence — through the lift and its momentum — until macOS ends the
+/// momentum or the user begins a new scroll.
+struct ScrollSequenceReservation {
+    private(set) var owned: MouseScrollAxes = []
+    private var lastOwned = 0.0
+    /// Backstop if a sequence never reports its end.
+    static let timeout = 1.0
+
+    /// CGEvent scroll and momentum phase values.
+    static let phaseBegan: Int64 = 1, phaseMayBegin: Int64 = 128
+    static let momentumEnded: Int64 = 3
+
+    /// The axes to withhold from this scroll event.
+    mutating func axes(touching: MouseScrollAxes, scrollPhase: Int64, momentumPhase: Int64, timestamp: Double) -> MouseScrollAxes {
+        if !owned.isEmpty {
+            let freshScroll = touching.isEmpty && momentumPhase == 0 &&
+                (scrollPhase == Self.phaseBegan || scrollPhase == Self.phaseMayBegin)
+            if freshScroll || timestamp - lastOwned > Self.timeout { owned = [] }
+        }
+        owned.formUnion(touching)
+        let withheld = owned
+        if !owned.isEmpty { lastOwned = timestamp }
+        if momentumPhase == Self.momentumEnded { owned = [] }
+        return withheld
+    }
+
+    mutating func reset() { owned = [] }
+}
+
 /// Selected by the input device, not persisted as user tuning.
 enum TipTapSpacingGeometry: Equatable {
     case surface
@@ -125,6 +161,11 @@ enum TipTapSpacingGeometry: Equatable {
 }
 
 struct MagicMouseSettings: Equatable {
+    /// How much the main axis must outweigh the other for a swipe to count.
+    /// Swipes on a Magic Mouse follow the thumb's arc: measured "up" swipes ran
+    /// 53–60° from horizontal (ratio 1.3–1.7), and 1.5 missed a quarter of them.
+    /// 1.2 (about 50°) still keeps up and right apart.
+    static let swipeAxisDominance = 1.2
     var enabled = true
     var invertVerticalScrolling = false
     var invertHorizontalScrolling = false
@@ -143,6 +184,11 @@ struct MagicMouseSettings: Equatable {
     var hasSwipes: Bool { MagicMouseGesture.allCases.contains { $0.isSwipe && action(for: $0) != .none } }
     func hasSwipes(fingers: Int) -> Bool {
         MagicMouseGesture.allCases.contains { $0.isSwipe && $0.fingers == fingers && action(for: $0) != .none }
+    }
+    /// Any gesture of two or more fingers is bound, so native scrolling under
+    /// two or more fingers would compete with it.
+    var holdsMultiFingerScroll: Bool {
+        enabled && bindings.contains { $0.value != .none && $0.key.fingers >= 2 && !$0.key.isPhysicalClick }
     }
     func reservedScrollAxes(fingers: Int) -> MouseScrollAxes {
         guard enabled else { return [] }

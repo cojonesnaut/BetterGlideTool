@@ -87,9 +87,6 @@ final class GestureRuleResolver {
     }
 
     static func hasAnySwipeRule(fingers: Int) -> Bool {
-        if Settings.shared.appSwitcher.enabled, fingers == Settings.shared.appSwitcher.fingers {
-            return true
-        }
         let swipeDirs: [GestureDirection] = [.swipeLeftRight, .swipeUpDown, .swipeLeft, .swipeRight, .swipeUp, .swipeDown]
         return Settings.shared.rules.contains {
             $0.isActive && $0.device == .trackpad && $0.fingers == fingers && swipeDirs.contains($0.direction)
@@ -125,17 +122,5 @@ final class GestureRuleResolver {
 
     private static func normalizedSpeed(_ speed: GestureSpeed) -> GestureSpeed {
         speed == .any ? .normal : speed
-    }
-
-    static func appSwitcherAction(fingers: Int, direction: GestureDirection,
-                                   modifiers: CapturedModifiers) -> GestureAction? {
-        let cfg = Settings.shared.appSwitcher
-        guard cfg.enabled, fingers == cfg.fingers else { return nil }
-        guard modifiers.matches(.noModifiers) else { return nil }
-        switch direction {
-        case .swipeRight: return .appSwitcherNext
-        case .swipeLeft:  return .appSwitcherPrev
-        default:          return nil
-        }
     }
 }

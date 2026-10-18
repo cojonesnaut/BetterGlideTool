@@ -90,8 +90,8 @@ private struct BasicTouchRecognizer {
         guard !cancelled, !emitted, !lifting, (1...4).contains(contacts.count), peak == contacts.count,
               timestamp - start <= 1.0, settings.hasSwipes(fingers: peak) else { return nil }
         dx /= Double(peak); dy /= Double(peak)
-        let horizontal = abs(dx) > abs(dy) * 1.5
-        let vertical = abs(dy) > abs(dx) * 1.5
+        let horizontal = abs(dx) > abs(dy) * MagicMouseSettings.swipeAxisDominance
+        let vertical = abs(dy) > abs(dx) * MagicMouseSettings.swipeAxisDominance
         guard horizontal || vertical else { return nil }
         let distance = horizontal ? dx : dy
         guard abs(distance) >= settings.swipeDistance,
@@ -422,6 +422,8 @@ private struct FixedFingerRecognizer {
     private var heldChordMotion = 0.0
     private var heldChordPeakSizes: [Int32: Double] = [:]
     private var needsAnchorRearm = false
+    private var anchorJumpSince: Double?
+    static let anchorJumpTolerance = 0.05
     private var interruptedTipID: Int32?
     private var rejectedContactID: Int32?
     private(set) var rejection: TipTapRejection?
@@ -544,7 +546,21 @@ private struct FixedFingerRecognizer {
                 let stable = anchors.allSatisfy { anchor in
                     contacts.contains { $0.id == anchor.id && hypot($0.x - anchor.x, $0.y - anchor.y) <= movement }
                 }
+                // A finger landing beside a resting one can merge with it for a
+                // frame: the resting contact jumps toward it and swells, then
+                // returns. Measured on a Magic Mouse: 0.05 sideways at 1.7× size
+                // for one 30 ms frame, just as the swiping finger arrived. A real
+                // shift of the resting hand does not swell, and re-settles at once.
+                let merged = !stable && !recovering && anchors.contains { anchor in
+                    contacts.contains { $0.id == anchor.id && hypot($0.x - anchor.x, $0.y - anchor.y) > movement &&
+                        anchor.size > 0 && $0.size >= anchor.size * 1.3 }
+                }
+                if merged {
+                    if anchorJumpSince == nil { anchorJumpSince = timestamp }
+                    if timestamp - anchorJumpSince! < Self.anchorJumpTolerance { return nil }
+                } else if stable { anchorJumpSince = nil }
                 if recovering || !stable {
+                    anchorJumpSince = nil
                     // Preserve identity and exclusivity, but allow the same
                     // fingers to settle again instead of disabling the session.
                     if claimed { rejection = .anchorsMoved }
@@ -639,8 +655,8 @@ private struct FixedFingerRecognizer {
             if !reservedAxes.isEmpty, timestamp - movingSince >= settings.tipTapMinimumDuration, timestamp - movingSince <= 1,
                peakSize >= settings.tipTap.requiredSize(anchors: anchorCount) {
                 let gesture: MagicMouseGesture?
-                if abs(dy) >= settings.swipeDistance, abs(dy) > abs(dx) * 1.5 { gesture = dy > 0 ? .tipSwipeLeftUp : .tipSwipeLeftDown }
-                else if abs(dx) >= settings.swipeDistance, abs(dx) > abs(dy) * 1.5 { gesture = dx > 0 ? .tipSwipeLeftRight : .tipSwipeLeftLeft }
+                if abs(dy) >= settings.swipeDistance, abs(dy) > abs(dx) * MagicMouseSettings.swipeAxisDominance { gesture = dy > 0 ? .tipSwipeLeftUp : .tipSwipeLeftDown }
+                else if abs(dx) >= settings.swipeDistance, abs(dx) > abs(dy) * MagicMouseSettings.swipeAxisDominance { gesture = dx > 0 ? .tipSwipeLeftRight : .tipSwipeLeftLeft }
                 else { gesture = nil }
                 if let gesture, settings.action(for: gesture) != .none { strokeFinished = true; return gesture }
             }
@@ -839,8 +855,8 @@ private struct CirclePathRecognizer {
             let straight = hypot(dx, dy)
             if straight >= settings.swipeDistance, travel <= straight * 1.2 {
                 let gesture: MagicMouseGesture?
-                if abs(dx) > abs(dy) * 1.5 { gesture = dx > 0 ? .oneFingerSwipeRight : .oneFingerSwipeLeft }
-                else if abs(dy) > abs(dx) * 1.5 { gesture = dy > 0 ? .oneFingerSwipeUp : .oneFingerSwipeDown }
+                if abs(dx) > abs(dy) * MagicMouseSettings.swipeAxisDominance { gesture = dx > 0 ? .oneFingerSwipeRight : .oneFingerSwipeLeft }
+                else if abs(dy) > abs(dx) * MagicMouseSettings.swipeAxisDominance { gesture = dy > 0 ? .oneFingerSwipeUp : .oneFingerSwipeDown }
                 else { gesture = nil }
                 return gesture.flatMap { settings.action(for: $0) != .none ? $0 : nil }
             }

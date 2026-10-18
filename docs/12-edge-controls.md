@@ -2,7 +2,7 @@
 
 # Trackpad Edge Controls
 
-Trackpad Edge Controls turns the physical outer rim of your trackpad into precision hardware sliders. Sliding a single finger along any edge allows smooth adjustment of system volume, display brightness, keyboard backlight, microphone gain, Night Shift warmth, scrolling, or application scrub.
+Trackpad Edge Controls turns the physical outer rim of your trackpad into precision hardware sliders. Sliding a single finger along any edge allows smooth adjustment of system volume, display brightness, keyboard backlight, microphone gain, Night Shift warmth, or scrolling.
 
 Configure edge bindings in **Preferences → Edge Controls**.
 
@@ -11,7 +11,7 @@ Configure edge bindings in **Preferences → Edge Controls**.
 1. **Physical Rim Sliders:** Each of the four edges (Left, Right, Top, Bottom) can be mapped to a dedicated action:
    - **Right Edge** *(default: System Volume):* Slide up to raise volume; slide down to lower volume.
    - **Left Edge** *(default: Display Brightness):* Slide up to brighten the display; slide down to dim it.
-   - **Top / Bottom Edges** *(optional):* Assign to Keyboard Backlight, Microphone Input Gain, Night Shift, Scroll, or App Switcher scrub.
+   - **Top / Bottom Edges** *(optional):* Assign to Keyboard Backlight, Microphone Input Gain, Night Shift, or Scroll.
 2. **Native OSD Bezels:** BetterGlideTool triggers native macOS system display bezels (identical to the overlays displayed by physical media keys). This operates with 0.0% CPU overhead and zero latency.
 3. **Tactile Haptic Ticks:** Each adjustment increment delivers a subtle tactile tap via the trackpad Taptic Engine.
 

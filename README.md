@@ -34,13 +34,13 @@ To create `build/BetterGlideTool.dmg`:
 ./build.sh --dmg
 ```
 
-Drag the app into Applications and grant **BetterGlideTool** Accessibility access when prompted. Screen Recording is optional for window thumbnails. Automation is used for configured AppleScript and menu actions. Run only one gesture utility at a time to avoid competing gesture handlers.
+Drag the app into Applications and grant **BetterGlideTool** Accessibility access when prompted. Automation is used for configured AppleScript and menu actions. Run only one gesture utility at a time to avoid competing gesture handlers.
 
 ## Features and configuration
 
 - Customizable multi-finger trackpad swipes, clicks, force-clicks, and holds.
 - Magic Mouse regional taps and one- through four-finger swipes, with middle-click, window, app, and media actions.
-- Window snapping, maximizing, restoring, and a spatial app switcher.
+- Window snapping, maximizing, restoring, and Stage Manager and Space switching.
 - Trackpad edge controls for volume, brightness, and scrolling.
 - Global keyboard shortcuts.
 - Native preferences, configuration import/export, and launch at login.
@@ -127,7 +127,7 @@ Space/window operations depend on private macOS APIs and can be rejected by macO
 
 ### Three-finger gestures and scroll direction
 
-Both devices support **3 Finger Tap**, **3 Finger Double-Tap**, **3 Finger Click**, **3 Finger Swipe Up/Down/Left/Right**, **TipTap Left/Middle/Right (2 Fingers Fix)**, and **TipSwipe Left Finger Up/Down (2 Fingers Fix)**. Trackpad's existing force-click and continuous gestures remain available. App Switcher reserves plain three-finger horizontal trackpad swipes while enabled; disable it or choose a modifier for custom horizontal bindings.
+Both devices support **3 Finger Tap**, **3 Finger Double-Tap**, **3 Finger Click**, **3 Finger Swipe Up/Down/Left/Right**, **TipTap Left/Middle/Right (2 Fingers Fix)**, and **TipSwipe Left Finger Up/Down (2 Fingers Fix)**. Trackpad's existing force-click and continuous gestures remain available.
 
 For two-fixed-finger gestures, rest two fingers for the device's configured TipTap rest time, then tap a third finger to the left, between them, or to the right. For TipSwipe, move the left finger vertically while the other two stay still. Lift all fingers before repeating. Brief touches, moving/lifting an anchor, and physical clicks cancel the gesture.
 

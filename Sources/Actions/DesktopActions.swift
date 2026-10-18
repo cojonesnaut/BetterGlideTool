@@ -60,6 +60,19 @@ final class DesktopActions: NSObject, ObservableObject {
     private let stageWorker = DispatchQueue(label: "com.betterglidetool.stage-actions", qos: .userInitiated)
     private var stageBusy = false
     private var stageRequests: [() -> Void] = []
+    /// Raises the chosen window inside its app once the switch is under way. Kept
+    /// off `stageWorker` so it never delays the next tap's discovery.
+    private let stagePolish = DispatchQueue(label: "com.betterglidetool.stage-polish", qos: .userInitiated)
+    /// Bumped for every issued switch, so a late raise for an earlier tap never
+    /// pulls focus back from a newer one.
+    private var stageGeneration = 0
+    /// One request's reporting, detached from the shared state so a request can
+    /// keep confirming its result after the next tap has already started.
+    private struct StageReport {
+        let monitoring: LiveActionContext?
+        var result: StageActionResult
+        let requestedAt: Double
+    }
     private var activeMonitoring: LiveActionContext?
     private var activeRequestTime = 0.0
     private var activeResult = StageActionResult()
@@ -222,6 +235,23 @@ final class DesktopActions: NSObject, ObservableObject {
             return (display, overlap.width * overlap.height)
         }.max { $0.1 < $1.1 }?.0
     }
+    /// The display a Stage Manager space container stands for, or nil when the
+    /// element is not one. WindowManager keeps one `sm.space` group per display,
+    /// sized exactly to it; older versions without the identifier are matched by
+    /// an AXGroup whose frame is a display's bounds.
+    static func stageSpaceDisplay(identifier: String?, role: String, frame: CGRect?, displays: [StageDisplay]) -> UInt32? {
+        let normalized = (identifier ?? "").lowercased().filter { $0.isLetter || $0.isNumber }
+        if normalized == "smspace", let frame { return displayForWindow(frame, displays: displays)?.id }
+        guard role == kAXGroupRole as String, let frame else { return nil }
+        return displays.first { $0.bounds == frame }?.id
+    }
+    /// The display a stage button belongs to. Its space container decides when
+    /// there is one: when a window covers the strip, Stage Manager slides it off
+    /// the edge of the screen and every button's own frame lands on no display
+    /// (or on a neighbouring one), though the stages are still there to cycle.
+    static func stageDisplayID(buttonFrame: CGRect, space: UInt32?, displays: [StageDisplay]) -> UInt32? {
+        space ?? displayForWindow(buttonFrame, displays: displays)?.id
+    }
     static func focusedDisplay(window: CGRect?, pointer: CGPoint, displays: [StageDisplay]) -> StageDisplay? {
         if let window { return displayForWindow(window, displays: displays) }
         return displays.first { $0.bounds.contains(pointer) }
@@ -282,11 +312,11 @@ final class DesktopActions: NSObject, ObservableObject {
             var rootRole: CFTypeRef?
             let rootResult = AXUIElementCopyAttributeValue(root, kAXRoleAttribute as CFString, &rootRole)
             let startCount = visited.count
-            var pending: [(AXUIElement, Int, Bool, [String])] = [(root, 0, false, [])]
+            var pending: [(AXUIElement, Int, Bool, [String], UInt32?)] = [(root, 0, false, [], nil)]
             var cursor = 0
             while cursor < pending.count, visited.count < 512,
                   ProcessInfo.processInfo.systemUptime < deadline {
-                let (element, depth, insideStrip, ancestors) = pending[cursor]
+                let (element, depth, insideStrip, ancestors, inheritedSpace) = pending[cursor]
                 cursor += 1
                 guard depth < 16, !visited.contains(where: { CFEqual($0, element) }) else { continue }
                 visited.append(element)
@@ -297,6 +327,8 @@ final class DesktopActions: NSObject, ObservableObject {
                 let descriptors = [identifier ?? "", subrole, role]
                 let strip = descriptors.contains(where: Self.isStageStrip)
                 let descendants = children(from: values)
+                let ownFrame = axFrame(position: values["AXPosition"], size: values["AXSize"])
+                let space = Self.stageSpaceDisplay(identifier: identifier, role: role, frame: ownFrame, displays: displays) ?? inheritedSpace
                 var actionNames: CFArray?
                 if role == kAXButtonRole as String || insideStrip || identifier?.lowercased().contains("stage") == true {
                     _ = AXUIElementCopyActionNames(element, &actionNames)
@@ -313,8 +345,8 @@ final class DesktopActions: NSObject, ObservableObject {
                     let labels = [values["AXTitle"] as? String, values["AXDescription"] as? String].compactMap { $0 }
                         + descendants.map { text($0) }
                     // Unknown geometry is not permission to activate another display.
-                    guard let frame = axFrame(position: values["AXPosition"], size: values["AXSize"]),
-                          Self.displayForWindow(frame, displays: displays)?.id == display.id else { continue }
+                    guard let frame = ownFrame,
+                          Self.stageDisplayID(buttonFrame: frame, space: space, displays: displays) == display.id else { continue }
                     let position = frame.origin
                     guard let identity = Self.stageIdentity(identifier: identifier, labels: labels, windowIDs: members) else { continue }
                     let key = "\(app.processIdentifier):" + identity
@@ -326,7 +358,7 @@ final class DesktopActions: NSObject, ObservableObject {
                     }
                 } else {
                     let path = Array((ancestors + [role]).suffix(2))
-                    pending.append(contentsOf: descendants.map { ($0, depth + 1, insideStrip || strip, path) })
+                    pending.append(contentsOf: descendants.map { ($0, depth + 1, insideStrip || strip, path, space) })
                 }
             }
             hostDetails.append("\(app.localizedName ?? app.bundleIdentifier ?? "host"): AX \(rootResult.rawValue), \(visited.count - startCount) elements")
@@ -436,12 +468,45 @@ final class DesktopActions: NSObject, ObservableObject {
     private func finishStageRequest(_ message: String, succeeded: Bool = false) {
         stageStatus = message
         updateStageTrace(succeeded ? "succeeded" : "failed", message)
-        activeMonitoring = nil
         AppLogger.debug("[Stage Manager] \(message)")
+        releaseStageQueue()
+    }
+    private func releaseStageQueue() {
+        activeMonitoring = nil
         stageBusy = false
         if !stageRequests.isEmpty {
             stageRequests.removeFirst()()
         }
+    }
+    /// The member window to focus, found without asking the target app anything:
+    /// WindowServer names its owner and display directly. Listing every window
+    /// on the system and then the app's AX windows cost tens of milliseconds per
+    /// tap, and a busy app made it longer. The AX path remains for windows whose
+    /// display WindowServer will not report.
+    private func memberTarget(in stage: Stage) -> (pid: pid_t, windowID: UInt32)? {
+        for windowID in stage.windowIDs {
+            guard let info = (CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(windowID)) as? [[String: Any]])?.first,
+                  (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value == windowID,
+                  let pid = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, pid > 0 else { continue }
+            let nativeDisplay = GLDWDisplayForWindow(windowID)
+            if nativeDisplay == 0 { break }
+            if nativeDisplay == stage.display.id { return (pid, windowID) }
+        }
+        return memberWindow(in: stage).map { ($0.0.processIdentifier, $0.3) }
+    }
+    /// Makes the window main, focused and raised within its app.
+    @discardableResult
+    private func raiseMember(pid: pid_t, windowID: UInt32) -> AXError {
+        let root = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(root, 0.1)
+        for window in attribute(root, kAXWindowsAttribute as String) as? [AXUIElement] ?? [] {
+            var id: UInt32 = 0
+            guard _AXUIElementGetWindow(window, &id) == .success, id == windowID else { continue }
+            _ = AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
+            _ = AXUIElementSetAttributeValue(root, kAXFocusedWindowAttribute as CFString, window)
+            return AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        }
+        return .cannotComplete
     }
     private func activate(_ stage: Stage) {
         stageStatus = "Activating stage…"
@@ -449,32 +514,49 @@ final class DesktopActions: NSObject, ObservableObject {
         updateStageTrace("activating", stageStatus)
         stageWorker.async {
             let before = self.focusedWindowID()
-            let member = self.memberWindow(in: stage)
-            if !stage.windowIDs.isEmpty && member == nil {
+            let target = self.memberTarget(in: stage)
+            if !stage.windowIDs.isEmpty && target == nil {
                 DispatchQueue.main.async { self.finishStageRequest("No accessible member window on the focused display. No other display was activated.") }
                 return
             }
             Self.performStageWindowMutation {
-                let result: AXError
+                var result = AXError.success
                 let route: String
                 self.activeResult.beforeWindowID = before
-                if let (app, root, window, windowID) = member {
+                self.stageGeneration += 1
+                let generation = self.stageGeneration
+                if let target {
                     // A process-wide activation can select another window of
                     // this app, including one in a different stage or display.
-                    // Use the existing exact-window focus bridge first.
-                    let exact = GLDWFocusWindow(app.processIdentifier, windowID)
-                    _ = AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
-                    _ = AXUIElementSetAttributeValue(root, kAXFocusedWindowAttribute as CFString, window)
-                    result = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-                    route = exact ? "exact window \(windowID)" : "AX window \(windowID); native focus unavailable/rejected"
+                    // The exact-window focus bridge switches the stage by itself.
+                    let exact = GLDWFocusWindow(target.pid, target.windowID)
+                    route = exact ? "exact window \(target.windowID)" : "AX window \(target.windowID); native focus unavailable/rejected"
+                    if exact {
+                        // Selecting the window inside its app is polish once focus
+                        // has moved, so it runs after this tap has released the queue.
+                        let own = target.pid == ProcessInfo.processInfo.processIdentifier
+                        (own ? DispatchQueue.main : self.stagePolish).async {
+                            let current = own ? self.stageGeneration == generation
+                                              : DispatchQueue.main.sync { self.stageGeneration == generation }
+                            guard current else { return }
+                            self.raiseMember(pid: target.pid, windowID: target.windowID)
+                        }
+                    } else {
+                        // Native focus was refused: the AX raise is the activation.
+                        result = self.raiseMember(pid: target.pid, windowID: target.windowID)
+                    }
                 } else {
                     result = AXUIElementPerformAction(stage.element, kAXPressAction as CFString)
                     route = stage.windowIDs.isEmpty ? "thumbnail; no member IDs exposed" : "thumbnail; member windows unavailable"
                 }
-                // AXRaise may return an error even when setting the focused window
-                // succeeded. Verify the outcome of the complete sequence either way.
                 self.activeResult.route = route
-                self.verifyStageActivation(stage, before: before, route: route, result: result, attempt: 0)
+                // The switch is issued. Confirmation only reports the outcome, so
+                // the next tap may start now instead of waiting ~200 ms for it;
+                // the cycle state already moves past this request's target.
+                let report = StageReport(monitoring: self.activeMonitoring, result: self.activeResult, requestedAt: self.activeRequestTime)
+                self.stageStatus = "Stage switch issued: " + (stage.title.isEmpty ? "recent stage" : stage.title)
+                self.releaseStageQueue()
+                self.verifyStageActivation(stage, before: before, route: route, result: result, attempt: 0, report: report)
             }
         }
     }
@@ -486,29 +568,41 @@ final class DesktopActions: NSObject, ObservableObject {
             body()
         }
     }
-    private func verifyStageActivation(_ stage: Stage, before: UInt32?, route: String, result: AXError, attempt: Int) {
-        // Release the queue promptly when focus arrives; retain a bounded
-        // settling window for slow apps instead of adding 120 ms to every tap.
+    private func verifyStageActivation(_ stage: Stage, before: UInt32?, route: String, result: AXError, attempt: Int, report: StageReport) {
+        // Reporting only: this request has already released the queue. Retain a
+        // bounded settling window for slow apps.
         let delays = [0.04, 0.06, 0.10, 0.16, 0.24, 0.30]
         stageWorker.asyncAfter(deadline: .now() + delays[attempt]) {
             let after = self.focusedWindowID()
             let nativeDisplay = after.map { GLDWDisplayForWindow($0) } ?? 0
             let focusedDisplay = nativeDisplay != 0 ? nativeDisplay : DispatchQueue.main.sync { self.stageDisplayContext()?.0.id }
-            DispatchQueue.main.async { self.activeResult.afterWindowID = after }
             if focusedDisplay == stage.display.id,
                Self.stageActivationConfirmed(members: stage.windowIDs, before: before, after: after) {
                 DispatchQueue.main.async {
                     self.cycles[stage.display.id, default: CycleState()].last = stage.key
-                    self.finishStageRequest("Stage activated: " + (stage.title.isEmpty ? "recent stage" : stage.title), succeeded: true)
+                    self.completeStageReport(report, after: after, succeeded: true,
+                                             message: "Stage activated: " + (stage.title.isEmpty ? "recent stage" : stage.title))
                 }
             } else if attempt + 1 < delays.count {
-                self.verifyStageActivation(stage, before: before, route: route, result: result, attempt: attempt + 1)
+                self.verifyStageActivation(stage, before: before, route: route, result: result, attempt: attempt + 1, report: report)
             } else {
                 DispatchQueue.main.async {
-                    self.finishStageRequest("Stage found, but focus did not reach it (\(route); \(stage.windowIDs.count) member IDs; AX \(result.rawValue)).")
+                    self.completeStageReport(report, after: after, succeeded: false,
+                                             message: "Stage found, but focus did not reach it (\(route); \(stage.windowIDs.count) member IDs; AX \(result.rawValue)).")
                 }
             }
         }
+    }
+    private func completeStageReport(_ report: StageReport, after: UInt32?, succeeded: Bool, message: String) {
+        var result = report.result
+        result.afterWindowID = after
+        result.state = succeeded ? "succeeded" : "failed"
+        result.message = message
+        result.elapsedMilliseconds = max(0, ProcessInfo.processInfo.systemUptime - report.requestedAt) * 1000
+        report.monitoring?.update(result)
+        // A newer request's progress is the more useful status to show.
+        if !stageBusy { stageStatus = message }
+        AppLogger.debug("[Stage Manager] \(message)")
     }
     func performStage(_ action: GestureAction, options: DesktopActionOptions, monitoring: LiveActionContext? = nil) {
         let requestedAt = ProcessInfo.processInfo.systemUptime

@@ -45,8 +45,6 @@ struct GlideConfig {
     }
 
     struct Tuning {
-        var appSwitcherStepThreshold: Float = 0.002
-        var appSwitcherDebounce: Double = 0.05
         var continuousStepThreshold: Float = 0.025
         var continuousDebounce: Double = 0.08
         var candidateFrames: Int = 3
@@ -166,8 +164,6 @@ extension GlideConfig {
         cfg.edgeControls.invertScroll = s.edgeControls.invertScroll
         cfg.edgeControls.scrollMomentum = s.edgeControls.scrollMomentum
 
-        cfg.tuning.appSwitcherStepThreshold  = t.appSwitcherStepThreshold
-        cfg.tuning.appSwitcherDebounce       = t.appSwitcherDebounce
         cfg.tuning.continuousStepThreshold   = t.continuousStepThreshold
         cfg.tuning.continuousDebounce        = t.continuousDebounce
         cfg.tuning.candidateFrames           = t.candidateFrames
@@ -277,10 +273,15 @@ extension GlideConfig {
     func toEdgeControls() -> EdgeControlsSettings {
         var e = EdgeControlsSettings()
         e.enabled    = edgeControls.enabled
-        e.topEdge    = EdgeAction(rawValue: edgeControls.topEdge) ?? .none
-        e.bottomEdge = EdgeAction(rawValue: edgeControls.bottomEdge) ?? .none
-        e.leftEdge   = EdgeAction(rawValue: edgeControls.leftEdge) ?? .brightness
-        e.rightEdge  = EdgeAction(rawValue: edgeControls.rightEdge) ?? .volume
+        // "app_switcher" was retired in 2.11.6 with the App Switcher; an edge that
+        // used it is switched off rather than falling back to a default action.
+        func edge(_ raw: String, _ fallback: EdgeAction) -> EdgeAction {
+            raw == "app_switcher" ? .none : EdgeAction(rawValue: raw) ?? fallback
+        }
+        e.topEdge    = edge(edgeControls.topEdge, .none)
+        e.bottomEdge = edge(edgeControls.bottomEdge, .none)
+        e.leftEdge   = edge(edgeControls.leftEdge, .brightness)
+        e.rightEdge  = edge(edgeControls.rightEdge, .volume)
         e.marginMm    = edgeControls.marginMm
         e.activationTravelMm = edgeControls.activationTravelMm
         e.scrollSpeed = edgeControls.scrollSpeed
@@ -295,8 +296,6 @@ extension GlideConfig {
         t.fastVelocityThreshold     = speed.fastVelocityThreshold
         t.slowVelocityThreshold     = speed.slowVelocityThreshold
         t.speedLogic                = SpeedLogic(rawValue: speed.speedLogic.lowercased()) ?? .simple
-        t.appSwitcherStepThreshold  = tuning.appSwitcherStepThreshold
-        t.appSwitcherDebounce       = tuning.appSwitcherDebounce
         t.continuousStepThreshold   = tuning.continuousStepThreshold
         t.continuousDebounce        = tuning.continuousDebounce
         t.candidateFrames           = tuning.candidateFrames
@@ -318,8 +317,15 @@ extension GlideConfig {
         return t
     }
 
+    /// Actions removed with the App Switcher in 2.11.6. Gestures that used them are
+    /// dropped on import, as normalisation already did, instead of failing the file.
+    static let retiredActions: Set<String> = ["Next App (App Switcher)", "Previous App (App Switcher)"]
+
+    /// The gestures that are still meaningful, without retired ones.
+    var liveGestures: [Gesture] { gestures.filter { !Self.retiredActions.contains($0.action) } }
+
     func toRules() -> [GestureRule] {
-        gestures.compactMap { g in
+        liveGestures.compactMap { g in
             guard !g.action.isEmpty, let action = GestureAction(rawValue: g.action) else { return nil }
 
             let direction: GestureDirection
@@ -497,8 +503,6 @@ enum GlideConfigSerializer {
             "",
             "  # ── Tuning ─────────────────────────────────────────",
             "  tuning:",
-            "    app_switcher_step_threshold: \(fmt(config.tuning.appSwitcherStepThreshold))",
-            "    app_switcher_debounce: \(String(config.tuning.appSwitcherDebounce))",
             "    continuous_step_threshold: \(fmt(config.tuning.continuousStepThreshold))",
             "    continuous_debounce: \(String(config.tuning.continuousDebounce))",
             "    candidate_frames: \(config.tuning.candidateFrames)",
@@ -738,7 +742,7 @@ enum GlideConfigParser {
             default:            i += 1
             }
         }
-        guard (0...1).contains(cfg.gestureSchemaVersion), cfg.toRules().count == cfg.gestures.count,
+        guard (0...1).contains(cfg.gestureSchemaVersion), cfg.toRules().count == cfg.liveGestures.count,
               cfg.gestures.allSatisfy({ GestureDevice(rawValue: $0.device) != nil && Self.gestureTypes.contains($0.type) }) else { return nil }
         return cfg
     }
@@ -898,8 +902,6 @@ enum GlideConfigParser {
             let (ind, key, val) = tokenize(line)
             if ind <= parentIndent { return }
             switch key {
-            case "app_switcher_step_threshold":  tuning.appSwitcherStepThreshold  = floatVal(val)  ?? tuning.appSwitcherStepThreshold
-            case "app_switcher_debounce":        tuning.appSwitcherDebounce       = doubleVal(val) ?? tuning.appSwitcherDebounce
             case "continuous_step_threshold":     tuning.continuousStepThreshold   = floatVal(val)  ?? tuning.continuousStepThreshold
             case "continuous_debounce":           tuning.continuousDebounce        = doubleVal(val) ?? tuning.continuousDebounce
             case "candidate_frames":             tuning.candidateFrames           = intVal(val)    ?? tuning.candidateFrames

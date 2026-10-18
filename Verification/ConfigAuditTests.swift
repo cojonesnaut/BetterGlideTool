@@ -11,7 +11,6 @@ enum ConfigAuditTests {
         seed.speed.slowVelocityThreshold = 0.005123456
         seed.edgeControls.marginMm = 12.123456789
         seed.tuning.continuousDebounce = 0.081234567
-        seed.tuning.appSwitcherDebounce = 0.051234567
         seed.tuning.forceClickMarginLeft = 0.23123456
         seed.deviceTuning.trackpadSensitivity = 0.23456789
         seed.deviceTuning.mouseSensitivity = 0.7654321
@@ -49,7 +48,7 @@ enum ConfigAuditTests {
                 }
             }
         }
-        for action in GestureAction.allCases where !Settings.isAppSwitcherAction(action) {
+        for action in GestureAction.allCases {
             var rule = GestureRule(name: "Action \(action)", fingers: 3, direction: .swipeUp, action: action)
             rule.appPath = "/Applications/Test \"quoted\" \\ path.app"
             rule.appFilters = ["com.brave.Browser", "com.apple.Safari"]
@@ -171,6 +170,34 @@ enum ConfigAuditTests {
         let reorderedConfig = GlideConfigParser.parse(yaml: crlf)!
         precondition(reorderedConfig.gestures[0].name == "Literal \\n and it's a name")
         precondition(reorderedConfig.deviceTuning.mouseTipTap.allowSensitiveTipTaps)
+        // Everything the App Switcher left in configs before 2.11.6 must still import:
+        // its gestures are dropped, its edge is switched off, the rest is ignored.
+        let retiredSwitcher = """
+        touchpad:
+          gesture_schema_version: 1
+          haptics:
+            switcher_open: "rising"
+            switcher_step: "soft_tick"
+            switcher_commit: "double_tap"
+          edge_controls:
+            top_edge: app_switcher
+          tuning:
+            app_switcher_step_threshold: 0.002
+            app_switcher_debounce: 0.05
+          gestures:
+            - type: swipe
+              device: trackpad
+              direction: right
+              fingers: 3
+              action: "Next App (App Switcher)"
+            - action: Show Desktop
+              type: tap
+              device: trackpad
+              fingers: 3
+        """
+        guard let retired = GlideConfigParser.parse(yaml: retiredSwitcher) else { fatalError("A pre-2.11.6 App Switcher config must still import") }
+        precondition(retired.toRules().map(\.action) == [.showDesktop], "Retired switcher gestures are dropped, others kept")
+        precondition(retired.toEdgeControls().topEdge == .none, "A retired switcher edge is switched off")
         print("PASS: \(expectedRules.count) complete gesture/action records; all tuning, metadata, precision and order survive six round-trips; atomic file import/export, failure rollback, invalid-file rejection and legacy text handling")
     }
 }

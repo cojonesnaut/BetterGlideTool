@@ -26,6 +26,8 @@ enum ConfigImportSyntax {
         "stage_window_title", "shortcut_name", "script", "haptic", "reciprocal_action",
         "continuous_update_negative_action", "continuous_update_positive_action", "continuous_end_action"
     ]
+    /// Haptic events of the App Switcher, retired in 2.11.6; still accepted on import.
+    private static let retiredHaptics: Set<String> = ["switcher_open", "switcher_step", "switcher_commit"]
     // Derive settings keys/types from the exporter so every newly exported tuning
     // field is automatically accepted. Gesture optional payloads are listed above.
     private static let schema: [String: Kind] = {
@@ -46,8 +48,9 @@ enum ConfigImportSyntax {
         }
         result["touchpad.gesture_schema_version"] = .integer
         // Retired sections. The App Switcher's settings page and the TrackPoint were
-        // removed in 2.11.0; files exported before that still carry these blocks and
-        // must keep importing. The parser skips them.
+        // removed in 2.11.1 (the App Switcher entirely in 2.11.6); files exported
+        // before that still carry these blocks and must keep importing. The parser
+        // skips them.
         let retired: [String: [String: Kind]] = [
             "app_switcher": [
                 "enabled": .boolean, "style": .text, "fingers": .integer, "skip_windowless_finder": .boolean,
@@ -65,6 +68,9 @@ enum ConfigImportSyntax {
             result["touchpad.\(section)"] = .object
             for (key, kind) in fields { result["touchpad.\(section).\(key)"] = kind }
         }
+        // App Switcher tuning, retired with the switcher itself in 2.11.6.
+        result["touchpad.tuning.app_switcher_step_threshold"] = .number
+        result["touchpad.tuning.app_switcher_debounce"] = .number
         result["touchpad.tuning.candidate_frames"] = .integer
         result["touchpad.speed.speed_sample_count"] = .integer // retired legacy field
         result["touchpad.tuning.force_click_corner_margin"] = .number
@@ -126,7 +132,7 @@ enum ConfigImportSyntax {
                 kind = gestureLists.contains(key) ? .list : (gestureIntegers.contains(key) ? .integer :
                     (gestureBooleans.contains(key) ? .boolean : (gestureStrings.contains(key) ? .text : nil)))
             } else if parent == "touchpad.haptics" {
-                kind = HapticEvent(rawValue: key) != nil ? .text : nil
+                kind = HapticEvent(rawValue: key) != nil || retiredHaptics.contains(key) ? .text : nil
             } else { kind = schema[path.replacingOccurrences(of: "touchpad.edgecontrols", with: "touchpad.edge_controls")] }
             guard let kind else { return false }
             if parent.isEmpty && (key != "touchpad" || indent != 0) { return false }

@@ -310,13 +310,6 @@ final class WindowTargeting {
         DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay, execute: activateItem)
     }
 
-    /// Unminimizes every minimized window of the given app (app-switcher commit).
-    func unminimizeWindows(of pid: pid_t) {
-        for w in windows(for: pid) where axBool(w, attribute: kAXMinimizedAttribute as CFString) == true {
-            setAXBool(w, attribute: kAXMinimizedAttribute as CFString, value: false)
-        }
-    }
-
     func maximize() {
         guard let w = targetWindow() else { return }
         pruneOrphanedFrames()
@@ -383,7 +376,45 @@ final class WindowTargeting {
         setFrame(w, CGRect(x: x, y: mainH - (y + sh), width: sw, height: sh))
     }
 
+    /// macOS's own window tiling (Window ▸ Move & Resize). It remembers each
+    /// window's size from before it was tiled, so Center after Fill puts the window
+    /// back at that size, centred in the space Stage Manager leaves — the behaviour
+    /// of BetterTouchTool's "macOS Window Tiling" actions. Moving the frame by hand
+    /// cannot do that: after Maximize, centring the full-size window changes
+    /// nothing. Driven through the tiling shortcuts (Globe+Control+key), which are
+    /// the same in every language. Key codes are ANSI positions.
+    enum NativeTile: CGKeyCode {
+        case fill = 3             // F
+        case center = 8           // C
+        case restorePrevious = 15 // R
+    }
+
+    /// Returns false where macOS has no window tiling (before 15) or there is no
+    /// window to act on, so callers can fall back to their own frame maths.
+    @discardableResult
+    func nativeTile(_ tile: NativeTile) -> Bool {
+        guard #available(macOS 15.0, *), let window = targetWindow() else { return false }
+        func post() {
+            let source = CGEventSource(stateID: .hidSystemState)
+            for down in [true, false] {
+                guard let event = CGEvent(keyboardEventSource: source, virtualKey: tile.rawValue, keyDown: down) else { return }
+                event.flags = [.maskSecondaryFn, .maskControl]
+                event.post(tap: .cghidEventTap)
+            }
+        }
+        // The shortcut acts on the frontmost app's key window. When the target is a
+        // window under the cursor instead, bring it forward first.
+        if let focused = focusedWindow(), CFEqual(focused, window) {
+            post()
+        } else {
+            focus(window: window)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { post() }
+        }
+        return true
+    }
+
     func centerWindow() {
+        if nativeTile(.center) { return }
         guard let w = targetWindow(), let f = axFrame(w) else { return }
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main else { return }
@@ -419,9 +450,9 @@ final class WindowTargeting {
     // MARK: - App switching
 
     func activateAdjacentApp(forward: Bool) {
-        // MRU order (same as the switcher) — raw runningApplications is launch order
+        // Most-recently-used order — raw runningApplications is launch order
         // and shifts as apps come and go, making "next app" unpredictable.
-        let apps = AppSwitcherState.shared.getOrderedApps()
+        let apps = AppActivationOrder.shared.getOrderedApps()
         guard apps.count > 1, let cur = NSWorkspace.shared.frontmostApplication,
               let idx = apps.firstIndex(where: { $0.processIdentifier == cur.processIdentifier }) else { return }
         let next = forward
@@ -511,24 +542,6 @@ final class WindowTargeting {
         return WindowKey(pid: pid, identity: Int(CFHash(w)))
     }
 
-    /// The first Accessibility request to a process pays a one-off connection
-    /// handshake — measured at ~40ms per application, ~250ms across a typical set.
-    /// Paying that on the first switcher open is exactly the quarter-second stall
-    /// the panel must not have, so it is paid in the background ahead of time.
-    /// Every later request to the same process costs well under a millisecond.
-    func warmAccessibilityConnection(for pid: pid_t) {
-        DispatchQueue.global(qos: .utility).async { _ = self.windows(for: pid) }
-    }
-
-    func warmAccessibilityConnections() {
-        let pids = NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular }
-            .map(\.processIdentifier)
-        DispatchQueue.global(qos: .utility).async {
-            for pid in pids { _ = self.windows(for: pid) }
-        }
-    }
-
     func windows(for pid: pid_t) -> [AXUIElement] {
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.1)
@@ -536,346 +549,6 @@ final class WindowTargeting {
         guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &ref) == .success,
               let wins = ref as? [AXUIElement] else { return [] }
         return wins
-    }
-
-    /// One pass over the window manager, shared by every application in a switcher
-    /// open. Accessibility only ever describes windows on the active Space, so the
-    /// set of windows that exist — and whether each is on this Space or merely
-    /// ordered out — comes from the WindowServer instead.
-    private struct WindowServerSnapshot {
-        /// Front-to-back, per owning process. Layer 0 and at least 40×40, so menus,
-        /// tooltips, shadows and status items never reach the switcher.
-        var idsByProcess: [pid_t: [CGWindowID]] = [:]
-        var sizes: [CGWindowID: CGSize] = [:]
-        var titles: [CGWindowID: String] = [:]
-        var onCurrentSpace: Set<CGWindowID> = []
-        var orderedIn: Set<CGWindowID> = []
-    }
-
-    private func copyWindowServerIDs(currentSpaceOnly: Bool, orderedInOnly: Bool) -> Set<CGWindowID>? {
-        guard let unmanaged = GLDWCopyWindowIDs(currentSpaceOnly, orderedInOnly) else { return nil }
-        let ids = unmanaged.takeRetainedValue() as NSArray
-        return Set(ids.compactMap { ($0 as? NSNumber).map { CGWindowID($0.uint32Value) } })
-    }
-
-    private func windowServerSnapshot() -> WindowServerSnapshot {
-        var snapshot = WindowServerSnapshot()
-        // nil means the private symbols are gone (a future macOS). Everything then
-        // falls back to the on-screen flag, which only sees the active Space —
-        // the old behaviour, rather than an empty switcher.
-        let managed = copyWindowServerIDs(currentSpaceOnly: false, orderedInOnly: false)
-        let current = copyWindowServerIDs(currentSpaceOnly: true, orderedInOnly: false)
-        let ordered = copyWindowServerIDs(currentSpaceOnly: false, orderedInOnly: true)
-        // An empty answer is treated as no answer: reporting every window as
-        // "another Space" would be worse than the pre-Spaces heuristic.
-        let useOnscreenFlag = managed == nil || current?.isEmpty != false
-        snapshot.onCurrentSpace = current ?? []
-        snapshot.orderedIn = ordered ?? []
-
-        guard let info = CGWindowListCopyWindowInfo(
-            [.optionAll, .excludeDesktopElements],
-            kCGNullWindowID
-        ) as? [[String: Any]] else { return snapshot }
-
-        for row in info {
-            guard let pidNumber = row[kCGWindowOwnerPID as String] as? NSNumber,
-                  let layerNumber = row[kCGWindowLayer as String] as? NSNumber,
-                  layerNumber.intValue == 0,
-                  let idNumber = row[kCGWindowNumber as String] as? NSNumber,
-                  let bounds = row[kCGWindowBounds as String] as? [String: Any] else { continue }
-            let size = CGSize(
-                width: (bounds["Width"] as? NSNumber)?.doubleValue ?? 0,
-                height: (bounds["Height"] as? NSNumber)?.doubleValue ?? 0
-            )
-            guard size.width >= 40, size.height >= 40 else { continue }
-
-            let id = CGWindowID(idNumber.uint32Value)
-            // The window manager knows which of an application's surfaces are real
-            // windows; Core Graphics also lists hidden scratch windows that no
-            // switcher should offer.
-            if let managed, !managed.contains(id) { continue }
-            if useOnscreenFlag,
-               (row[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue == true {
-                snapshot.onCurrentSpace.insert(id)
-            }
-            if ordered == nil { snapshot.orderedIn.insert(id) }
-            snapshot.idsByProcess[pidNumber.int32Value, default: []].append(id)
-            snapshot.sizes[id] = size
-            // Only populated when the user has granted Screen Recording; used as a
-            // title of last resort for windows Accessibility cannot describe.
-            if let name = row[kCGWindowName as String] as? String, !name.isEmpty {
-                snapshot.titles[id] = name
-            }
-        }
-        return snapshot
-    }
-
-    func switcherWindows(for apps: [NSRunningApplication]) -> [[AppSwitcherWindow]] {
-        let snapshot = windowServerSnapshot()
-        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-
-        return apps.map { app in
-            let windowIDs = snapshot.idsByProcess[app.processIdentifier] ?? []
-            guard !windowIDs.isEmpty else { return [] }
-
-            let appElement = AXUIElementCreateApplication(app.processIdentifier)
-            AXUIElementSetMessagingTimeout(appElement, 0.1)
-            var focusedRef: CFTypeRef?
-            let focusedWindow: AXUIElement? = {
-                guard AXUIElementCopyAttributeValue(
-                    appElement,
-                    kAXFocusedWindowAttribute as CFString,
-                    &focusedRef
-                ) == .success else { return nil }
-                return axElement(from: focusedRef)
-            }()
-            let focusedID = focusedWindow.flatMap(cgWindowID)
-
-            var elementsByID: [CGWindowID: AXUIElement] = [:]
-            for window in windows(for: app.processIdentifier) {
-                if let id = cgWindowID(for: window) { elementsByID[id] = window }
-            }
-
-            var result = windowIDs.compactMap { windowID -> AppSwitcherWindow? in
-                let element = elementsByID[windowID]
-                let isOrderedIn = snapshot.orderedIn.contains(windowID)
-                guard isSwitcherWindow(
-                    element,
-                    isOrderedIn: isOrderedIn,
-                    size: snapshot.sizes[windowID] ?? .zero
-                ) else { return nil }
-                let axTitle = element
-                    .flatMap { axString($0, attribute: kAXTitleAttribute as CFString) }?
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                let title = [axTitle, snapshot.titles[windowID], app.localizedName]
-                    .compactMap { $0 }
-                    .first { !$0.isEmpty }
-                return AppSwitcherWindow(
-                    id: Int(windowID),
-                    processIdentifier: app.processIdentifier,
-                    windowID: windowID,
-                    element: element,
-                    title: title ?? "Untitled Window",
-                    isMinimized: element.map { axBool($0, attribute: kAXMinimizedAttribute as CFString) == true }
-                        ?? false,
-                    isOnCurrentSpace: snapshot.onCurrentSpace.contains(windowID),
-                    isApplicationHidden: app.isHidden
-                )
-            }
-
-            if let focusedID,
-               let index = result.firstIndex(where: { $0.windowID == focusedID }) {
-                let focused = result.remove(at: index)
-                if app.processIdentifier == frontmostPID, !result.isEmpty {
-                    // Returning to the app you are already using should pick its
-                    // alternate window first, mirroring the intent of ⌘`.
-                    result.append(focused)
-                } else {
-                    result.insert(focused, at: 0)
-                }
-            }
-            return result
-        }
-    }
-
-    func activateSwitcherWindow(_ window: AppSwitcherWindow, in app: NSRunningApplication) {
-        app.unhide()
-
-        // Activating a process is enough to reach a target on another Space, as long
-        // as the process has nothing on the Space in front of us: macOS then moves to
-        // where its windows actually are, full-screen Spaces included. An application
-        // holding windows on both Spaces is the case that breaks, because activating
-        // it just raises the window already here — which is how a full-screen window
-        // ends up unreachable while its ordinary sibling keeps coming forward.
-        //
-        // Accessibility is no help in resolving it: it stops describing a window
-        // while that window's Space is inactive, so the target arrives here with no
-        // element and every AX call below is a no-op. Nor can the Space be changed
-        // directly; the window manager refuses to show and hide Spaces for an
-        // ordinary connection, and doing half of it leaves the abandoned Space
-        // composited on screen. So macOS is asked to make the move itself, by the
-        // same shortcut the user would press.
-        if let windowID = window.windowID,
-           inactiveSpace(containing: windowID) != nil,
-           hasWindowOnCurrentSpace(app.processIdentifier),
-           let steps = spaceWalkSteps(toSpaceOf: windowID),
-           let shortcut = MissionControlShortcut.moveToSpace(next: steps > 0) {
-            walkSpaces(steps: steps, pressing: shortcut) { [weak self] in
-                self?.focusSwitcherWindow(window, in: app, attemptsRemaining: 6)
-            }
-            return
-        }
-
-        if window.isMinimized, let element = window.element {
-            _ = setAXBool(element, attribute: kAXMinimizedAttribute as CFString, value: false)
-        }
-
-        let appElement = AXUIElementCreateApplication(app.processIdentifier)
-        func focus(_ element: AXUIElement?) {
-            guard let element else { return }
-            AXUIElementSetAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, element)
-            AXUIElementPerformAction(element, kAXRaiseAction as CFString)
-        }
-
-        // Claim the exact target before activating the process. A successful
-        // WindowServer focus alone does not guarantee that macOS moves to the
-        // target's Space, so it must never short-circuit this sequence.
-        focus(window.element)
-        app.activate(options: .activateIgnoringOtherApps)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { [weak self] in
-            guard let self else { return }
-            let element = window.element ?? window.windowID.flatMap { targetID in
-                self.windows(for: app.processIdentifier).first { candidate in
-                    self.cgWindowID(for: candidate) == targetID
-                }
-            }
-            focus(element)
-            if let windowID = window.windowID {
-                _ = GLDWFocusWindow(app.processIdentifier, windowID)
-            }
-
-            // The app activation and Space transition are asynchronous. Reapply
-            // the AX focus after the transition so macOS cannot fall back to the
-            // application's most recently focused window on another Space.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                focus(element)
-            }
-        }
-    }
-
-    /// The Space owning a window, but only when it is not already on screen.
-    /// `nil` also covers the case where the window manager cannot answer, so an
-    /// unsupported macOS simply keeps the plain activation path.
-    private func inactiveSpace(containing windowID: CGWindowID) -> UInt64? {
-        let space = GLDWSpaceForWindow(windowID)
-        guard space != 0, !GLDWIsSpaceCurrent(space) else { return nil }
-        return space
-    }
-
-    /// Whether the process has any window on a Space that is on screen — the reason
-    /// activating it alone would not move anywhere.
-    private func hasWindowOnCurrentSpace(_ pid: pid_t) -> Bool {
-        guard let list = CGWindowListCopyWindowInfo(
-            [.optionAll, .excludeDesktopElements], kCGNullWindowID
-        ) as? [[String: Any]] else { return false }
-
-        for row in list {
-            guard (row[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid,
-                  (row[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
-                  let idNumber = row[kCGWindowNumber as String] as? NSNumber else { continue }
-            let space = GLDWSpaceForWindow(CGWindowID(idNumber.uint32Value))
-            if space != 0, GLDWIsSpaceCurrent(space) { return true }
-        }
-        return false
-    }
-
-    /// Steps of the "move one Space" shortcut needed to bring a window's Space on
-    /// screen, or `nil` when there is no such route. Distant Spaces are refused
-    /// rather than animated through one transition at a time.
-    private func spaceWalkSteps(toSpaceOf windowID: CGWindowID) -> Int? {
-        let space = GLDWSpaceForWindow(windowID)
-        guard space != 0 else { return nil }
-        var steps: Int32 = 0
-        guard GLDWSpaceWalkSteps(space, &steps), steps != 0, abs(steps) <= 8 else { return nil }
-        return Int(steps)
-    }
-
-    /// Presses the user's own move-a-Space shortcut, one Space at a time, letting
-    /// each transition finish before the next. Every step goes the same direction,
-    /// so the shortcut is resolved once and reused.
-    private func walkSpaces(
-        steps: Int,
-        pressing shortcut: MissionControlShortcut,
-        then completion: @escaping () -> Void
-    ) {
-        guard steps != 0 else {
-            completion()
-            return
-        }
-        KeyboardEmulator.shared.sendKey(shortcut.keyCode, shortcut.flags)
-        let remaining = steps > 0 ? steps - 1 : steps + 1
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self else { return }
-            self.walkSpaces(steps: remaining, pressing: shortcut, then: completion)
-        }
-    }
-
-    /// Focuses a switcher target after its Space has been made current. The Space
-    /// changes immediately, but Accessibility only starts describing windows there
-    /// about a frame later, so the element is retried until it resolves — a
-    /// full-screen window cannot be raised without it.
-    private func focusSwitcherWindow(
-        _ window: AppSwitcherWindow,
-        in app: NSRunningApplication,
-        attemptsRemaining: Int
-    ) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            guard let self, !app.isTerminated else { return }
-
-            let element = window.element ?? window.windowID.flatMap { targetID in
-                self.windows(for: app.processIdentifier).first { candidate in
-                    self.cgWindowID(for: candidate) == targetID
-                }
-            }
-            guard element != nil || attemptsRemaining <= 1 else {
-                self.focusSwitcherWindow(window, in: app, attemptsRemaining: attemptsRemaining - 1)
-                return
-            }
-
-            let appElement = AXUIElementCreateApplication(app.processIdentifier)
-            func claim() {
-                guard let element else { return }
-                AXUIElementSetAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, element)
-                AXUIElementPerformAction(element, kAXRaiseAction as CFString)
-            }
-
-            if let element,
-               self.axBool(element, attribute: kAXMinimizedAttribute as CFString) == true {
-                // Unminimizing had to wait for the Space too, for the same reason.
-                _ = self.setAXBool(element, attribute: kAXMinimizedAttribute as CFString, value: false)
-            }
-            claim()
-            app.activate(options: .activateIgnoringOtherApps)
-            if let windowID = window.windowID {
-                _ = GLDWFocusWindow(app.processIdentifier, windowID)
-            }
-            // Activation is asynchronous, so reassert the target afterwards or macOS
-            // can settle on the application's previously focused window instead.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { claim() }
-        }
-    }
-
-    private func cgWindowID(for window: AXUIElement) -> CGWindowID? {
-        var windowID: UInt32 = 0
-        return _AXUIElementGetWindow(window, &windowID) == .success ? windowID : nil
-    }
-
-    private func axString(_ element: AXUIElement, attribute: CFString) -> String? {
-        var ref: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute, &ref) == .success else { return nil }
-        return ref as? String
-    }
-
-    /// The switcher represents document-style windows, not sheets, dialogs, or
-    /// floating panels. Window management actions are deliberately more permissive,
-    /// since they legitimately operate on dialogs.
-    ///
-    /// A window with no AX element lives on another Space (or its application
-    /// refuses Accessibility): the WindowServer is then the only witness, and it
-    /// only vouches for windows that are ordered in.
-    private func isSwitcherWindow(_ window: AXUIElement?, isOrderedIn: Bool, size: CGSize) -> Bool {
-        guard let window else {
-            // Nothing can report a subrole here, so shape stands in for it. A
-            // full-screen Space adds a display-wide title strip alongside the real
-            // window; no document window is that letterboxed.
-            return isOrderedIn && size.width >= 200 && size.height >= 100
-        }
-        guard axRole(window) == (kAXWindowRole as String) else { return false }
-        // Subrole degrades to AXDialog while a window is ordered out — minimized,
-        // or its application hidden — so it only means anything while ordered in.
-        guard isOrderedIn, let subrole = axSubrole(window) else { return true }
-        return subrole == (kAXStandardWindowSubrole as String)
     }
 
     private func shouldMinimizeWindow(_ window: AXUIElement) -> Bool {

@@ -332,8 +332,6 @@ struct TrackpadDemoView: View {
                     travel: CGSize(width: 0, height: -0.42), isClick: false),
         GestureDemo(caption: "3-finger click — quit app under cursor", fingers: 3,
                     travel: .zero, isClick: true),
-        GestureDemo(caption: "3-finger swipe left or right — app switcher", fingers: 3,
-                    travel: CGSize(width: 0.42, height: 0), isClick: false),
         GestureDemo(caption: "4-finger swipe left — snap window left", fingers: 4,
                     travel: CGSize(width: -0.42, height: 0), isClick: false),
         GestureDemo(caption: "5-finger swipe up — enter fullscreen", fingers: 5,

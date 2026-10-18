@@ -119,16 +119,13 @@ enum SystemGestureManager {
     }
 
     /// Native gestures that are still on while a Glide gesture uses the same trigger.
-    static func currentConflicts(rules: [GestureRule], appSwitcher: AppSwitcherSettings) -> [Conflict] {
+    static func currentConflicts(rules: [GestureRule]) -> [Conflict] {
         var triggers: [String: [String]] = [:]   // native key → glide gesture names
 
         func add(_ native: NativeGesture, _ label: String) {
             triggers[native.key, default: []].append(label)
         }
 
-        if appSwitcher.enabled {
-            add(threeFingerHoriz, "App Switcher (3-finger swipe)")
-        }
         for rule in rules where rule.isActive && rule.device == .trackpad {
             let label = rule.displayName
             switch (rule.fingers, rule.direction) {
@@ -209,8 +206,7 @@ enum SystemGestureManager {
     /// configured Glide gesture. Safe to call often — skips work when clean.
     static func reconcileIfAutoEnabled() {
         guard Settings.shared.autoDisableNativeGestures else { return }
-        let conflicts = currentConflicts(rules: Settings.shared.rules,
-                                         appSwitcher: Settings.shared.appSwitcher)
+        let conflicts = currentConflicts(rules: Settings.shared.rules)
         disableNativeGestures(conflicts.map(\.native))
     }
 
