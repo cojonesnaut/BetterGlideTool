@@ -24,6 +24,11 @@ private struct BasicTouchRecognizer {
     private var lifting = false
     private(set) var isTouching = false
     private(set) var suppressScroll = false
+    /// Recent mean finger displacement, and the fastest motion seen along each
+    /// axis in either direction, for flick swipes.
+    private var motion: [(t: Double, x: Double, y: Double)] = []
+    private var motionFingers = 0
+    private var fastest = (right: 0.0, left: 0.0, up: 0.0, down: 0.0)
 
     var tapLocation: MouseContact? {
         guard !origins.isEmpty else { return nil }
@@ -87,6 +92,7 @@ private struct BasicTouchRecognizer {
             maxMovement = max(maxMovement, hypot(x, y))
             dx += x; dy += y; deltas.append((x, y))
         }
+        if !lifting, peak == contacts.count { trackMotion(x: dx / Double(peak), y: dy / Double(peak), at: timestamp) }
         guard !cancelled, !emitted, !lifting, (1...4).contains(contacts.count), peak == contacts.count,
               timestamp - start <= 1.0, settings.hasSwipes(fingers: peak) else { return nil }
         dx /= Double(peak); dy /= Double(peak)
@@ -94,9 +100,15 @@ private struct BasicTouchRecognizer {
         let vertical = abs(dy) > abs(dx) * MagicMouseSettings.swipeAxisDominance
         guard horizontal || vertical else { return nil }
         let distance = horizontal ? dx : dy
-        guard abs(distance) >= settings.swipeDistance,
+        let flick = settings.isFlick(fingers: peak)
+        let required = flick ? MagicMouseSettings.flickDistance : settings.swipeDistance
+        guard abs(distance) >= required,
               deltas.allSatisfy({ (horizontal ? $0.0 : $0.1) * distance > 0 &&
-                  abs(horizontal ? $0.0 : $0.1) >= settings.swipeDistance * 0.5 }) else { return nil }
+                  abs(horizontal ? $0.0 : $0.1) >= required * 0.5 }) else { return nil }
+        if flick {
+            let speed = horizontal ? (distance > 0 ? fastest.right : fastest.left) : (distance > 0 ? fastest.up : fastest.down)
+            guard speed >= MagicMouseSettings.flickSpeed else { return nil }
+        }
         let gesture: MagicMouseGesture
         if peak == 1 {
             gesture = horizontal ? (dx < 0 ? .oneFingerSwipeLeft : .oneFingerSwipeRight) : (dy < 0 ? .oneFingerSwipeDown : .oneFingerSwipeUp)
@@ -111,6 +123,20 @@ private struct BasicTouchRecognizer {
         emitted = true
         suppressScroll = true
         return gesture
+    }
+
+    private mutating func trackMotion(x: Double, y: Double, at timestamp: Double) {
+        // A landing finger shifts the mean displacement; start over rather than
+        // read that shift as motion.
+        if peak != motionFingers { motion = []; motionFingers = peak; fastest = (0, 0, 0, 0) }
+        motion.append((timestamp, x, y))
+        // Keep the newest sample at least one window old as the baseline.
+        while motion.count > 2, timestamp - motion[1].t >= MagicMouseSettings.flickWindow { motion.removeFirst() }
+        guard let base = motion.first, timestamp - base.t >= MagicMouseSettings.flickWindow else { return }
+        let dt = timestamp - base.t
+        let vx = (x - base.x) / dt, vy = (y - base.y) / dt
+        fastest.right = max(fastest.right, vx); fastest.left = max(fastest.left, -vx)
+        fastest.up = max(fastest.up, vy); fastest.down = max(fastest.down, -vy)
     }
 }
 

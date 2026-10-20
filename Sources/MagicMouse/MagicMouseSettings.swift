@@ -166,6 +166,21 @@ struct MagicMouseSettings: Equatable {
     /// 53–60° from horizontal (ratio 1.3–1.7), and 1.5 missed a quarter of them.
     /// 1.2 (about 50°) still keeps up and right apart.
     static let swipeAxisDominance = 1.2
+    /// Swipes made with the fingers a device scrolls with — one on a Magic
+    /// Mouse, two on a trackpad — are flicks: they never withhold the scroll,
+    /// and fire only on speed, so panning a chart or page never triggers them.
+    /// Measured on TradingView with spoken cues: slow pans peaked at 0.44–0.75
+    /// surface widths per second on the Magic Mouse and 0.32–0.50 on the
+    /// trackpad; flicks peaked at 3.5–9.6 and 6.1–7.1.
+    static let flickSpeed = 2.0
+    /// Travel a flick needs, so a twitch at speed is not a swipe. The shortest
+    /// recorded flick moved 0.21.
+    static let flickDistance = 0.12
+    /// Speed is taken over at least this window, as in the measurements.
+    static let flickWindow = 0.045
+    func isFlick(fingers: Int) -> Bool {
+        (fingers == 1 && tipTapSpacingGeometry == .magicMouse) || (fingers == 2 && tipTapSpacingGeometry == .surface)
+    }
     var enabled = true
     var invertVerticalScrolling = false
     var invertHorizontalScrolling = false
@@ -195,8 +210,9 @@ struct MagicMouseSettings: Equatable {
         let horizontal: [MagicMouseGesture], vertical: [MagicMouseGesture]
         switch fingers {
         case 1:
-            horizontal = [.oneFingerSwipeLeft, .oneFingerSwipeRight]
-            vertical = [.oneFingerSwipeUp, .oneFingerSwipeDown]
+            // One finger is how a Magic Mouse scrolls: its swipes fire on top
+            // of the scroll instead of taking it (see flickSpeed).
+            return []
         case 2:
             horizontal = [.swipeLeft, .swipeRight]
             vertical = [.swipeUp, .swipeDown]

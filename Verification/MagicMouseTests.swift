@@ -12,6 +12,7 @@ struct MagicMouseTests {
     }
     static func main() {
         var settings = MagicMouseSettings()
+        settings.tipTapSpacingGeometry = .magicMouse
         for (n, expected) in [(1, MagicMouseGesture.leftTap), (2, .twoFingerTap), (3, .threeFingerTap)] {
             var r = MagicMouseRecognizer()
             expect(r.consume(points(n), timestamp: 1, settings: settings) == nil, "No action on landing")
@@ -96,20 +97,38 @@ struct MagicMouseTests {
         expect(r.consume([], timestamp: 1.1, settings: settings) == .leftTap, "First device independent")
         expect(other.consume([], timestamp: 1.1, settings: settings) == .rightTap, "Second device independent")
         // Single-finger swipes are opt-in and never borrow a two-finger binding.
-        for (gesture, dx, dy) in [(MagicMouseGesture.oneFingerSwipeRight, 0.25, 0.0), (.oneFingerSwipeLeft, -0.25, 0.0), (.oneFingerSwipeUp, 0.0, 0.25), (.oneFingerSwipeDown, 0.0, -0.25)] {
-            r.reset(); settings = MagicMouseSettings(); settings.bindings[gesture] = .showDesktop
+        // One finger scrolls a Magic Mouse and two scroll a trackpad: those swipes
+        // are flicks, fired on speed so a slow pan never triggers them.
+        for (gesture, dx, dy) in [(MagicMouseGesture.oneFingerSwipeRight, 0.3, 0.0), (.oneFingerSwipeLeft, -0.3, 0.0), (.oneFingerSwipeUp, 0.0, 0.3), (.oneFingerSwipeDown, 0.0, -0.3)] {
+            r.reset(); settings = MagicMouseSettings(); settings.tipTapSpacingGeometry = .magicMouse; settings.bindings[gesture] = .showDesktop
             _ = r.consume(points(1, x: 0.4, y: 0.5), timestamp: 1, settings: settings)
-            expect(r.consume(points(1, x: 0.4 + dx, y: 0.5 + dy), timestamp: 1.2, settings: settings) == gesture, "Single-finger swipe direction")
-            expect(r.consume(points(1, x: 0.4 + dx, y: 0.5 + dy), timestamp: 1.3, settings: settings) == nil, "Single swipe fires once")
-            expect(r.consume([], timestamp: 1.4, settings: settings) == nil, "Single swipe cannot also tap")
+            for step in 1...10 {
+                expect(r.consume(points(1, x: 0.4 + dx * Double(step) / 10, y: 0.5 + dy * Double(step) / 10), timestamp: 1 + Double(step) * 0.1, settings: settings) == nil, "A slow pan (0.3/s) is not a swipe")
+            }
+            _ = r.consume([], timestamp: 2.1, settings: settings)
+            _ = r.consume(points(1, x: 0.4, y: 0.5), timestamp: 3, settings: settings)
+            expect(r.consume(points(1, x: 0.4 + dx * 0.25, y: 0.5 + dy * 0.25), timestamp: 3.03, settings: settings) == nil, "A flick needs some travel")
+            expect(r.consume(points(1, x: 0.4 + dx * 0.6, y: 0.5 + dy * 0.6), timestamp: 3.06, settings: settings) == gesture, "A flick fires on speed")
+            expect(r.consume(points(1, x: 0.4 + dx, y: 0.5 + dy), timestamp: 3.1, settings: settings) == nil, "Single swipe fires once")
+            expect(r.consume([], timestamp: 3.2, settings: settings) == nil, "Single swipe cannot also tap")
         }
+        var trackpad = MagicMouseSettings(); trackpad.bindings[.swipeRight] = .showDesktop
+        r.reset()
+        _ = r.consume(points(2, x: 0.3), timestamp: 1, settings: trackpad)
+        expect(r.consume(points(2, x: 0.7), timestamp: 2, settings: trackpad) == nil, "A slow two-finger trackpad pan is not a swipe")
+        _ = r.consume([], timestamp: 2.1, settings: trackpad)
+        _ = r.consume(points(2, x: 0.3), timestamp: 3, settings: trackpad)
+        _ = r.consume(points(2, x: 0.35), timestamp: 3.03, settings: trackpad)
+        expect(r.consume(points(2, x: 0.5), timestamp: 3.06, settings: trackpad) == .swipeRight, "A two-finger trackpad flick fires")
+        expect(trackpad.reservedScrollAxes(fingers: 1).isEmpty, "One-finger swipes never withhold Magic Mouse scrolling")
+        settings.bindings[.oneFingerSwipeLeft] = .snapLeft
         r.reset(); settings.bindings[.oneFingerSwipeRight] = .showDesktop
         _ = r.consume(points(2), timestamp: 1, settings: settings)
         _ = r.consume(points(1), timestamp: 1.1, settings: settings)
         expect(r.consume(points(1, x: 0.6), timestamp: 1.2, settings: settings) == nil, "Partial lift cannot turn two fingers into a single swipe")
         _ = r.consume([], timestamp: 1.3, settings: settings)
         _ = r.consume(points(1), timestamp: 2, settings: settings)
-        expect(r.consume(points(1, x: 0.6), timestamp: 2.2, settings: settings) == .oneFingerSwipeRight, "All fingers lifted rearms single swipe")
+        expect(r.consume(points(1, x: 0.6), timestamp: 2.1, settings: settings) == .oneFingerSwipeRight, "All fingers lifted rearms single swipe")
         settings = MagicMouseSettings()
         settings.bindings[.twoFingerDoubleTap] = .showDesktop
         r.reset()

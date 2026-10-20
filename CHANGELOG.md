@@ -1,5 +1,13 @@
 # Changelog
 
+## BetterGlideTool 2.11.13 (local)
+
+- Swipes made with the fingers a device scrolls with — one finger on the Magic Mouse, two on the trackpad — now fire on speed, as flicks, and never withhold the scroll. Panning a TradingView chart sideways used to send the swipe's ⌘←/⌘→ too: on the trackpad every slow pan did (the scroll itself always reached the app), and on the Magic Mouse any pan past 0.29. Recorded on TradingView with spoken cues, slow pans peaked at 0.44–0.75 surface widths per second on the Magic Mouse and 0.32–0.50 on the trackpad, flicks at 3.5–9.6 and 6.1–7.1. A flick now needs 2.0 widths per second over at least 45 ms and 0.12 of travel. Replayed through the recogniser, none of the 11 recorded pans fire and every recorded flick does. Magic Mouse swipes with two or more fingers, and trackpad swipes with one or three or more, are unchanged.
+
+## BetterGlideTool 2.11.12 (local)
+
+- One-finger Magic Mouse swipes no longer block scrolling. A one-finger swipe left/right withheld all horizontal scrolling while a finger was down, so a TradingView chart in Brave could not be panned. Recorded under BetterTouchTool on the same chart, the scroll passes the whole time and the swipe fires on top of it, once the finger has travelled 0.29 of the surface — every stroke that reached 0.291 fired, none that stopped at 0.288 or less. BetterGlideTool now does the same: one-finger swipes reserve no scroll axis, and on the Magic Mouse they fire at 0.29 (or the swipe distance, if larger). Replaying BetterTouchTool's recorded pans, BetterGlideTool fires on the same eight strokes within 30 ms and on none of the four shorter pans. Trackpad one-finger swipes are unchanged.
+
 ## BetterGlideTool 2.11.11 (local)
 
 Tip swipes (rest two fingers, swipe the left one up or down), measured from recordings of 30 strokes with per-finger touch data, the scrolls that reached the app and the window's frame:

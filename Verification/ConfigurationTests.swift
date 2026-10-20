@@ -400,11 +400,11 @@ struct ConfigurationTests {
         }
         print("PASS: 12 three-finger menu entries on both devices, dedicated routing, configuration persistence, independent scroll inversion with native phases")
         var horizontalMouse = MagicMouseSettings()
-        horizontalMouse.bindings[.oneFingerSwipeLeft] = .previousApp
-        horizontalMouse.bindings[.oneFingerSwipeRight] = .nextApp
-        let horizontalAxes = horizontalMouse.reservedScrollAxes(fingers: 1)
+        horizontalMouse.bindings[.swipeLeft] = .previousApp
+        horizontalMouse.bindings[.swipeRight] = .nextApp
+        let horizontalAxes = horizontalMouse.reservedScrollAxes(fingers: 2)
         precondition(horizontalAxes == .horizontal)
-        precondition(horizontalMouse.reservedScrollAxes(fingers: 2).isEmpty)
+        precondition(horizontalMouse.reservedScrollAxes(fingers: 3).isEmpty)
         let verticalEvent = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 24, wheel2: 0, wheel3: 0)!
         let verticalFields: [CGEventField] = [.scrollWheelEventDeltaAxis1, .scrollWheelEventFixedPtDeltaAxis1, .scrollWheelEventPointDeltaAxis1]
         let verticalBefore = verticalFields.map { verticalEvent.getDoubleValueField($0) }
@@ -425,14 +425,14 @@ struct ConfigurationTests {
         phaseEnd.setIntegerValueField(.scrollWheelEventScrollPhase, value: 4)
         precondition(!MagicMouseScrollFilter.filter(phaseEnd, reserving: horizontalAxes))
         precondition(phaseEnd.getIntegerValueField(.scrollWheelEventScrollPhase) == 4)
-        horizontalMouse.bindings[.swipeUp] = .showDesktop
+        horizontalMouse.bindings = [.swipeUp: .showDesktop]
         precondition(horizontalMouse.reservedScrollAxes(fingers: 2) == .vertical)
         let sideways = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: 12, wheel2: 20, wheel3: 0)!
         precondition(!MagicMouseScrollFilter.filter(sideways, reserving: .vertical))
         precondition(sideways.getIntegerValueField(.scrollWheelEventPointDeltaAxis2) == 20)
         precondition(sideways.getDoubleValueField(.scrollWheelEventPointDeltaAxis1) == 0)
         horizontalMouse.enabled = false
-        precondition(horizontalMouse.reservedScrollAxes(fingers: 1).isEmpty)
+        precondition(horizontalMouse.reservedScrollAxes(fingers: 2).isEmpty)
         print("PASS: horizontal gestures preserve vertical/diagonal scrolling, momentum and phase; vertical gestures preserve horizontal scrolling")
 
         var tuningFixture = GlideConfig()
