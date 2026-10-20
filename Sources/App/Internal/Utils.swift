@@ -26,16 +26,13 @@ enum Haptic {
              .maximizeWindow, .restoreWindow,
              .enterFullscreen, .exitFullscreen, .toggleFullscreen,
              .snapLeft, .snapRight, .snapTopLeft, .snapTopRight,
-             .snapBottomLeft, .snapBottomRight, .centerWindow, .moveNextDisplay:
+             .snapBottomLeft, .snapBottomRight, .centerWindow, .tileFill, .tileRestore, .moveNextDisplay:
             HapticEngine.shared.play(event: .windowAction)
         default:
             HapticEngine.shared.play(event: .otherAction)
         }
     }
 
-    static func switcherStep()   { HapticEngine.shared.play(event: .switcherStep) }
-    static func switcherOpen()   { HapticEngine.shared.play(event: .switcherOpen) }
-    static func switcherCommit() { HapticEngine.shared.play(event: .switcherCommit) }
     static func reciprocal()     { HapticEngine.shared.play(event: .reciprocal) }
 }
 import Foundation

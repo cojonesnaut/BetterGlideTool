@@ -16,10 +16,18 @@ final class ActionExecutor {
     func execute(_ action: GestureAction, appPath: String? = nil, menuItemPath: [String]? = nil,
                  menuTargetBundleID: String? = nil, customShortcut: KeyboardShortcut? = nil,
                  advancedKeyboard: [KeyboardInputStep] = [],
-                 shortcutName: String? = nil, script: String? = nil) {
+                 shortcutName: String? = nil, script: String? = nil, desktopOptions: DesktopActionOptions = DesktopActionOptions(), monitoring: LiveActionContext? = nil) {
         AppLogger.debug("[Action] \(action.rawValue)")
         switch action {
 
+        case .spaceLeftInstant, .spaceRightInstant:
+            DesktopActions.shared.changeSpace(next: action == .spaceRightInstant, options: desktopOptions)
+        case .windowSpaceLeft, .windowSpaceRight:
+            DesktopActions.shared.moveWindow(next: action == .windowSpaceRight)
+        case .stagePosition, .stageNext, .stagePrevious, .stageMatching, .stageMenu, .stageToggle, .stageRecentToggle:
+            DesktopActions.shared.performStage(action, options: desktopOptions, monitoring: monitoring)
+        case .leftClick, .rightClick, .middleClick:
+            SyntheticMouseInput.click(action == .leftClick ? .left : action == .rightClick ? .right : .center)
         // App lifecycle
         case .quitApp:           WindowTargeting.shared.quitAppAtCursor(NSEvent.mouseLocation)
         case .forceQuitApp:      WindowTargeting.shared.forceQuitAtCursor()
@@ -29,8 +37,6 @@ final class ActionExecutor {
         case .openApp:           if let path = appPath { WindowTargeting.shared.openApp(path: path) }
 
         // App switching
-        case .appSwitcherNext:   KeyboardEmulator.shared.sendKey(0x30, .maskCommand)
-        case .appSwitcherPrev:   KeyboardEmulator.shared.sendKey(0x30, [.maskCommand, .maskShift])
         case .switchAppNext:     WindowTargeting.shared.activateAdjacentApp(forward: true)
         case .switchAppPrev:     WindowTargeting.shared.activateAdjacentApp(forward: false)
 
@@ -54,6 +60,8 @@ final class ActionExecutor {
         case .snapBottomLeft:   WindowTargeting.shared.snap(CGRect(x: 0,   y: 0,   width: 0.5, height: 0.5))
         case .snapBottomRight:  WindowTargeting.shared.snap(CGRect(x: 0.5, y: 0,   width: 0.5, height: 0.5))
         case .centerWindow:     WindowTargeting.shared.centerWindow()
+        case .tileFill:         if !WindowTargeting.shared.nativeTile(.fill) { WindowTargeting.shared.maximize() }
+        case .tileRestore:      if !WindowTargeting.shared.nativeTile(.restorePrevious) { WindowTargeting.shared.restore() }
         case .moveNextDisplay:  WindowTargeting.shared.moveToNextDisplay()
 
         // System
@@ -111,6 +119,22 @@ final class ActionExecutor {
         case .openDownloads: SystemActions.openDownloads()
 
         case .doNothing: break
+        }
+    }
+}
+
+/// Tag generated clicks so input providers never feed an action back into itself.
+enum SyntheticMouseInput {
+    static let tag: Int64 = 0x42474D4F555345
+    static func click(_ button: CGMouseButton) {
+        guard let position = CGEvent(source: nil)?.location else { return }
+        let down: CGEventType = button == .left ? .leftMouseDown : button == .right ? .rightMouseDown : .otherMouseDown
+        let up: CGEventType = button == .left ? .leftMouseUp : button == .right ? .rightMouseUp : .otherMouseUp
+        for type in [down, up] {
+            guard let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: position, mouseButton: button) else { continue }
+            event.setIntegerValueField(.eventSourceUserData, value: tag)
+            event.setIntegerValueField(.mouseEventClickState, value: 1)
+            event.post(tap: .cghidEventTap)
         }
     }
 }

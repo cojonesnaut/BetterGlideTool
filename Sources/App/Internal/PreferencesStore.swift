@@ -28,9 +28,8 @@ final class PreferencesStore: ObservableObject {
             persistRules()
         }
     }
-    @Published private(set) var appSwitcher: AppSwitcherSettings = .init()
-    @Published private(set) var trackPoint: TrackPointSettings = .init()
     @Published private(set) var magicMouse = MagicMouseSettings()
+    @Published private(set) var deviceTuning = DeviceTuningSettings()
     @Published private(set) var edgeControls: EdgeControlsSettings = .init()
     @Published private(set) var tuning: GestureTuning = .init()
     @Published private(set) var windowTargetingMode: WindowTargetingMode = .focusedThenCursor
@@ -50,10 +49,9 @@ final class PreferencesStore: ObservableObject {
     func reload() {
         let s = Settings.shared
         rules = s.rules.map(sanitizedRule)
-        appSwitcher = s.appSwitcher
-        trackPoint = s.trackPoint
-        TrackPointController.shared.applySettings()
         magicMouse = s.magicMouse
+        deviceTuning = s.deviceTuning
+        if GestureEngine.shared.isRunning { NativePointerSpeed.shared.apply() }
         MagicMouseInput.shared.applySettings()
         edgeControls = s.edgeControls
         EdgeControlsController.shared.applySettings()
@@ -76,12 +74,16 @@ final class PreferencesStore: ObservableObject {
     }
 
     func refreshAccessibilityStatus() {
-        accessibilityGranted = AXIsProcessTrusted()
+        let granted = AccessibilityPermission.isGranted
+        if accessibilityGranted != granted { accessibilityGranted = granted }
     }
 
     @discardableResult
-    func addRule() -> UUID {
-        let rule = GestureRule.newDraft()
+    func addRule(fingers: Int = 3, device: GestureDevice = .trackpad) -> UUID {
+        var rule = GestureRule.newDraft()
+        rule.fingers = fingers
+        rule.device = device
+        if fingers <= 2 || device == .magicMouse { rule.direction = .tap }
         rules.append(rule)
         return rule.id
     }
@@ -106,7 +108,17 @@ final class PreferencesStore: ObservableObject {
     }
 
     func resetRules() {
-        rules = Settings.defaultRules.map(sanitizedRule)
+        rules = (Settings.defaultRules + MouseRuleBridge.migrate(MagicMouseSettings())).map(sanitizedRule)
+    }
+
+    func updateDeviceTuning(_ mutate: (inout DeviceTuningSettings) -> Void) {
+        var value = deviceTuning
+        mutate(&value)
+        deviceTuning = DeviceTuningSettings.normalized(value)
+        Settings.shared.deviceTuning = deviceTuning
+        MagicMouseInput.shared.applySettings()
+        LowFingerTrackpadInput.shared.applySettings()
+        if GestureEngine.shared.isRunning { NativePointerSpeed.shared.apply() }
     }
 
     func updateMagicMouse(_ mutate: (inout MagicMouseSettings) -> Void) {
@@ -115,31 +127,6 @@ final class PreferencesStore: ObservableObject {
         Settings.shared.magicMouse = value
         magicMouse = Settings.shared.magicMouse
         MagicMouseInput.shared.applySettings()
-    }
-
-    func updateAppSwitcher(_ mutate: (inout AppSwitcherSettings) -> Void) {
-        var copy = appSwitcher
-        mutate(&copy)
-        copy = AppSwitcherSettings.normalized(copy)
-        let fingersChanged = copy.enabled && copy.fingers != appSwitcher.fingers
-        let turnedOn = copy.enabled && !appSwitcher.enabled
-        if copy.enabled && (turnedOn || fingersChanged) {
-            var updatedRules = rules
-            Settings.stripReservedHorizontalSwipes(from: &updatedRules, fingerCount: copy.fingers)
-            rules = updatedRules.map(sanitizedRule)
-        }
-        Settings.shared.appSwitcher = copy
-        appSwitcher = Settings.shared.appSwitcher
-        SystemGestureManager.reconcileIfAutoEnabled()
-        refreshNativeConflicts()
-    }
-
-    /// Horizontal swipes reserved for app switcher on this finger count (when enabled).
-    func isDirectionReservedByAppSwitcher(fingers: Int, direction: GestureDirection,
-                                          modifierFilter: ModifierFilter = .any) -> Bool {
-        guard appSwitcher.enabled, fingers == appSwitcher.fingers else { return false }
-        guard direction == .swipeLeft || direction == .swipeRight || direction == .swipeLeftRight else { return false }
-        return !modifierFilter.requiresModifierHeld
     }
 
     func updateRule(_ r: GestureRule) {
@@ -228,24 +215,6 @@ final class PreferencesStore: ObservableObject {
         TouchTracker.updateTuningCache(edgeMarginEnabled: tuning.edgeMarginEnabled, edgeMargin: tuning.edgeMargin)
     }
 
-    func updateTrackPoint(_ mutate: (inout TrackPointSettings) -> Void) {
-        var copy = trackPoint
-        mutate(&copy)
-        Settings.shared.trackPoint = copy       // TrackPointSettings.normalized runs here + saves
-        trackPoint = Settings.shared.trackPoint // read back the clamped value
-        TrackPointController.shared.applySettings()
-        // Edge Controls size their corner exclusion from the TrackPoint's zone, so
-        // they have to be rebuilt when it moves or the two can overlap again.
-        EdgeControlsController.shared.applySettings()
-    }
-
-    func resetTrackPoint() {
-        Settings.shared.resetTrackPoint()
-        trackPoint = Settings.shared.trackPoint
-        TrackPointController.shared.applySettings()
-        EdgeControlsController.shared.applySettings()
-    }
-
     func updateEdgeControls(_ mutate: (inout EdgeControlsSettings) -> Void) {
         var copy = edgeControls
         mutate(&copy)
@@ -301,7 +270,7 @@ final class PreferencesStore: ObservableObject {
             reload()
             configAlert = .importSuccess
         } else {
-            configAlert = .error("File is not a valid BetterGlideTool config.")
+            configAlert = .error("Import could not be saved. Your previous configuration is still active. " + (GlideConfigStore.shared.lastError ?? "Check file permissions."))
         }
     }
 
@@ -404,8 +373,8 @@ final class PreferencesStore: ObservableObject {
     }
 
     /// Configured rules grouped by finger count (preserves list order within each group).
-    func rulesGroupedByFingers() -> [(fingers: Int, rules: [GestureRule])] {
-        let configured = rules.filter { !$0.isDraft && !$0.isKeyboardBinding }
+    func rulesGroupedByFingers(device: GestureDevice = .trackpad) -> [(fingers: Int, rules: [GestureRule])] {
+        let configured = rules.filter { $0.device == device && !$0.isKeyboardBinding }
         let grouped = Dictionary(grouping: configured) { $0.fingers }
         return grouped.keys.sorted().map { (fingers: $0, rules: grouped[$0]!) }
     }
@@ -424,6 +393,9 @@ final class PreferencesStore: ObservableObject {
 
     private func persistRules() {
         Settings.shared.rules = rules.map(sanitizedRule)
+        MagicMouseInput.shared.applySettings()
+        LowFingerTrackpadInput.shared.applySettings()
+        MultitouchBridge.shared.updateMinimumContactCount()
         diagnostics = buildDiagnostics(for: rules)
         SystemGestureManager.reconcileIfAutoEnabled()
         refreshNativeConflicts()
@@ -433,8 +405,7 @@ final class PreferencesStore: ObservableObject {
     // MARK: Native gesture conflicts
 
     func refreshNativeConflicts() {
-        nativeConflicts = SystemGestureManager.currentConflicts(rules: Settings.shared.rules,
-                                                                appSwitcher: Settings.shared.appSwitcher)
+        nativeConflicts = SystemGestureManager.currentConflicts(rules: Settings.shared.rules)
         disabledNativeGestures = SystemGestureManager.disabledByGlide()
     }
 
@@ -482,7 +453,7 @@ final class PreferencesStore: ObservableObject {
     private func buildDiagnostics(for rules: [GestureRule]) -> RuleDiagnostics {
         RuleDiagnostics(
             configuredFingerCounts: Set(rules.map(\.fingers)).count,
-            appSpecificRules: rules.filter { $0.appFilter != nil || $0.windowStateFilter != .any }.count,
+            appSpecificRules: rules.filter { !$0.effectiveAppFilters.isEmpty || $0.windowStateFilter != .any }.count,
             openAppRulesMissingTarget: rules.filter { $0.action == .openApp && (($0.appPath?.isEmpty) != false) }.count,
             menuItemRulesMissingTarget: rules.filter {
                 $0.action == .customMenuItem && ($0.menuItemPath == nil || ($0.menuItemPath?.count ?? 0) < 2)

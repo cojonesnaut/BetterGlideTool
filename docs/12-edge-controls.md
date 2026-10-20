@@ -2,7 +2,7 @@
 
 # Trackpad Edge Controls
 
-Trackpad Edge Controls turns the physical outer rim of your trackpad into precision hardware sliders. Sliding a single finger along any edge allows smooth adjustment of system volume, display brightness, keyboard backlight, microphone gain, Night Shift warmth, scrolling, or application scrub.
+Trackpad Edge Controls turns the physical outer rim of your trackpad into precision hardware sliders. Sliding a single finger along any edge allows smooth adjustment of system volume, display brightness, keyboard backlight, microphone gain, Night Shift warmth, or scrolling.
 
 Configure edge bindings in **Preferences → Edge Controls**.
 
@@ -11,7 +11,7 @@ Configure edge bindings in **Preferences → Edge Controls**.
 1. **Physical Rim Sliders:** Each of the four edges (Left, Right, Top, Bottom) can be mapped to a dedicated action:
    - **Right Edge** *(default: System Volume):* Slide up to raise volume; slide down to lower volume.
    - **Left Edge** *(default: Display Brightness):* Slide up to brighten the display; slide down to dim it.
-   - **Top / Bottom Edges** *(optional):* Assign to Keyboard Backlight, Microphone Input Gain, Night Shift, Scroll, or App Switcher scrub.
+   - **Top / Bottom Edges** *(optional):* Assign to Keyboard Backlight, Microphone Input Gain, Night Shift, or Scroll.
 2. **Native OSD Bezels:** BetterGlideTool triggers native macOS system display bezels (identical to the overlays displayed by physical media keys). This operates with 0.0% CPU overhead and zero latency.
 3. **Tactile Haptic Ticks:** Each adjustment increment delivers a subtle tactile tap via the trackpad Taptic Engine.
 
@@ -63,7 +63,7 @@ Edge Controls apply several independent filters to separate rim gestures from or
 
 - **Edge-Origin Only:** Touches must start on the outer perimeter. A contact that begins on the main trackpad surface is excluded from edge actions for its entire lifetime, so sweeping into an edge never triggers anything.
 - **Rim Proximity, with hysteresis:** The finger must start within the border zone (**Edge Margin Depth**, default 12 mm, adjustable 3–30 mm). Once a gesture has committed it keeps 10 mm more room than that before being dropped — see below.
-- **No Corners:** A gesture cannot start in a corner. With any real margin the four edge zones overlap there, so "which edge is this?" has no correct answer — and corners are also where the TrackPoint's corner activation lives. The exclusion is at least 12 mm, always at least as deep as the margin (which is what makes the four zones provably non-overlapping), and grows to clear the TrackPoint's zone when corner activation is in use.
+- **No Corners:** A gesture cannot start in a corner. With any real margin the four edge zones overlap there, so "which edge is this?" has no correct answer. The exclusion is at least 12 mm, and always at least as deep as the margin, which is what makes the four zones provably non-overlapping.
 - **Activation Travel:** The finger must slide a minimum distance *along* the edge before anything fires (**Activation Travel**, default 4 mm). This is the main dial if edge controls are triggering when you did not mean them to.
 - **Direction Purity:** Travel along the edge must be at least twice any drift across it, so the slide has to run roughly parallel to the rim — within about 27°. A diagonal sweep away from the edge keeps steering the cursor no matter how much along-edge distance it covers, which is the most common source of accidental triggers.
 - **Commit Near the Rim:** More than 3 mm of inward drift before committing cancels the gesture outright. The decision gets made close to where your finger landed, rather than after it has wandered.

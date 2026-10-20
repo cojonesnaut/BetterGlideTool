@@ -48,8 +48,7 @@ final class EdgeControlsController: ObservableObject {
             leftAction: settings.leftEdge,
             rightAction: settings.rightEdge,
             marginMm: settings.marginMm,
-            activationTravelMm: settings.activationTravelMm,
-            trackPointCornerZone: Self.trackPointCornerZone()
+            activationTravelMm: settings.activationTravelMm
         )
 
         TouchTracker.updateEdgeControlsCache(enabled: hasActiveEdgeControls)
@@ -91,8 +90,7 @@ final class EdgeControlsController: ObservableObject {
             leftAction: leftEdge,
             rightAction: rightEdge,
             marginMm: marginMm,
-            activationTravelMm: Settings.shared.edgeControls.activationTravelMm,
-            trackPointCornerZone: Self.trackPointCornerZone()
+            activationTravelMm: Settings.shared.edgeControls.activationTravelMm
         )
 
         TouchTracker.updateEdgeControlsCache(enabled: hasActiveEdgeControls)
@@ -107,15 +105,6 @@ final class EdgeControlsController: ObservableObject {
     /// Whether a committed edge gesture currently holds the pointer frozen.
     /// Exposed so `--diag-edges` can observe the live pipeline rather than a copy.
     var isSuppressingPointer: Bool { engine.isSuppressingPointer }
-
-    /// How much of each axis the TrackPoint's corner zone occupies, or 0 when it
-    /// isn't corner-activated. Edge gestures steer clear of it so a corner touch
-    /// can't be claimed by both features at once.
-    private static func trackPointCornerZone() -> Double {
-        let trackPoint = Settings.shared.trackPoint
-        guard trackPoint.enabled, trackPoint.activationMode == .cornerZone else { return 0 }
-        return Double(trackPoint.zoneSize)
-    }
 
     // MARK: - Ingestion
 

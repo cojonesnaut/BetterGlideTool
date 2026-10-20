@@ -15,16 +15,12 @@ final class GestureEngine {
     // MARK: - State
     private(set) var phase: GesturePhase = .idle
     private var reciprocalToken: ReciprocalToken?
-    private var escapeMonitorLocal: Any?
-    private var escapeMonitorGlobal: Any?
     /// Direction + finger count of the most recently fired swipe rule.
     /// Used to detect back-to-back same-direction gestures (toggles) so we don't
     /// leave a stale reciprocal token pointing the other way.
     private var lastFiredSwipe: (fingers: Int, direction: GestureDirection)?
     private(set) var isRunning = false
-    
-    var lastStepTime: TimeInterval = 0
-    private lazy var keyEventSource = CGEventSource(stateID: .hidSystemState)
+
 
     /// macOS accessibility zoom is "double-tap three fingers, then drag". A brief,
     /// motionless 3-finger tap followed by an immediate 3-finger re-touch is that
@@ -81,7 +77,6 @@ final class GestureEngine {
         TouchTracker.resetGlobalMTState()
         phase = .idle
         reciprocalToken = nil
-        removeEscapeMonitors()
         lastFiredSwipe = nil
         pendingClickTimeout?.cancel(); pendingClickTimeout = nil; pendingClick = nil
         cancelHoldTimer()
@@ -90,15 +85,17 @@ final class GestureEngine {
 
         TouchTracker.updateTuningCache(edgeMarginEnabled: Settings.shared.tuning.edgeMarginEnabled,
                                         edgeMargin: Settings.shared.tuning.edgeMargin)
-        TrackPointController.shared.applySettings()
         EdgeControlsController.shared.applySettings()
+        LowFingerTrackpadInput.shared.start()
+        MultitouchBridge.shared.updateMinimumContactCount()
         inputManager.setupTaps()
         MultitouchBridge.shared.start(callback: glideMTCallback)
         inputManager.installMonitors()
-        AppSwitcherState.shared.startMRUTracking()
+        AppActivationOrder.shared.startMRUTracking()
 
         isRunning = true
         MagicMouseInput.shared.start()
+        NativePointerSpeed.shared.apply()
         updateObservableState()
         AppLogger.debug("[Engine] Started")
     }
@@ -110,6 +107,7 @@ final class GestureEngine {
         guard isRunning else { return }
         inputManager.checkHealth()
         MagicMouseInput.shared.checkHealth()
+        NativePointerSpeed.shared.apply()
         guard !MultitouchBridge.shared.isDeviceRunning else { return }
         AppLogger.debug("[Engine] Multitouch device not running — rebuilding")
         MultitouchBridge.shared.restart(callback: glideMTCallback)
@@ -119,8 +117,9 @@ final class GestureEngine {
         guard isRunning else { return }
 
         finishIfNeeded()
+        LowFingerTrackpadInput.shared.stop()
         MagicMouseInput.shared.stop()
-        TrackPointController.shared.engineWillStop()
+        NativePointerSpeed.shared.apply(restoring: true)
         EdgeControlsController.shared.reset()
         MultitouchBridge.shared.stop()
         inputManager.teardownTaps()
@@ -128,12 +127,10 @@ final class GestureEngine {
 
         TouchTracker.resetGlobalMTState()
         reciprocalToken = nil
-        removeEscapeMonitors()
-        lastStepTime = 0
         pendingClickTimeout?.cancel(); pendingClickTimeout = nil; pendingClick = nil
         cancelHoldTimer()
         isRunning = false
-        AppSwitcherState.shared.stopMRUTracking()
+        AppActivationOrder.shared.stopMRUTracking()
         updateObservableState()
         AppLogger.debug("[Engine] Stopped")
     }
@@ -210,7 +207,9 @@ final class GestureEngine {
 
         if TouchTracker.glideClickFingerCount >= 3 { return }
 
-        if let nextPhase = processor.handleTouches(frame, phase: phase, tuning: Settings.shared.tuning) {
+        var tuning = Settings.shared.tuning
+        tuning.initialThreshold *= Float(Settings.shared.deviceTuning.thresholdScale(for: .trackpad))
+        if let nextPhase = processor.handleTouches(frame, phase: phase, tuning: tuning) {
             phase = nextPhase
             updateObservableState()
         }
@@ -246,7 +245,7 @@ final class GestureEngine {
               !isSystemZoomSession,
               holdMaxMovement < tapMaxMovement else { return }
         switch phase {
-        case .fired, .switchingApps, .continuousSwipe, .lockedSwipe: return
+        case .fired, .continuousSwipe, .lockedSwipe: return
         default: break
         }
         guard let rule = GestureRuleResolver.bestRule(fingers: n, direction: .tapHold,
@@ -258,7 +257,6 @@ final class GestureEngine {
     // MARK: - Actions
 
     func processClick(fingerCount n: Int) {
-        if case .switchingApps = phase { return }
         guard TouchTracker.areClickTouchesSimultaneous() else { return }
 
         let modifiers = captureModifiers()
@@ -313,7 +311,6 @@ final class GestureEngine {
     }
 
     func processForceClick(fingerCount n: Int) {
-        if case .switchingApps = phase { return }
         guard TouchTracker.areClickTouchesSimultaneous() else { return }
 
         // Resolve against the corner the fingers rest in (centroid is fresh — the
@@ -335,10 +332,12 @@ final class GestureEngine {
     }
 
     private func fireClickRule(_ rule: GestureRule, label: String, fingerCount n: Int) {
+        LowFingerTrackpadInput.shared.cancelCurrentGesture()
         AppLogger.debug("[Engine] \(label) — \(n) fingers → \(rule.action.rawValue)")
         clearReciprocalToken()
         phase = .fired
 
+        let monitoring = recordMonitoredGesture(rule)
         if rule.action == .quitApp {
             WindowTargeting.shared.quitAppAtCursor(NSEvent.mouseLocation)
         } else {
@@ -346,7 +345,7 @@ final class GestureEngine {
                                           menuItemPath: rule.menuItemPath, menuTargetBundleID: rule.appFilter,
                                           customShortcut: rule.customShortcut,
                                           advancedKeyboard: rule.advancedKeyboard,
-                                          shortcutName: rule.shortcutName, script: rule.script)
+                                          shortcutName: rule.shortcutName, script: rule.script, desktopOptions: rule.desktopOptions, monitoring: monitoring)
         }
         updateObservableState()
     }
@@ -354,7 +353,6 @@ final class GestureEngine {
     func handleExternalInteraction() {
         guard TouchTracker.glideActiveTouches < 3 else { return }
         if case .fired = phase { return }
-        if case .switchingApps = phase { return }
         // Don't clear the reciprocal token while idle — mouse movement between
         // two gestures is normal and would otherwise kill a pending reciprocal.
         // The token already has a TTL (1.5s) so it expires on its own.
@@ -363,200 +361,27 @@ final class GestureEngine {
     }
 
     private func finishIfNeeded() {
-        if case .switchingApps(let data) = phase { commitAppSwitcher(data: data) }
         if case .continuousSwipe(let data) = phase { executeContinuousEndAction(for: data) }
         phase = .idle
-        lastStepTime = 0
     }
 
-    // MARK: - App Switcher logic
-
-    func beginAppSwitcher(
-        for action: GestureAction,
-        refX: Float,
-        refY: Float,
-        fingerCount: Int
-    ) -> SwitcherData? {
-        let systemApps = AppSwitcherState.shared.getOrderedApps()
-        guard systemApps.count > 1 else { return nil }
-        let systemWindows = WindowTargeting.shared.switcherWindows(for: systemApps)
-
-        let movingForward = action == .appSwitcherNext
-        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-
-        // Finder's desktop process is always running, so a windowless Finder is the
-        // one app worth hiding from the switcher.
-        let skipFinder = Settings.shared.appSwitcher.skipWindowlessFinder
-        let customIndices = systemApps.indices.filter { index in
-            !(skipFinder
-              && systemApps[index].bundleIdentifier == "com.apple.finder"
-              && systemWindows[index].isEmpty)
-        }
-        let customApps = customIndices.map { systemApps[$0] }
-        let customWindows = customIndices.map { systemWindows[$0] }
-        guard !customApps.isEmpty else { return nil }
-
-        let customIndex: Int = {
-            guard let frontmostPID,
-                  let frontIndex = customApps.firstIndex(where: { $0.processIdentifier == frontmostPID }) else {
-                return movingForward ? 0 : customApps.count - 1
-            }
-            if movingForward { return frontIndex + 1 < customApps.count ? frontIndex + 1 : 0 }
-            return frontIndex > 0 ? frontIndex - 1 : customApps.count - 1
-        }()
-        guard customApps[customIndex].processIdentifier != frontmostPID else { return nil }
-
-        clearReciprocalToken()
-        Haptic.switcherOpen()
-
-        if Settings.shared.appSwitcher.style == .newer,
-           AppSwitcherOverlayController.shared.show(
-            apps: customApps,
-            windowsByApp: customWindows,
-            selectedAppIndex: customIndex,
-            selectedWindowIndex: 0
-        ) {
-            installEscapeMonitors()
-            lastStepTime = ProcessInfo.processInfo.systemUptime
-            return SwitcherData(
-                refX: refX,
-                refY: refY,
-                index: customIndex,
-                windowIndex: 0,
-                fingerCount: fingerCount,
-                apps: customApps,
-                windowsByApp: customWindows,
-                finderIndex: nil,
-                effectiveMin: 0,
-                effectiveMax: customApps.count - 1,
-                usesCustomOverlay: true
-            )
-        }
-
-        let finderIndex = systemApps.indices.first { index in
-            skipFinder
-                && systemApps[index].bundleIdentifier == "com.apple.finder"
-                && systemWindows[index].isEmpty
-        }
-
-        let firstIndex = movingForward ? 1 : systemApps.count - 1
-        var nativeIndex = firstIndex
-        if finderIndex == nativeIndex { nativeIndex += movingForward ? 1 : -1 }
-        let effectiveMin = (finderIndex == 0) ? 1 : 0
-        let effectiveMax = (finderIndex == systemApps.count - 1) ? systemApps.count - 2 : systemApps.count - 1
-        nativeIndex = min(max(nativeIndex, effectiveMin), effectiveMax)
-
-        sendKeyEvent(0x37, down: true, flags: .maskCommand) // kCmd
-        if movingForward { sendCmdTab() } else { sendCmdShiftTab() }
-        if finderIndex == firstIndex {
-            if movingForward { sendCmdTab() } else { sendCmdShiftTab() }
-        }
-
-        installEscapeMonitors()
-        lastStepTime = ProcessInfo.processInfo.systemUptime
-        return SwitcherData(
-            refX: refX,
-            refY: refY,
-            index: nativeIndex,
-            windowIndex: 0,
-            fingerCount: fingerCount,
-            apps: systemApps,
-            windowsByApp: systemWindows,
-            finderIndex: finderIndex,
-            effectiveMin: effectiveMin,
-            effectiveMax: effectiveMax,
-            usesCustomOverlay: false
-        )
+    private func recordMonitoredGesture(_ rule: GestureRule) -> LiveActionContext? {
+        LiveContactsMonitor.forDevice(rule.device).recordGesture(rule.direction.title(fingers: rule.fingers),
+            action: rule.action.rawValue, appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
     }
-
-    func updateAppSwitcherSelection(_ data: SwitcherData) {
-        guard data.usesCustomOverlay else { return }
-        AppSwitcherOverlayController.shared.select(
-            appIndex: data.index,
-            windowIndex: data.windowIndex
-        )
-    }
-
-    private func commitAppSwitcher(data: SwitcherData) {
-        removeEscapeMonitors()
-        Haptic.switcherCommit()
-        let selectedApp = data.apps.indices.contains(data.index) ? data.apps[data.index] : nil
-
-        if data.usesCustomOverlay {
-            AppSwitcherOverlayController.shared.hide()
-            if let selectedApp,
-               data.windowsByApp.indices.contains(data.index),
-               data.windowsByApp[data.index].indices.contains(data.windowIndex) {
-                WindowTargeting.shared.activateSwitcherWindow(
-                    data.windowsByApp[data.index][data.windowIndex],
-                    in: selectedApp
-                )
-            } else {
-                selectedApp?.unhide()
-                selectedApp?.activate(options: .activateIgnoringOtherApps)
-            }
-        } else {
-            // Releasing Command confirms the selection in the native Cmd+Tab panel.
-            sendKeyEvent(0x3A, down: true,  flags: [.maskAlternate]) // kOpt
-            sendKeyEvent(0x37, down: false, flags: [.maskCommand, .maskAlternate]) // kCmd
-            sendKeyEvent(0x3A, down: false, flags: []) // kOpt
-
-            if Settings.shared.appSwitcher.restoreMinimizedOnCommit {
-                let selectedPID = selectedApp?.processIdentifier
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    guard let pid = selectedPID ?? NSWorkspace.shared.frontmostApplication?.processIdentifier else { return }
-                    WindowTargeting.shared.unminimizeWindows(of: pid)
-                }
-            }
-        }
-    }
-
-    private func installEscapeMonitors() {
-        guard escapeMonitorLocal == nil else { return }
-        escapeMonitorLocal = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 {
-                self?.cancelAppSwitcher()
-                return nil
-            }
-            return event
-        }
-        escapeMonitorGlobal = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 {
-                self?.cancelAppSwitcher()
-            }
-        }
-    }
-
-    private func removeEscapeMonitors() {
-        if let monitor = escapeMonitorLocal { NSEvent.removeMonitor(monitor); escapeMonitorLocal = nil }
-        if let monitor = escapeMonitorGlobal { NSEvent.removeMonitor(monitor); escapeMonitorGlobal = nil }
-    }
-
-    func cancelAppSwitcher() {
-        guard case .switchingApps(let data) = phase else { return }
-        removeEscapeMonitors()
-        if data.usesCustomOverlay {
-            AppSwitcherOverlayController.shared.hide()
-        } else {
-            sendKeyEvent(0x37, down: false, flags: []) // kCmd
-        }
-        phase = .idle
-        lastStepTime = 0
-        updateObservableState()
-    }
-
-    // MARK: - Reciprocal & Continuous
 
     func executeGestureRuleAction(_ rule: GestureRule) {
-        Haptic.forRule(rule)
+        let monitoring = recordMonitoredGesture(rule)
+        if rule.device == .trackpad { Haptic.forRule(rule) }
         ActionExecutor.shared.execute(rule.action, appPath: rule.appPath,
                                       menuItemPath: rule.menuItemPath, menuTargetBundleID: rule.appFilter,
                                       customShortcut: rule.customShortcut,
                                       advancedKeyboard: rule.advancedKeyboard,
-                                      shortcutName: rule.shortcutName, script: rule.script)
+                                      shortcutName: rule.shortcutName, script: rule.script, desktopOptions: rule.desktopOptions, monitoring: monitoring)
     }
 
     func executeSwipeRule(_ rule: GestureRule, fingers: Int, direction: GestureDirection) {
+        LowFingerTrackpadInput.shared.cancelCurrentGesture()
         executeGestureRuleAction(rule)
 
         // Track what just fired so we can detect back-to-back same-direction toggles.
@@ -594,8 +419,11 @@ final class GestureEngine {
         }
         clearReciprocalToken()
         lastFiredSwipe = nil   // reciprocal consumed — reset toggle tracking
+        LowFingerTrackpadInput.shared.cancelCurrentGesture()
         Haptic.reciprocal()
-        ActionExecutor.shared.execute(token.inverseAction)
+        let monitoring = LiveContactsMonitor.shared.recordGesture(direction.title(fingers: fingers), action: token.inverseAction.rawValue,
+            appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
+        ActionExecutor.shared.execute(token.inverseAction, desktopOptions: token.desktopOptions, monitoring: monitoring)
         return true
     }
 
@@ -607,21 +435,23 @@ final class GestureEngine {
         default: return nil
         }
         let inverse = rule.reciprocalAction ?? rule.action.inverseAction ?? .doNothing
-        return ReciprocalToken(inverseAction: inverse,
+        return ReciprocalToken(inverseAction: inverse, desktopOptions: rule.desktopOptions,
                                fingers: rule.fingers, direction: rev, sourceRuleID: rule.id,
                                expiresAt: ProcessInfo.processInfo.systemUptime + 1.5)
     }
 
     func clearReciprocalToken() { reciprocalToken = nil; isReciprocalActive = false }
 
-    func executeContinuousAction(_ action: GestureAction, shortcut: KeyboardShortcut? = nil, keyboard: [KeyboardInputStep] = []) {
+    func executeContinuousAction(_ action: GestureAction, shortcut: KeyboardShortcut? = nil, keyboard: [KeyboardInputStep] = [], gesture: String = "Continuous gesture") {
+        let monitoring = LiveContactsMonitor.shared.recordGesture(gesture, action: action.rawValue, appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
+        LowFingerTrackpadInput.shared.cancelCurrentGesture()
         Haptic.forAction(action)
-        ActionExecutor.shared.execute(action, customShortcut: shortcut, advancedKeyboard: keyboard)
+        ActionExecutor.shared.execute(action, customShortcut: shortcut, advancedKeyboard: keyboard, monitoring: monitoring)
     }
 
     func executeContinuousEndAction(for data: SwipeTrackData) {
         guard let rule = data.continuousRule else { return }
-        executeContinuousAction(rule.continuousEndAction, shortcut: rule.continuousEndShortcut, keyboard: rule.continuousEndKeyboard)
+        executeContinuousAction(rule.continuousEndAction, shortcut: rule.continuousEndShortcut, keyboard: rule.continuousEndKeyboard, gesture: "\(rule.direction.title(fingers: rule.fingers)) · End")
     }
 
     func continuousUpdateAction(for dir: GestureDirection, in rule: GestureRule) -> GestureAction {
@@ -644,7 +474,6 @@ final class GestureEngine {
         case .idle: newPhaseName = "Idle"; case .candidate: newPhaseName = "Candidate"
         case .lockedSwipe: newPhaseName = "Locked (Swipe)"; case .ignored: newPhaseName = "Ignored"
         case .fired: newPhaseName = "Fired"; case .continuousSwipe: newPhaseName = "Continuous"
-        case .switchingApps: newPhaseName = "App Switcher"
         }
         let newReciprocal = (reciprocalToken != nil)
         let stateChanged = (newPhaseName != currentPhaseName) || (newReciprocal != isReciprocalActive)
@@ -653,19 +482,5 @@ final class GestureEngine {
         if stateChanged {
             onStateChange?()
         }
-    }
-
-    func sendCmdTab() { sendKeyEvent(0x30, down: true, flags: .maskCommand); sendKeyEvent(0x30, down: false, flags: .maskCommand) }
-    func sendCmdShiftTab() {
-        sendKeyEvent(0x38, down: true,  flags: [.maskCommand, .maskShift])
-        sendKeyEvent(0x30, down: true,  flags: [.maskCommand, .maskShift])
-        sendKeyEvent(0x30, down: false, flags: [.maskCommand, .maskShift])
-        sendKeyEvent(0x38, down: false, flags: .maskCommand)
-    }
-
-    private func sendKeyEvent(_ key: CGKeyCode, down: Bool, flags: CGEventFlags) {
-        let src = keyEventSource ?? CGEventSource(stateID: .hidSystemState)
-        guard let e = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: down) else { return }
-        e.flags = flags; e.post(tap: .cghidEventTap)
     }
 }

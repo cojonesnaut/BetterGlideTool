@@ -85,6 +85,6 @@ final class HotkeyManager {
                                       menuItemPath: rule.menuItemPath, menuTargetBundleID: rule.appFilter,
                                       customShortcut: rule.customShortcut,
                                       advancedKeyboard: rule.advancedKeyboard,
-                                      shortcutName: rule.shortcutName, script: rule.script)
+                                      shortcutName: rule.shortcutName, script: rule.script, desktopOptions: rule.desktopOptions)
     }
 }

@@ -41,7 +41,7 @@ struct TrackpadSurfaceSize: Equatable {
 //
 // Detects 1-finger edge scrubs along Top, Bottom, Left, and Right edges.
 // Uses TickAccumulator to quantize continuous finger travel into rate-limited,
-// velocity-smoothed ticks driving native OSD bezels or App Switcher.
+// velocity-smoothed ticks driving native OSD bezels.
 //
 // Continuous actions (scrolling) are the exception: they read finger travel
 // directly, bypassing the quantizer, and hold pointer suppression for the
@@ -58,11 +58,6 @@ final class EdgeGestureEngine {
         var rightAction: EdgeAction = .volume
         var marginMm: Double = 12.0
         var activationTravelMm: Double = 4.0
-
-        /// Fraction of each axis the TrackPoint's corner zone claims, or 0 when
-        /// TrackPoint is not corner-activated. Edge gestures keep clear of it so the
-        /// two features can't both lay claim to the same touch.
-        var trackPointCornerZone: Double = 0
     }
 
     private struct ActiveGesture {
@@ -73,7 +68,10 @@ final class EdgeGestureEngine {
         var lastPosition: CGPoint
         var isSwiping: Bool
         let accumulator: TickAccumulator
-        var switcherSession: EdgeAppSwitcherSession?
+
+        /// Fine ticks since the last haptic, so quarter-step sliders still click
+        /// once per full system notch rather than buzzing on every quarter.
+        var fineTicksSinceHaptic = 0
 
         /// Where the cursor sat when the finger landed, so the drift it picks up
         /// before the gesture is recognised can be undone on commit.
@@ -102,6 +100,9 @@ final class EdgeGestureEngine {
     /// straight slide along the edge, and the cost of being wrong has flipped — a
     /// gesture dropped halfway is worse than one held a little too long.
     private static let postCommitSlackMm = 10.0
+
+    /// Quarter steps per full system notch for volume and brightness.
+    static let fineStepsPerNotch = 4
 
     var config: Configuration
     var surfaceSize: TrackpadSurfaceSize = .default
@@ -135,9 +136,6 @@ final class EdgeGestureEngine {
 
     func reset() {
         endPointerSuppression()
-        if let current = activeGesture, current.isSwiping, current.action == .appSwitcher {
-            current.switcherSession?.cancel()
-        }
         activeGesture = nil
         activeEdge = nil
     }
@@ -154,12 +152,7 @@ final class EdgeGestureEngine {
         // Edge controls strictly require exactly 1 contact.
         // 2 contacts is scroll/pinch, 3+ contacts is Glide gesture.
         guard contacts == 1, let touch else {
-            if let current = activeGesture {
-                if current.isSwiping && current.action == .appSwitcher {
-                    current.switcherSession?.commit()
-                }
-                reset()
-            }
+            if activeGesture != nil { reset() }
             disqualifiedTouchIds.removeAll(keepingCapacity: true)
             return
         }
@@ -201,7 +194,6 @@ final class EdgeGestureEngine {
             lastPosition: currentPos,
             isSwiping: false,
             accumulator: accumulator,
-            switcherSession: nil,
             cursorOrigin: CGEvent(source: nil)?.location
         )
         activeEdge = edge
@@ -238,9 +230,6 @@ final class EdgeGestureEngine {
             ? config.marginMm + Self.postCommitSlackMm
             : config.marginMm
         guard isWithinEdge(currentPos, edge: current.edge, depth: retainDepth) else {
-            if current.isSwiping && current.action == .appSwitcher {
-                current.switcherSession?.commit()
-            }
             disqualifiedTouchIds.insert(touch.identifier)
             reset()
             return
@@ -312,13 +301,6 @@ final class EdgeGestureEngine {
                 CursorDriver.shared.warp(to: origin)
             }
 
-            if updated.action == .appSwitcher && updated.switcherSession == nil {
-                let switcher = EdgeAppSwitcherSession()
-                let movingForward = alongAxisMm > 0
-                if switcher.begin(movingForward: movingForward) {
-                    updated.switcherSession = switcher
-                }
-            }
             if updated.action == .scroll {
                 EdgeScrollSession.shared.begin(pointsPerMm: Settings.shared.edgeControls.scrollSpeed)
             }
@@ -346,10 +328,18 @@ final class EdgeGestureEngine {
         if outcome.count > 0 {
             let isPositive = travelMm > 0
             for _ in 0..<outcome.count {
-                dispatchAction(updated.action, directionPositive: isPositive, session: updated.switcherSession)
+                dispatchAction(updated.action, directionPositive: isPositive)
             }
             if updated.action.wantsHapticTicks {
-                HapticEngine.shared.play(outcome.isAttenuated ? .softTick : .tap)
+                var playHaptic = true
+                if updated.action.usesFineSteps {
+                    updated.fineTicksSinceHaptic += outcome.count
+                    playHaptic = updated.fineTicksSinceHaptic >= Self.fineStepsPerNotch
+                    if playHaptic { updated.fineTicksSinceHaptic %= Self.fineStepsPerNotch }
+                }
+                if playHaptic {
+                    HapticEngine.shared.play(outcome.isAttenuated ? .softTick : .tap)
+                }
             }
         }
 
@@ -379,7 +369,7 @@ final class EdgeGestureEngine {
         // one is what the user sees.
         AppLogger.debug("[Edge] committed on \(activeEdge?.rawValue ?? "?") — "
                         + "manager: \(manager == nil ? "MISSING" : "ok"), "
-                        + "tap active: \(manager?.trackPointSuppressionEnabled ?? false)")
+                        + "tap active: \(manager?.pointerSuppressionEnabled ?? false)")
     }
 
     /// Hands the pointer back and lets any scroll coast out. Suppression is dropped
@@ -422,7 +412,7 @@ final class EdgeGestureEngine {
 
     // MARK: - Action Dispatch
 
-    private func dispatchAction(_ action: EdgeAction, directionPositive: Bool, session: EdgeAppSwitcherSession?) {
+    private func dispatchAction(_ action: EdgeAction, directionPositive: Bool) {
         switch action {
         case .none:
             break
@@ -430,13 +420,11 @@ final class EdgeGestureEngine {
             // Continuous: applied in `advance` without passing through ticks.
             break
         case .volume:
-            SystemActions.sendMediaKey(directionPositive ? .volumeUp : .volumeDown)
+            SystemActions.sendMediaKey(directionPositive ? .volumeUp : .volumeDown, fine: true)
         case .brightness:
-            SystemActions.sendMediaKey(directionPositive ? .brightnessUp : .brightnessDown)
+            SystemActions.sendMediaKey(directionPositive ? .brightnessUp : .brightnessDown, fine: true)
         case .keyboardBacklight:
-            SystemActions.sendMediaKey(directionPositive ? .illuminationUp : .illuminationDown)
-        case .appSwitcher:
-            session?.step(forward: directionPositive)
+            SystemActions.sendMediaKey(directionPositive ? .illuminationUp : .illuminationDown, fine: true)
         case .microphone:
             let mic = AudioDeviceVolume.defaultInput()
             if let current = mic.read() {
@@ -453,8 +441,8 @@ final class EdgeGestureEngine {
     /// Picks the edge a touch belongs to, or nil if it belongs to none.
     ///
     /// Corners are where the trouble is: with any meaningful margin the four zones
-    /// overlap there, "which edge is this?" has no right answer, and it is also where
-    /// the TrackPoint's corner activation lives. So corners are refused outright, and
+    /// overlap there, and "which edge is this?" has no right answer. So corners are
+    /// refused outright, and
     /// because the exclusion is never shallower than the margin that alone guarantees
     /// at most one edge can qualify. Picking the nearest is then just a deterministic
     /// tie-break rather than the thing doing the work.
@@ -486,14 +474,10 @@ final class EdgeGestureEngine {
     /// The floor is `depth` itself, which is what makes the edge zones provably
     /// disjoint: a point within `depth` of one edge and at least `depth` from that
     /// edge's ends cannot also be within `depth` of a perpendicular edge. On top of
-    /// that sits an absolute minimum, and the TrackPoint's corner reach along this
-    /// edge's own axis when corner activation is in use.
+    /// that sits an absolute minimum.
     private func cornerExclusionMm(for edge: TrackpadPhysicalEdge, depth: Double) -> Double {
         let alongLength = edge.isHorizontal ? surfaceSize.width : surfaceSize.height
-        var exclusion = max(Self.minCornerExclusionMm, depth)
-        if config.trackPointCornerZone > 0 {
-            exclusion = max(exclusion, config.trackPointCornerZone * alongLength)
-        }
+        let exclusion = max(Self.minCornerExclusionMm, depth)
         // Never eat the whole edge, however the settings are combined.
         return min(exclusion, alongLength * 0.4)
     }
@@ -528,16 +512,20 @@ final class EdgeGestureEngine {
     private func makeTickConfiguration(for action: EdgeAction) -> TickConfiguration {
         var cfg = TickConfiguration.default
         switch action {
-        case .volume, .brightness, .keyboardBacklight, .microphone:
+        case .volume, .brightness, .keyboardBacklight:
+            // Same ~70 mm for the full range as before, but in the system's quarter
+            // steps: 64 levels at ~1.1 mm each, so the level follows the finger
+            // instead of jumping a notch at a time. The rate ceiling and per-frame
+            // cap scale with it, or a brisk slide would hit them and fall behind.
+            cfg.stepSize = 4.5 / Double(Self.fineStepsPerNotch)
+            cfg.maximumTickRate = 24.0 * Double(Self.fineStepsPerNotch)
+            cfg.maximumTicksPerSample = 2 * Self.fineStepsPerNotch
+            cfg.attenuationVelocity = 160.0
+        case .microphone:
             // ~70mm travel for 16 notches => ~4.375mm per tick
             cfg.stepSize = 4.5
             cfg.maximumTickRate = 24.0
             cfg.attenuationVelocity = 160.0
-        case .appSwitcher:
-            // ~12mm travel per app step for distinct, controllable scrubbing
-            cfg.stepSize = 12.0
-            cfg.maximumTickRate = 12.0
-            cfg.attenuationVelocity = 200.0
         case .nightShift:
             cfg.stepSize = 6.0
             cfg.maximumTickRate = 20.0

@@ -34,8 +34,8 @@ final class KeyboardEmulator {
         guard let src = keyEventSource ?? CGEventSource(stateID: .hidSystemState),
               let kd = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: true),
               let ku = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: false) else { return }
-        kd.flags = kd.flags.union(flags)
-        ku.flags = ku.flags.union(flags)
+        Self.stamp(kd, flags)
+        Self.stamp(ku, flags)
         kd.post(tap: .cghidEventTap)
         ku.post(tap: .cghidEventTap)
     }
@@ -43,15 +43,24 @@ final class KeyboardEmulator {
     private func sendKeyDown(_ key: CGKeyCode, _ flags: CGEventFlags) {
         guard let src = keyEventSource ?? CGEventSource(stateID: .hidSystemState),
               let event = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: true) else { return }
-        event.flags = event.flags.union(flags)
+        Self.stamp(event, flags)
         event.post(tap: .cghidEventTap)
     }
 
     private func sendKeyUp(_ key: CGKeyCode, _ flags: CGEventFlags) {
         guard let src = keyEventSource ?? CGEventSource(stateID: .hidSystemState),
               let event = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: false) else { return }
-        event.flags = event.flags.union(flags)
+        Self.stamp(event, flags)
         event.post(tap: .cghidEventTap)
+    }
+
+    /// A new event inherits the HID system's modifier state, and that state still
+    /// carries the modifiers of the previous synthetic shortcut until a real
+    /// modifier key changes it: ⌃⇧Tab followed by ⌘T arrived as ⌘⌃⇧T. Replace the
+    /// inherited modifiers with exactly the ones this step asks for.
+    private static func stamp(_ event: CGEvent, _ flags: CGEventFlags) {
+        let modifiers: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate, .maskShift]
+        event.flags = event.flags.subtracting(modifiers).union(flags)
     }
 
     private func modifierFlag(for keyCode: UInt16) -> CGEventFlags {
@@ -133,9 +142,13 @@ enum SystemActions {
         case illuminationDown = 22 // NX_KEYTYPE_ILLUMINATION_DOWN
     }
 
-    static func sendMediaKey(_ key: MediaKey) {
+    /// - Parameter fine: holds Option+Shift on the key, which macOS treats as a
+    ///   quarter step for volume, display and keyboard brightness — 64 levels
+    ///   instead of 16, still shown on the system's own indicator.
+    static func sendMediaKey(_ key: MediaKey, fine: Bool = false) {
         func post(down: Bool) {
-            let flags = NSEvent.ModifierFlags(rawValue: down ? 0xA00 : 0xB00)
+            var flags = NSEvent.ModifierFlags(rawValue: down ? 0xA00 : 0xB00)
+            if fine { flags.formUnion([.option, .shift]) }
             let data1 = Int((key.rawValue << 16) | ((down ? 0xA : 0xB) << 8))
             guard let event = NSEvent.otherEvent(with: .systemDefined, location: .zero,
                                                  modifierFlags: flags, timestamp: 0,

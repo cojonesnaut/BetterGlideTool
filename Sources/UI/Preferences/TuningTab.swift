@@ -18,6 +18,9 @@ struct TuningTab: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
 
+                DeviceTuningCard(device: .trackpad)
+                TipTapTuningCard(device: .trackpad)
+
                 presetsCard
 
                 TuningSection(title: "Swipes", icon: "hand.draw") {
@@ -142,7 +145,10 @@ struct TuningTab: View {
                 HStack {
                     Spacer()
                     Button("Reset All to Defaults") {
-                        withAnimation { store.resetTuning() }
+                        withAnimation {
+                            store.resetTuning()
+                            store.updateDeviceTuning { $0.trackpadSensitivity = 0.5; $0.trackpadPointerSpeed = 1; $0.trackpadTipTapMinimum = 0.08; $0.trackpadTipTapAnchor = 0.25 }
+                        }
                     }
                     .buttonStyle(.bordered)
                 }

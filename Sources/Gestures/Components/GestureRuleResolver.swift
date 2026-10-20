@@ -6,28 +6,38 @@ final class GestureRuleResolver {
         fingers: Int,
         direction: GestureDirection,
         speed: GestureSpeed = .normal,
-        modifiers: CapturedModifiers
+        modifiers: CapturedModifiers, device: GestureDevice = .trackpad
     ) -> GestureRule? {
-        let matching = self.matchingRules(fingers: fingers, direction: direction, modifiers: modifiers)
+        let matching = self.matchingRules(fingers: fingers, direction: direction, modifiers: modifiers, device: device)
         return bestRuleMatch(in: matching, speed: speed)
     }
 
     static func matchingRules(
         fingers: Int,
         direction: GestureDirection,
-        modifiers: CapturedModifiers
+        modifiers: CapturedModifiers, device: GestureDevice = .trackpad
     ) -> [GestureRule] {
         let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let isFullscreen = WindowTargeting.shared.isFrontmostWindowFullscreen()
         let isMaximized  = WindowTargeting.shared.isFrontmostWindowMaximized()
 
-        return Settings.shared.rules.filter { rule in
+        return matchingRules(in: Settings.shared.rules, fingers: fingers, direction: direction,
+                             modifiers: modifiers, device: device, bundleID: bid,
+                             isFullscreen: isFullscreen, isMaximized: isMaximized)
+    }
+
+    /// Pure context matching shared by runtime resolution and regression checks.
+    static func matchingRules(in rules: [GestureRule], fingers: Int, direction: GestureDirection,
+                              modifiers: CapturedModifiers, device: GestureDevice,
+                              bundleID: String?, isFullscreen: Bool = false, isMaximized: Bool = false) -> [GestureRule] {
+        rules.filter { rule in
             rule.isActive
+                && rule.device == device
                 && !rule.isKeyboardBinding
                 && rule.fingers == fingers
                 && ruleDirection(rule.direction, matchesActual: direction)
                 && matchesWindowState(rule, isFullscreen: isFullscreen, isMaximized: isMaximized)
-                && matchesAppFilter(rule, bundleID: bid)
+                && matchesAppFilter(rule, bundleID: bundleID)
                 && modifiers.matches(rule.modifierFilter)
         }
     }
@@ -53,8 +63,7 @@ final class GestureRuleResolver {
     }
 
     private static func matchesAppFilter(_ rule: GestureRule, bundleID: String?) -> Bool {
-        guard let filter = rule.appFilter, !filter.isEmpty else { return true }
-        return filter == bundleID
+        rule.matchesApp(bundleID)
     }
 
     /// Resolves a force-click at a given centroid. A rule bound to the corner the
@@ -73,17 +82,14 @@ final class GestureRuleResolver {
 
     static func hasHoldRule(fingers: Int) -> Bool {
         Settings.shared.rules.contains {
-            $0.isActive && $0.fingers == fingers && $0.direction == .tapHold
+            $0.isActive && $0.device == .trackpad && $0.fingers == fingers && $0.direction == .tapHold
         }
     }
 
     static func hasAnySwipeRule(fingers: Int) -> Bool {
-        if Settings.shared.appSwitcher.enabled, fingers == Settings.shared.appSwitcher.fingers {
-            return true
-        }
         let swipeDirs: [GestureDirection] = [.swipeLeftRight, .swipeUpDown, .swipeLeft, .swipeRight, .swipeUp, .swipeDown]
         return Settings.shared.rules.contains {
-            $0.isActive && $0.fingers == fingers && swipeDirs.contains($0.direction)
+            $0.isActive && $0.device == .trackpad && $0.fingers == fingers && swipeDirs.contains($0.direction)
         }
     }
 
@@ -98,30 +104,23 @@ final class GestureRuleResolver {
         }
     }
 
-    private static func bestRuleMatch(in rules: [GestureRule], speed: GestureSpeed) -> GestureRule? {
+    static func bestRuleMatch(in rules: [GestureRule], speed: GestureSpeed) -> GestureRule? {
         let normalized = normalizedSpeed(speed)
-        if let exact = rules.last(where: { normalizedSpeed($0.speed) == normalized }) {
-            return exact
-        }
+        let exact = rules.filter { normalizedSpeed($0.speed) == normalized }
+        if !exact.isEmpty { return preferredRule(in: exact) }
         let configuredSpeeds = Set(rules.map { normalizedSpeed($0.speed) })
         if configuredSpeeds.count > 1 { return nil }
         guard speed != .normal else { return nil }
-        return rules.last(where: { normalizedSpeed($0.speed) == .normal })
+        return preferredRule(in: rules.filter { normalizedSpeed($0.speed) == .normal })
+    }
+
+    private static func preferredRule(in rules: [GestureRule]) -> GestureRule? {
+        // An app-specific binding overrides Any App regardless of list order.
+        // Preserve last-rule-wins for equally specific matches.
+        rules.last(where: { !$0.effectiveAppFilters.isEmpty }) ?? rules.last
     }
 
     private static func normalizedSpeed(_ speed: GestureSpeed) -> GestureSpeed {
         speed == .any ? .normal : speed
-    }
-
-    static func appSwitcherAction(fingers: Int, direction: GestureDirection,
-                                   modifiers: CapturedModifiers) -> GestureAction? {
-        let cfg = Settings.shared.appSwitcher
-        guard cfg.enabled, fingers == cfg.fingers else { return nil }
-        guard modifiers.matches(.noModifiers) else { return nil }
-        switch direction {
-        case .swipeRight: return .appSwitcherNext
-        case .swipeLeft:  return .appSwitcherPrev
-        default:          return nil
-        }
     }
 }

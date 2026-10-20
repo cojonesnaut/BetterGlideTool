@@ -24,4 +24,4 @@ For continuous gestures (see [Smart filters & conditions](02-filters-and-conditi
 - **Force-click zones:** Adjust the dimensional boundaries for corner and perimeter force-click triggers.
 
 ---
-[← Previous: TrackPoint](06-trackpoint.md) · [Back to manual](../USAGE.md) · [Next: General preferences →](08-general-preferences.md)
+[← Previous: Global keyboard shortcuts](04-keyboard-shortcuts.md) · [Back to manual](../USAGE.md) · [Next: General preferences →](08-general-preferences.md)

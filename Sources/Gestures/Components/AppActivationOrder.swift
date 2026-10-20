@@ -1,12 +1,12 @@
 import Cocoa
 
-final class AppSwitcherState {
+/// Most-recently-used order of regular apps, for "Activate Next/Previous App".
+final class AppActivationOrder {
 
-    static let shared = AppSwitcherState()
+    static let shared = AppActivationOrder()
 
     private var mruAppOrder: [pid_t] = []
     private var mruObserver: Any?
-    private var launchObserver: Any?
 
     private init() {}
 
@@ -31,30 +31,16 @@ final class AppSwitcherState {
             self.mruAppOrder.removeAll { $0 == pid }
             self.mruAppOrder.insert(pid, at: 0)
         }
-        WindowTargeting.shared.warmAccessibilityConnections()
-        launchObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didLaunchApplicationNotification,
-            object: nil, queue: .main
-        ) { notification in
-            guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.activationPolicy == .regular else { return }
-            WindowTargeting.shared.warmAccessibilityConnection(for: app.processIdentifier)
-        }
     }
 
     func stopMRUTracking() {
-        for observer in [mruObserver, launchObserver].compactMap({ $0 }) {
-            NSWorkspace.shared.notificationCenter.removeObserver(observer)
-        }
+        if let observer = mruObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         mruObserver = nil
-        launchObserver = nil
     }
 
     func getOrderedApps() -> [NSRunningApplication] {
-        // This list models the *system* ⌘Tab switcher, which is always MRU-ordered.
-        // The index math (Finder skip, step boundaries) breaks whenever the model
-        // diverges from it, so MRU is not optional here. Stable tie-break keeps
-        // never-activated apps in a deterministic order.
+        // Matches the system ⌘Tab order, which is most-recently-used. A stable
+        // tie-break keeps never-activated apps in a deterministic order.
         let apps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
         let runningPIDs = Set(apps.map(\.processIdentifier))
         mruAppOrder.removeAll { !runningPIDs.contains($0) }

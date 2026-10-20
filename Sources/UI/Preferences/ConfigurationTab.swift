@@ -59,7 +59,7 @@ struct ConfigurationTab: View {
                 // Export
                 GroupBox(label: Label("Export", systemImage: "square.and.arrow.up")) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Save a backup copy of your gestures and settings as a `.yaml` file. Share it with other BetterGlideTool users or keep it as a snapshot.")
+                        Text("Save a `.yaml` backup of both devices’ gestures, app conditions, actions, scrolling, pointer speed, sensitivity and TipTap settings. Recent edits are included immediately.")
                             .foregroundStyle(.secondary)
                             .font(.callout)
 
@@ -74,7 +74,7 @@ struct ConfigurationTab: View {
                 // Import
                 GroupBox(label: Label("Import", systemImage: "square.and.arrow.down")) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Load a previously exported `.yaml` file to restore a configuration. This will replace your current gestures and settings.")
+                        Text("Restore a previously exported `.yaml` backup for both devices. Invalid or unsupported files leave your current configuration unchanged. macOS permissions and login-item registration are managed separately by macOS.")
                             .foregroundStyle(.secondary)
                             .font(.callout)
 

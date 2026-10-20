@@ -31,34 +31,6 @@ struct GlideConfig {
         var autoDisableNativeGestures: Bool = false
     }
 
-    struct AppSwitcher {
-        var enabled: Bool = true
-        var style: String = "newer"
-        var fingers: Int = 3
-        var skipWindowlessFinder: Bool = true
-        var restoreMinimizedOnCommit: Bool = true
-        var animationsEnabled: Bool = false
-    }
-
-    struct TrackPoint {
-        var enabled: Bool = true
-        var activationMode: String = "double_tap_hold"
-        var zone: String = "bottom_right"
-        var zoneSize: Float = 0.198
-        var activationDelay: Double = 0.59
-        var activationMovement: Float = 0.012
-        var doubleTapWindow: Double = 0.35
-        var deadZone: Float = 0.006
-        var pushRange: Float = 0.042
-        var maxSpeed: Float = 3350
-        var acceleration: Float = 1.39
-        var hapticFeedback: Bool = true
-        var scrollEnabled: Bool = true
-        var scrollSpeed: Float = 1200
-        var invertScroll: Bool = false
-        var smoothing: Float = 0.022
-    }
-
     struct EdgeControls {
         var enabled: Bool = true
         var topEdge: String = "none"
@@ -73,8 +45,6 @@ struct GlideConfig {
     }
 
     struct Tuning {
-        var appSwitcherStepThreshold: Float = 0.002
-        var appSwitcherDebounce: Double = 0.05
         var continuousStepThreshold: Float = 0.025
         var continuousDebounce: Double = 0.08
         var candidateFrames: Int = 3
@@ -83,6 +53,7 @@ struct GlideConfig {
         var swipeCoherenceThreshold: Float = 0.30
         var swipeAngleTolerance: Float = 45.0
         var tapHoldDuration: Double = 0.5
+        var explicitForceClickMargins: Set<String> = []
         var forceClickCornerMargin: Float = 0.35
         var forceClickMarginLeft: Float = 0.35
         var forceClickMarginRight: Float = 0.35
@@ -96,6 +67,9 @@ struct GlideConfig {
     }
 
     struct Gesture {
+        var desktopOptions = DesktopActionOptions()
+        var device: String = "trackpad"
+        var appFilters: [String] = []
         var name: String? = nil     // user-given label
         var type: String            // "swipe" | "click"
         var direction: String?      // "up" | "down" | "left" | "right" — nil for click
@@ -141,13 +115,13 @@ struct GlideConfig {
 
     var speed: Speed = Speed()
     var preferences: Preferences = Preferences()
-    var appSwitcher: AppSwitcher = AppSwitcher()
-    var trackPoint: TrackPoint = TrackPoint()
     var edgeControls: EdgeControls = EdgeControls()
     var tuning: Tuning = Tuning()
     /// haptic event rawValue → pattern rawValue (see HapticEvent / HapticPattern)
     var haptics: [String: String] = [:]
     var magicMouse = MagicMouseSettings()
+    var deviceTuning = DeviceTuningSettings()
+    var gestureSchemaVersion = 0
     var gestures: [Gesture] = []
 }
 
@@ -164,6 +138,8 @@ extension GlideConfig {
         let t = s.tuning
         var cfg = GlideConfig()
         cfg.magicMouse = s.magicMouse
+        cfg.deviceTuning = s.deviceTuning
+        cfg.gestureSchemaVersion = 1
 
         cfg.speed.swipeThreshold         = t.initialThreshold
         cfg.speed.fastVelocityThreshold  = t.fastVelocityThreshold
@@ -177,30 +153,6 @@ extension GlideConfig {
         cfg.preferences.launchAtLogin    = s.launchAtLoginEnabled
         cfg.preferences.autoDisableNativeGestures = s.autoDisableNativeGestures
 
-        cfg.appSwitcher.enabled = s.appSwitcher.enabled
-        cfg.appSwitcher.style   = s.appSwitcher.style.rawValue
-        cfg.appSwitcher.fingers = s.appSwitcher.fingers
-        cfg.appSwitcher.skipWindowlessFinder = s.appSwitcher.skipWindowlessFinder
-        cfg.appSwitcher.restoreMinimizedOnCommit = s.appSwitcher.restoreMinimizedOnCommit
-        cfg.appSwitcher.animationsEnabled = s.appSwitcher.animationsEnabled
-
-        cfg.trackPoint.enabled            = s.trackPoint.enabled
-        cfg.trackPoint.activationMode     = s.trackPoint.activationMode.rawValue
-        cfg.trackPoint.zone               = s.trackPoint.zone.yamlValue ?? "bottom_right"
-        cfg.trackPoint.zoneSize           = s.trackPoint.zoneSize
-        cfg.trackPoint.activationDelay    = s.trackPoint.activationDelay
-        cfg.trackPoint.activationMovement = s.trackPoint.activationMovement
-        cfg.trackPoint.doubleTapWindow    = s.trackPoint.doubleTapWindow
-        cfg.trackPoint.deadZone           = s.trackPoint.deadZone
-        cfg.trackPoint.pushRange          = s.trackPoint.pushRange
-        cfg.trackPoint.maxSpeed           = s.trackPoint.maxSpeed
-        cfg.trackPoint.acceleration       = s.trackPoint.acceleration
-        cfg.trackPoint.hapticFeedback     = s.trackPoint.hapticFeedback
-        cfg.trackPoint.scrollEnabled      = s.trackPoint.scrollEnabled
-        cfg.trackPoint.scrollSpeed        = s.trackPoint.scrollSpeed
-        cfg.trackPoint.invertScroll       = s.trackPoint.invertScroll
-        cfg.trackPoint.smoothing          = s.trackPoint.smoothing
-
         cfg.edgeControls.enabled    = s.edgeControls.enabled
         cfg.edgeControls.topEdge    = s.edgeControls.topEdge.rawValue
         cfg.edgeControls.bottomEdge = s.edgeControls.bottomEdge.rawValue
@@ -212,8 +164,6 @@ extension GlideConfig {
         cfg.edgeControls.invertScroll = s.edgeControls.invertScroll
         cfg.edgeControls.scrollMomentum = s.edgeControls.scrollMomentum
 
-        cfg.tuning.appSwitcherStepThreshold  = t.appSwitcherStepThreshold
-        cfg.tuning.appSwitcherDebounce       = t.appSwitcherDebounce
         cfg.tuning.continuousStepThreshold   = t.continuousStepThreshold
         cfg.tuning.continuousDebounce        = t.continuousDebounce
         cfg.tuning.candidateFrames           = t.candidateFrames
@@ -235,7 +185,33 @@ extension GlideConfig {
         cfg.gestures = s.rules.map { rule in
             let typeStr: String
             switch rule.direction {
+            case .tapTop: typeStr = "tap_top"
+            case .tapBottom: typeStr = "tap_bottom"
+            case .circleClockwise: typeStr = "circle_clockwise"
+            case .circleCounterClockwise: typeStr = "circle_counter_clockwise"
+            case .cornerBottomLeft: typeStr = "corner_bottom_left"
+            case .cornerBottomRight: typeStr = "corner_bottom_right"
+            case .cornerTopLeft: typeStr = "corner_top_left"
+            case .cornerTopRight: typeStr = "corner_top_right"
+            case .tipTapThreeLeft: typeStr = "tip_tap_three_left"
+            case .tipTapThreeRight: typeStr = "tip_tap_three_right"
+            case .tipSwipeLeftLeft: typeStr = "tip_swipe_left_left"
+            case .tipSwipeLeftRight: typeStr = "tip_swipe_left_right"
             case .forceClick:           typeStr = "force_click"
+            case .tap:                  typeStr = "tap"
+            case .doubleTap:            typeStr = "double_tap"
+            case .tipTapTwoLeft: typeStr = "tip_tap_two_left"
+            case .tipTapTwoMiddle: typeStr = "tip_tap_two_middle"
+            case .tipTapTwoRight: typeStr = "tip_tap_two_right"
+            case .tipSwipeLeftUp: typeStr = "tip_swipe_left_up"
+            case .tipSwipeLeftDown: typeStr = "tip_swipe_left_down"
+            case .tipTapLeft:           typeStr = "tip_tap_left"
+            case .tipTapRight:          typeStr = "tip_tap_right"
+            case .middleTap: typeStr = "middle_tap"
+            case .aboveAppleTap: typeStr = "above_apple_tap"
+            case .middleClick: typeStr = "middle_click"
+            case .leftTap:              typeStr = "left_tap"
+            case .rightTap:             typeStr = "right_tap"
             case .click:                typeStr = "click"
             case .tapHold:              typeStr = "hold"
             default:                    typeStr = "swipe"
@@ -284,6 +260,9 @@ extension GlideConfig {
                 gesture.triggerShortcutKeyCode = rule.triggerShortcut.map { Int($0.keyCode) }
                 gesture.triggerShortcutModifiers = rule.triggerShortcut?.yamlModifiers
             }
+            gesture.desktopOptions = rule.desktopOptions
+            gesture.device = rule.device.rawValue
+            gesture.appFilters = rule.appFilters
             return gesture
         }
         return cfg
@@ -291,45 +270,18 @@ extension GlideConfig {
 
     // ── Convert to Settings-domain types (used by Settings.apply(_:)) ──
 
-    func toAppSwitcher() -> AppSwitcherSettings {
-        var s = AppSwitcherSettings()
-        s.enabled = appSwitcher.enabled
-        s.style = AppSwitcherStyle(rawValue: appSwitcher.style) ?? .newer
-        s.fingers = appSwitcher.fingers
-        s.skipWindowlessFinder = appSwitcher.skipWindowlessFinder
-        s.restoreMinimizedOnCommit = appSwitcher.restoreMinimizedOnCommit
-        s.animationsEnabled = appSwitcher.animationsEnabled
-        return AppSwitcherSettings.normalized(s)
-    }
-
-    func toTrackPoint() -> TrackPointSettings {
-        var p = TrackPointSettings()
-        p.enabled            = trackPoint.enabled
-        p.activationMode     = TrackPointActivationMode(rawValue: trackPoint.activationMode) ?? .twoFingerHold
-        p.zone               = TrackpadZone(yamlValue: trackPoint.zone) ?? .bottomRight
-        p.zoneSize           = trackPoint.zoneSize
-        p.activationDelay    = trackPoint.activationDelay
-        p.activationMovement = trackPoint.activationMovement
-        p.doubleTapWindow    = trackPoint.doubleTapWindow
-        p.deadZone           = trackPoint.deadZone
-        p.pushRange          = trackPoint.pushRange
-        p.maxSpeed           = trackPoint.maxSpeed
-        p.acceleration       = trackPoint.acceleration
-        p.hapticFeedback     = trackPoint.hapticFeedback
-        p.scrollEnabled      = trackPoint.scrollEnabled
-        p.scrollSpeed        = trackPoint.scrollSpeed
-        p.invertScroll       = trackPoint.invertScroll
-        p.smoothing          = trackPoint.smoothing
-        return TrackPointSettings.normalized(p)
-    }
-
     func toEdgeControls() -> EdgeControlsSettings {
         var e = EdgeControlsSettings()
         e.enabled    = edgeControls.enabled
-        e.topEdge    = EdgeAction(rawValue: edgeControls.topEdge) ?? .none
-        e.bottomEdge = EdgeAction(rawValue: edgeControls.bottomEdge) ?? .none
-        e.leftEdge   = EdgeAction(rawValue: edgeControls.leftEdge) ?? .brightness
-        e.rightEdge  = EdgeAction(rawValue: edgeControls.rightEdge) ?? .volume
+        // "app_switcher" was retired in 2.11.6 with the App Switcher; an edge that
+        // used it is switched off rather than falling back to a default action.
+        func edge(_ raw: String, _ fallback: EdgeAction) -> EdgeAction {
+            raw == "app_switcher" ? .none : EdgeAction(rawValue: raw) ?? fallback
+        }
+        e.topEdge    = edge(edgeControls.topEdge, .none)
+        e.bottomEdge = edge(edgeControls.bottomEdge, .none)
+        e.leftEdge   = edge(edgeControls.leftEdge, .brightness)
+        e.rightEdge  = edge(edgeControls.rightEdge, .volume)
         e.marginMm    = edgeControls.marginMm
         e.activationTravelMm = edgeControls.activationTravelMm
         e.scrollSpeed = edgeControls.scrollSpeed
@@ -344,8 +296,6 @@ extension GlideConfig {
         t.fastVelocityThreshold     = speed.fastVelocityThreshold
         t.slowVelocityThreshold     = speed.slowVelocityThreshold
         t.speedLogic                = SpeedLogic(rawValue: speed.speedLogic.lowercased()) ?? .simple
-        t.appSwitcherStepThreshold  = tuning.appSwitcherStepThreshold
-        t.appSwitcherDebounce       = tuning.appSwitcherDebounce
         t.continuousStepThreshold   = tuning.continuousStepThreshold
         t.continuousDebounce        = tuning.continuousDebounce
         t.candidateFrames           = tuning.candidateFrames
@@ -355,10 +305,10 @@ extension GlideConfig {
         t.swipeAngleTolerance       = tuning.swipeAngleTolerance
         t.tapHoldDuration           = tuning.tapHoldDuration
         // If a new field was read, use it. Otherwise fall back to the legacy forceClickCornerMargin, which defaults to 0.35.
-        t.forceClickMargin.left     = tuning.forceClickMarginLeft != 0.35 ? tuning.forceClickMarginLeft : tuning.forceClickCornerMargin
-        t.forceClickMargin.right    = tuning.forceClickMarginRight != 0.35 ? tuning.forceClickMarginRight : tuning.forceClickCornerMargin
-        t.forceClickMargin.top      = tuning.forceClickMarginTop != 0.35 ? tuning.forceClickMarginTop : tuning.forceClickCornerMargin
-        t.forceClickMargin.bottom   = tuning.forceClickMarginBottom != 0.35 ? tuning.forceClickMarginBottom : tuning.forceClickCornerMargin
+        t.forceClickMargin.left     = (tuning.explicitForceClickMargins.contains("left") || tuning.forceClickMarginLeft != 0.35) ? tuning.forceClickMarginLeft : tuning.forceClickCornerMargin
+        t.forceClickMargin.right    = (tuning.explicitForceClickMargins.contains("right") || tuning.forceClickMarginRight != 0.35) ? tuning.forceClickMarginRight : tuning.forceClickCornerMargin
+        t.forceClickMargin.top      = (tuning.explicitForceClickMargins.contains("top") || tuning.forceClickMarginTop != 0.35) ? tuning.forceClickMarginTop : tuning.forceClickCornerMargin
+        t.forceClickMargin.bottom   = (tuning.explicitForceClickMargins.contains("bottom") || tuning.forceClickMarginBottom != 0.35) ? tuning.forceClickMarginBottom : tuning.forceClickCornerMargin
         t.edgeMarginEnabled         = tuning.edgeMarginEnabled
         t.edgeMargin.left           = tuning.edgeMarginLeft
         t.edgeMargin.right          = tuning.edgeMarginRight
@@ -367,12 +317,46 @@ extension GlideConfig {
         return t
     }
 
+    /// Actions removed with the App Switcher in 2.11.6. Gestures that used them are
+    /// dropped on import, as normalisation already did, instead of failing the file.
+    static let retiredActions: Set<String> = ["Next App (App Switcher)", "Previous App (App Switcher)"]
+
+    /// The gestures that are still meaningful, without retired ones.
+    var liveGestures: [Gesture] { gestures.filter { !Self.retiredActions.contains($0.action) } }
+
     func toRules() -> [GestureRule] {
-        gestures.compactMap { g in
+        liveGestures.compactMap { g in
             guard !g.action.isEmpty, let action = GestureAction(rawValue: g.action) else { return nil }
 
             let direction: GestureDirection
-            if g.type == "click" {
+            if g.type == "middle_tap" { direction = .middleTap
+            } else if g.type == "above_apple_tap" { direction = .aboveAppleTap
+            } else if g.type == "middle_click" { direction = .middleClick
+            } else if g.type == "tap_top" { direction = .tapTop
+            } else if g.type == "tap_bottom" { direction = .tapBottom
+            } else if g.type == "circle_clockwise" { direction = .circleClockwise
+            } else if g.type == "circle_counter_clockwise" { direction = .circleCounterClockwise
+            } else if g.type == "corner_bottom_left" { direction = .cornerBottomLeft
+            } else if g.type == "corner_bottom_right" { direction = .cornerBottomRight
+            } else if g.type == "corner_top_left" { direction = .cornerTopLeft
+            } else if g.type == "corner_top_right" { direction = .cornerTopRight
+            } else if g.type == "tip_tap_three_left" { direction = .tipTapThreeLeft
+            } else if g.type == "tip_tap_three_right" { direction = .tipTapThreeRight
+            } else if g.type == "tip_swipe_left_left" { direction = .tipSwipeLeftLeft
+            } else if g.type == "tip_swipe_left_right" { direction = .tipSwipeLeftRight
+            } else if g.type == "tip_tap_two_left" { direction = .tipTapTwoLeft
+            } else if g.type == "tip_tap_two_middle" { direction = .tipTapTwoMiddle
+            } else if g.type == "tip_tap_two_right" { direction = .tipTapTwoRight
+            } else if g.type == "tip_swipe_left_up" { direction = .tipSwipeLeftUp
+            } else if g.type == "tip_swipe_left_down" { direction = .tipSwipeLeftDown
+            } else if g.type == "double_tap" { direction = .doubleTap
+            } else if g.type == "tip_tap_left" { direction = .tipTapLeft
+            } else if g.type == "tip_tap_right" { direction = .tipTapRight
+            } else if g.type == "left_tap" { direction = .leftTap
+            } else if g.type == "right_tap" { direction = .rightTap
+            } else if g.type == "tap" {
+                direction = .tap
+            } else if g.type == "click" {
                 direction = .click
             } else if g.type == "force_click" {
                 direction = .forceClick
@@ -428,6 +412,9 @@ extension GlideConfig {
                 triggerShortcut:   KeyboardShortcut(yamlKeyCode: g.triggerShortcutKeyCode,
                                                     modifiers: g.triggerShortcutModifiers)
             )
+            rule.desktopOptions = g.desktopOptions
+            rule.device = GestureDevice(rawValue: g.device) ?? .trackpad
+            rule.appFilters = g.appFilters
             rule.hapticPattern = g.haptic.flatMap(HapticPattern.init(rawValue:))
             if direction == .forceClick { rule.zone = TrackpadZone(yamlValue: g.zone) ?? .any }
             return GestureRule.migratingLegacyAppFilter(rule)
@@ -444,7 +431,7 @@ extension GlideConfig {
         case .swipeRight: return "right"
         case .swipeUp:    return "up"
         case .swipeDown:  return "down"
-        case .click:      return "none"
+        case .tapTop, .tapBottom, .circleClockwise, .circleCounterClockwise, .cornerBottomLeft, .cornerBottomRight, .cornerTopLeft, .cornerTopRight, .tipTapThreeLeft, .tipTapThreeRight, .tipSwipeLeftLeft, .tipSwipeLeftRight, .tap, .doubleTap, .tipTapLeft, .tipTapRight, .tipTapTwoLeft, .tipTapTwoMiddle, .tipTapTwoRight, .tipSwipeLeftUp, .tipSwipeLeftDown, .leftTap, .rightTap, .middleTap, .aboveAppleTap, .middleClick, .click: return "none"
         case .forceClick: return "none"
         case .tapHold:    return "none"
         }
@@ -472,9 +459,10 @@ enum GlideConfigSerializer {
     static func serialize(_ config: GlideConfig) -> String {
         var lines: [String] = [
             "# BetterGlideTool Configuration",
-            "# Generated by BetterGlideTool — import via Preferences › General › Import Config",
+            "# Generated by BetterGlideTool — import via Preferences › Configuration › Import Config",
             "#",
             "touchpad:",
+            "  gesture_schema_version: \(config.gestureSchemaVersion)",
             "",
             "  # ── Speed & Velocity ──────────────────────────────",
             "  speed:",
@@ -497,37 +485,6 @@ enum GlideConfigSerializer {
         lines += config.haptics.sorted { $0.key < $1.key }.map { "    \($0.key): \"\($0.value)\"" }
         lines += [
             "",
-            "  # ── App Switcher (hold + swipe to browse, release to confirm) ──",
-            "  app_switcher:",
-            "    enabled: \(config.appSwitcher.enabled ? "true" : "false")",
-            "    style: \(config.appSwitcher.style)",
-            "    fingers: \(config.appSwitcher.fingers)",
-            "    skip_windowless_finder: \(config.appSwitcher.skipWindowlessFinder ? "true" : "false")",
-            "    restore_minimized_on_commit: \(config.appSwitcher.restoreMinimizedOnCommit ? "true" : "false")",
-            "    animations_enabled: \(config.appSwitcher.animationsEnabled ? "true" : "false")",
-            "",
-            "  # ── TrackPoint (pointing stick on trackpad) ──",
-            "  trackpoint:",
-            "    enabled: \(config.trackPoint.enabled ? "true" : "false")",
-            "    activation_mode: \(config.trackPoint.activationMode)",
-            "    zone: \(config.trackPoint.zone)",
-            "    zone_size: \(fmt(config.trackPoint.zoneSize))",
-            "    activation_delay: \(String(format: "%.2f", config.trackPoint.activationDelay))",
-            "    activation_movement: \(fmt(config.trackPoint.activationMovement))",
-            "    # Gap allowed between the two taps of double_tap_hold.",
-            "    double_tap_window: \(String(format: "%.2f", config.trackPoint.doubleTapWindow))",
-            "    dead_zone: \(fmt(config.trackPoint.deadZone))",
-            "    push_range: \(fmt(config.trackPoint.pushRange))",
-            "    max_speed: \(String(format: "%.0f", config.trackPoint.maxSpeed))",
-            "    acceleration: \(String(format: "%.2f", config.trackPoint.acceleration))",
-            "    haptic_feedback: \(config.trackPoint.hapticFeedback ? "true" : "false")",
-            "    # Rest a second finger anywhere on the pad to scroll with the stick.",
-            "    scroll_enabled: \(config.trackPoint.scrollEnabled ? "true" : "false")",
-            "    scroll_speed: \(String(format: "%.0f", config.trackPoint.scrollSpeed))",
-            "    invert_scroll: \(config.trackPoint.invertScroll ? "true" : "false")",
-            "    # Eases finger tremor out of the push. Seconds; 0 disables.",
-            "    smoothing: \(String(format: "%.3f", config.trackPoint.smoothing))",
-            "",
             "  # ── Edge Controls ──────────────────────────────────",
             "  edge_controls:",
             "    enabled: \(config.edgeControls.enabled ? "true" : "false")",
@@ -535,27 +492,25 @@ enum GlideConfigSerializer {
             "    bottom_edge: \(config.edgeControls.bottomEdge)",
             "    left_edge: \(config.edgeControls.leftEdge)",
             "    right_edge: \(config.edgeControls.rightEdge)",
-            "    margin_mm: \(String(format: "%.1f", config.edgeControls.marginMm))",
+            "    margin_mm: \(String(config.edgeControls.marginMm))",
             "    # Travel along an edge required before a gesture commits. Raise to",
             "    # make accidental triggers less likely.",
-            "    activation_travel_mm: \(String(format: "%.1f", config.edgeControls.activationTravelMm))",
+            "    activation_travel_mm: \(String(config.edgeControls.activationTravelMm))",
             "    # Points of scroll per millimetre of travel, for edges set to `scroll`.",
-            "    scroll_speed: \(String(format: "%.1f", config.edgeControls.scrollSpeed))",
+            "    scroll_speed: \(String(config.edgeControls.scrollSpeed))",
             "    invert_scroll: \(config.edgeControls.invertScroll ? "true" : "false")",
             "    scroll_momentum: \(config.edgeControls.scrollMomentum ? "true" : "false")",
             "",
             "  # ── Tuning ─────────────────────────────────────────",
             "  tuning:",
-            "    app_switcher_step_threshold: \(fmt(config.tuning.appSwitcherStepThreshold))",
-            "    app_switcher_debounce: \(String(format: "%.2f", config.tuning.appSwitcherDebounce))",
             "    continuous_step_threshold: \(fmt(config.tuning.continuousStepThreshold))",
-            "    continuous_debounce: \(String(format: "%.2f", config.tuning.continuousDebounce))",
+            "    continuous_debounce: \(String(config.tuning.continuousDebounce))",
             "    candidate_frames: \(config.tuning.candidateFrames)",
             "    pinch_spread_threshold: \(fmt(config.tuning.pinchSpreadThreshold))",
             "    pinch_frame_spread_threshold: \(fmt(config.tuning.pinchFrameSpreadThreshold))",
             "    swipe_coherence_threshold: \(fmt(config.tuning.swipeCoherenceThreshold))",
-            "    swipe_angle_tolerance: \(String(format: "%.1f", config.tuning.swipeAngleTolerance))",
-            "    tap_hold_duration: \(String(format: "%.2f", config.tuning.tapHoldDuration))",
+            "    swipe_angle_tolerance: \(String(config.tuning.swipeAngleTolerance))",
+            "    tap_hold_duration: \(String(config.tuning.tapHoldDuration))",
             "    force_click_margin:",
             "      left: \(fmt(config.tuning.forceClickMarginLeft))",
             "      right: \(fmt(config.tuning.forceClickMarginRight))",
@@ -573,22 +528,37 @@ enum GlideConfigSerializer {
             "  gestures:",
         ]
 
-        let grouped = Dictionary(grouping: config.gestures) { $0.fingers }
-        for fingers in grouped.keys.sorted() {
-            let bar = String(repeating: "#", count: 49)
-            lines += [
-                "",
-                "    \(bar)",
-                "    # 🔹 \("\(fingers)-FINGER GESTURES")",
-                "    \(bar)",
-            ]
-            for g in grouped[fingers]! {
-                lines += serializeGesture(g)
-            }
-        }
+        for gesture in config.gestures { lines += serializeGesture(gesture) }
 
+        lines += ["", "  device_tuning:",
+                  "    trackpad_sensitivity: \(config.deviceTuning.trackpadSensitivity)",
+                  "    mouse_sensitivity: \(config.deviceTuning.mouseSensitivity)",
+                  "    trackpad_pointer_speed: \(config.deviceTuning.trackpadPointerSpeed)",
+                  "    mouse_pointer_speed: \(config.deviceTuning.mousePointerSpeed)",
+                  "    trackpad_tiptap_minimum: \(config.deviceTuning.trackpadTipTapMinimum)",
+                  "    mouse_tiptap_minimum: \(config.deviceTuning.mouseTipTapMinimum)",
+                  "    trackpad_tiptap_anchor: \(config.deviceTuning.trackpadTipTapAnchor)",
+                  "    mouse_tiptap_anchor: \(config.deviceTuning.mouseTipTapAnchor)"]
+        lines.append("    trackpad_tiptap_sensitivity: \(config.deviceTuning.trackpadTipTap.sensitivity)")
+        lines.append("    trackpad_tiptap_two_sensitivity: \(config.deviceTuning.trackpadTipTap.twoFingerSensitivity)")
+        lines.append("    trackpad_tiptap_three_sensitivity: \(config.deviceTuning.trackpadTipTap.threeFingerSensitivity)")
+        lines.append("    trackpad_tiptap_two_minimum_distance: \(config.deviceTuning.trackpadTipTap.twoFingerMinimumDistance)")
+        lines.append("    trackpad_tiptap_three_minimum_distance: \(config.deviceTuning.trackpadTipTap.threeFingerMinimumDistance)")
+        lines.append("    trackpad_tiptap_maximum_distance: \(config.deviceTuning.trackpadTipTap.maximumDistance)")
+        lines.append("    trackpad_tiptap_allow_movement: \(config.deviceTuning.trackpadTipTap.allowFingerMovement)")
+        lines.append("    trackpad_tiptap_allow_sensitive: \(config.deviceTuning.trackpadTipTap.allowSensitiveTipTaps)")
+        lines.append("    mouse_tiptap_sensitivity: \(config.deviceTuning.mouseTipTap.sensitivity)")
+        lines.append("    mouse_tiptap_two_sensitivity: \(config.deviceTuning.mouseTipTap.twoFingerSensitivity)")
+        lines.append("    mouse_tiptap_three_sensitivity: \(config.deviceTuning.mouseTipTap.threeFingerSensitivity)")
+        lines.append("    mouse_tiptap_two_minimum_distance: \(config.deviceTuning.mouseTipTap.twoFingerMinimumDistance)")
+        lines.append("    mouse_tiptap_three_minimum_distance: \(config.deviceTuning.mouseTipTap.threeFingerMinimumDistance)")
+        lines.append("    mouse_tiptap_maximum_distance: \(config.deviceTuning.mouseTipTap.maximumDistance)")
+        lines.append("    mouse_tiptap_allow_movement: \(config.deviceTuning.mouseTipTap.allowFingerMovement)")
+        lines.append("    mouse_tiptap_allow_sensitive: \(config.deviceTuning.mouseTipTap.allowSensitiveTipTaps)")
         lines += ["", "  # Magic Mouse settings are independent of trackpad gestures.", "  magic_mouse:",
                   "    enabled: \(config.magicMouse.enabled)",
+                  "    invert_vertical_scrolling: \(config.magicMouse.invertVerticalScrolling)",
+                  "    invert_horizontal_scrolling: \(config.magicMouse.invertHorizontalScrolling)",
                   "    tap_duration: \(config.magicMouse.tapDuration)",
                   "    tap_movement: \(config.magicMouse.tapMovement)",
                   "    swipe_distance: \(config.magicMouse.swipeDistance)"]
@@ -601,9 +571,11 @@ enum GlideConfigSerializer {
     private static func serializeGesture(_ g: GlideConfig.Gesture) -> [String] {
         var lines: [String] = [""]
         let comment = "\(g.fingers)-finger \(g.type)\(g.direction.map { " \($0)" } ?? "")\(g.speed.map { " (\($0))" } ?? "") → \(g.action)"
-        lines.append("    # \(comment)")
+        lines.append("    # \(comment.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " "))")
         lines.append("    - type: \(g.type)")
         if let n = g.name, !n.isEmpty { lines.append("      name: \"\(escape(n))\"") }
+        lines.append("      device: \(g.device)")
+        appendStringList(g.appFilters, key: "app_filters", to: &lines)
         if let d = g.direction { lines.append("      direction: \(d)") }
         lines.append("      fingers: \(g.fingers)")
         if let s = g.speed { lines.append("      speed: \(s)") }
@@ -623,7 +595,7 @@ enum GlideConfigSerializer {
         if let ws = g.windowState { lines.append("      window_state: \(ws)") }
         if let mf = g.modifierFilter { lines.append("      modifier_filter: \(mf)") }
         if let z = g.zone { lines.append("      zone: \(z)") }
-        lines.append("      app_filter: \(g.appFilter.map { "\"\($0)\"" } ?? "null")")
+        lines.append("      app_filter: \(g.appFilter.map { "\"\(escape($0))\"" } ?? "null")")
         if g.type == "swipe" || g.appPath != nil {
             lines.append("      app_path: \(g.appPath.map { "\"\(escape($0))\"" } ?? "null")")
             lines.append("      reciprocal: \(g.reciprocal ? "true" : "false")")
@@ -653,13 +625,13 @@ enum GlideConfigSerializer {
                 }
             }
         }
-        if g.action == GestureAction.customMenuItem.rawValue, let path = g.menuPath, !path.isEmpty {
+        if let path = g.menuPath, !path.isEmpty {
             lines.append("      menu_path:")
             for segment in path {
                 lines.append("        - \"\(escape(segment))\"")
             }
         }
-        if g.action == GestureAction.customShortcut.rawValue, let code = g.shortcutKeyCode {
+        if let code = g.shortcutKeyCode {
             lines.append("      shortcut_key_code: \(code)")
             if let mods = g.shortcutModifiers, !mods.isEmpty {
                 lines.append("      shortcut_modifiers:")
@@ -668,14 +640,22 @@ enum GlideConfigSerializer {
                 }
             }
         }
-        if g.action == GestureAction.advancedKeyboard.rawValue {
+        if g.advancedKeyboard != nil {
             appendStringList(g.advancedKeyboard, key: "advanced_keyboard", to: &lines)
         }
-        if g.action == GestureAction.runShortcut.rawValue, let name = g.shortcutName, !name.isEmpty {
+        if g.desktopOptions != DesktopActionOptions() || GestureAction(rawValue: g.action)?.isStageAction == true {
+            lines.append("      stage_position: \(g.desktopOptions.stagePosition)")
+            lines.append("      stage_window_title: \"\(escape(g.desktopOptions.windowTitle))\"")
+            lines.append("      allow_animated_fallback: \(g.desktopOptions.allowAnimatedFallback)")
+            if !g.desktopOptions.stageApps.isEmpty {
+                lines.append("      stage_apps:")
+                for app in g.desktopOptions.stageApps { lines.append("        - \"\(escape(app))\"") }
+            }
+        }
+        if let name = g.shortcutName, !name.isEmpty {
             lines.append("      shortcut_name: \"\(escape(name))\"")
         }
-        if (g.action == GestureAction.runShellCommand.rawValue || g.action == GestureAction.runAppleScript.rawValue),
-           let script = g.script, !script.isEmpty {
+        if let script = g.script, !script.isEmpty {
             lines.append("      script: \"\(escape(script))\"")
         }
         if g.continuousNegativeAction == GestureAction.customShortcut.rawValue {
@@ -693,7 +673,7 @@ enum GlideConfigSerializer {
         return lines
     }
 
-    private static func fmt(_ v: Float) -> String { String(format: "%.3f", v) }
+    private static func fmt(_ v: Float) -> String { String(v) }
 
     private static func appendStringList(_ values: [String]?, key: String, to lines: inout [String]) {
         guard let values, !values.isEmpty else { return }
@@ -718,6 +698,8 @@ enum GlideConfigSerializer {
         s.replacingOccurrences(of: "\\", with: "\\\\")
          .replacingOccurrences(of: "\"", with: "\\\"")
          .replacingOccurrences(of: "\n", with: "\\n")
+         .replacingOccurrences(of: "\r", with: "\\r")
+         .replacingOccurrences(of: "\t", with: "\\t")
     }
 }
 
@@ -726,13 +708,16 @@ enum GlideConfigSerializer {
 // ─────────────────────────────────────────────
 
 enum GlideConfigParser {
+    private static let gestureTypes: Set<String> = ["above_apple_tap", "circle_clockwise", "circle_counter_clockwise", "click", "corner_bottom_left", "corner_bottom_right", "corner_top_left", "corner_top_right", "double_tap", "force_click", "hold", "left_tap", "middle_click", "middle_tap", "right_tap", "swipe", "tap", "tap_bottom", "tap_top", "tip_swipe_left_down", "tip_swipe_left_left", "tip_swipe_left_right", "tip_swipe_left_up", "tip_tap_left", "tip_tap_right", "tip_tap_three_left", "tip_tap_three_right", "tip_tap_two_left", "tip_tap_two_middle", "tip_tap_two_right"]
+
 
     static func parse(yaml: String) -> GlideConfig? {
-        let lines = yaml.components(separatedBy: "\n")
+        let input = yaml.hasPrefix("\u{FEFF}") ? String(yaml.dropFirst()) : yaml
+        let lines = input.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n").map(ConfigImportSyntax.withoutComment)
         var cfg = GlideConfig()
         var i = 0
 
-        guard scanToKey("touchpad", in: lines, from: &i) else { return nil }
+        guard ConfigImportSyntax.isValid(lines), scanToKey("touchpad", in: lines, from: &i) else { return nil }
 
         while i < lines.count {
             let line = lines[i]
@@ -741,19 +726,65 @@ enum GlideConfigParser {
             let (indent, key, _) = tokenize(line)
             if indent == 0 && key != nil && key != "touchpad" { break }
             switch key {
+            case "gesture_schema_version": cfg.gestureSchemaVersion = intVal(tokenize(line).2) ?? 0; i += 1
             case "speed":       i += 1; parseSpeed(lines, from: &i, parentIndent: indent, into: &cfg.speed)
             case "preferences":  i += 1; parsePreferences(lines, from: &i, parentIndent: indent, into: &cfg.preferences)
             case "haptics":     i += 1; parseHaptics(lines, from: &i, parentIndent: indent, into: &cfg.haptics)
-            case "app_switcher": i += 1; parseAppSwitcher(lines, from: &i, parentIndent: indent, into: &cfg.appSwitcher)
-            case "trackpoint":   i += 1; parseTrackPoint(lines, from: &i, parentIndent: indent, into: &cfg.trackPoint)
+            // Retired sections: still accepted in older files, but nothing reads them.
+            case "app_switcher", "trackpoint": i += 1; skipSection(lines, from: &i, parentIndent: indent)
             case "edge_controls", "edgecontrols": i += 1; parseEdgeControls(lines, from: &i, parentIndent: indent, into: &cfg.edgeControls)
+            case "device_tuning": i += 1; parseDeviceTuning(lines, from: &i, parentIndent: indent, into: &cfg.deviceTuning)
             case "magic_mouse":  i += 1; parseMagicMouse(lines, from: &i, parentIndent: indent, into: &cfg.magicMouse)
             case "tuning":       i += 1; parseTuning(lines, from: &i, parentIndent: indent, into: &cfg.tuning)
-            case "gestures":    i += 1; parseGestures(lines, from: &i, parentIndent: indent, into: &cfg.gestures)
+            case "gestures":
+                i += 1
+                guard parseGestures(lines, from: &i, parentIndent: indent, into: &cfg.gestures) else { return nil }
             default:            i += 1
             }
         }
+        guard (0...1).contains(cfg.gestureSchemaVersion), cfg.toRules().count == cfg.liveGestures.count,
+              cfg.gestures.allSatisfy({ GestureDevice(rawValue: $0.device) != nil && Self.gestureTypes.contains($0.type) }) else { return nil }
         return cfg
+    }
+
+    private static func parseDeviceTuning(_ lines: [String], from i: inout Int, parentIndent: Int, into tuning: inout DeviceTuningSettings) {
+        while i < lines.count {
+            let line = lines[i]
+            if line.trimmingCharacters(in: .whitespaces).isEmpty || line.trimmingCharacters(in: .whitespaces).hasPrefix("#") { i += 1; continue }
+            let (indent, key, val) = tokenize(line)
+            if indent <= parentIndent { break }
+            if key == "trackpad_tiptap_allow_movement" { tuning.trackpadTipTap.allowFingerMovement = boolVal(val) ?? tuning.trackpadTipTap.allowFingerMovement }
+            if key == "trackpad_tiptap_allow_sensitive" { tuning.trackpadTipTap.allowSensitiveTipTaps = boolVal(val) ?? tuning.trackpadTipTap.allowSensitiveTipTaps }
+            if key == "mouse_tiptap_allow_movement" { tuning.mouseTipTap.allowFingerMovement = boolVal(val) ?? tuning.mouseTipTap.allowFingerMovement }
+            if key == "mouse_tiptap_allow_sensitive" { tuning.mouseTipTap.allowSensitiveTipTaps = boolVal(val) ?? tuning.mouseTipTap.allowSensitiveTipTaps }
+            if let number = doubleVal(val) {
+                switch key {
+                case "trackpad_tiptap_sensitivity": tuning.trackpadTipTap.sensitivity = number
+                case "trackpad_tiptap_two_sensitivity": tuning.trackpadTipTap.twoFingerSensitivity = number
+                case "trackpad_tiptap_three_sensitivity": tuning.trackpadTipTap.threeFingerSensitivity = number
+                case "trackpad_tiptap_two_minimum_distance": tuning.trackpadTipTap.twoFingerMinimumDistance = number
+                case "trackpad_tiptap_three_minimum_distance": tuning.trackpadTipTap.threeFingerMinimumDistance = number
+                case "trackpad_tiptap_maximum_distance": tuning.trackpadTipTap.maximumDistance = number
+                case "mouse_tiptap_sensitivity": tuning.mouseTipTap.sensitivity = number
+                case "mouse_tiptap_two_sensitivity": tuning.mouseTipTap.twoFingerSensitivity = number
+                case "mouse_tiptap_three_sensitivity": tuning.mouseTipTap.threeFingerSensitivity = number
+                case "mouse_tiptap_two_minimum_distance": tuning.mouseTipTap.twoFingerMinimumDistance = number
+                case "mouse_tiptap_three_minimum_distance": tuning.mouseTipTap.threeFingerMinimumDistance = number
+                case "mouse_tiptap_maximum_distance": tuning.mouseTipTap.maximumDistance = number
+                case "trackpad_sensitivity": tuning.trackpadSensitivity = number
+                case "mouse_sensitivity": tuning.mouseSensitivity = number
+                case "trackpad_pointer_speed": tuning.trackpadPointerSpeed = number
+                case "mouse_pointer_speed": tuning.mousePointerSpeed = number
+                case "trackpad_tiptap_minimum": tuning.trackpadTipTapMinimum = number
+                case "mouse_tiptap_minimum": tuning.mouseTipTapMinimum = number
+                case "trackpad_tiptap_anchor": tuning.trackpadTipTapAnchor = number
+                case "mouse_tiptap_anchor": tuning.mouseTipTapAnchor = number
+                default: break
+                }
+            }
+            i += 1
+        }
+        tuning = DeviceTuningSettings.normalized(tuning)
     }
 
     private static func parseMagicMouse(_ lines: [String], from i: inout Int, parentIndent: Int, into mouse: inout MagicMouseSettings) {
@@ -764,6 +795,8 @@ enum GlideConfigParser {
             let (indent, key, val) = tokenize(line)
             if indent <= parentIndent { break }
             switch key {
+            case "invert_vertical_scrolling": mouse.invertVerticalScrolling = boolVal(val) ?? false
+            case "invert_horizontal_scrolling": mouse.invertHorizontalScrolling = boolVal(val) ?? false
             case "enabled": mouse.enabled = boolVal(val) ?? mouse.enabled
             case "tap_duration": mouse.tapDuration = doubleVal(val) ?? mouse.tapDuration
             case "tap_movement": mouse.tapMovement = doubleVal(val) ?? mouse.tapMovement
@@ -829,52 +862,10 @@ enum GlideConfigParser {
         }
     }
 
-    private static func parseAppSwitcher(_ lines: [String], from i: inout Int, parentIndent: Int, into switcher: inout GlideConfig.AppSwitcher) {
+    private static func skipSection(_ lines: [String], from i: inout Int, parentIndent: Int) {
         while i < lines.count {
-            let line = lines[i]
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty || trimmed.hasPrefix("#") { i += 1; continue }
-            let (ind, key, val) = tokenize(line)
-            if ind <= parentIndent { return }
-            switch key {
-            case "enabled": switcher.enabled = boolVal(val) ?? switcher.enabled
-            case "style": switcher.style = stringVal(val) ?? switcher.style
-            case "fingers": switcher.fingers = intVal(val) ?? switcher.fingers
-            case "skip_windowless_finder": switcher.skipWindowlessFinder = boolVal(val) ?? switcher.skipWindowlessFinder
-            case "restore_minimized_on_commit": switcher.restoreMinimizedOnCommit = boolVal(val) ?? switcher.restoreMinimizedOnCommit
-            case "animations_enabled": switcher.animationsEnabled = boolVal(val) ?? switcher.animationsEnabled
-            default: break
-            }
-            i += 1
-        }
-    }
-
-    private static func parseTrackPoint(_ lines: [String], from i: inout Int, parentIndent: Int, into point: inout GlideConfig.TrackPoint) {
-        while i < lines.count {
-            let line = lines[i]
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty || trimmed.hasPrefix("#") { i += 1; continue }
-            let (ind, key, val) = tokenize(line)
-            if ind <= parentIndent { return }
-            switch key {
-            case "enabled":             point.enabled            = boolVal(val)   ?? point.enabled
-            case "activation_mode":     point.activationMode     = stringVal(val) ?? point.activationMode
-            case "zone":                point.zone               = stringVal(val) ?? point.zone
-            case "zone_size":           point.zoneSize           = floatVal(val)  ?? point.zoneSize
-            case "activation_delay":    point.activationDelay    = doubleVal(val) ?? point.activationDelay
-            case "activation_movement": point.activationMovement = floatVal(val)  ?? point.activationMovement
-            case "double_tap_window":   point.doubleTapWindow    = doubleVal(val) ?? point.doubleTapWindow
-            case "dead_zone":           point.deadZone           = floatVal(val)  ?? point.deadZone
-            case "push_range":          point.pushRange          = floatVal(val)  ?? point.pushRange
-            case "max_speed":           point.maxSpeed           = floatVal(val)  ?? point.maxSpeed
-            case "acceleration":        point.acceleration       = floatVal(val)  ?? point.acceleration
-            case "haptic_feedback":     point.hapticFeedback     = boolVal(val)   ?? point.hapticFeedback
-            case "scroll_enabled":      point.scrollEnabled      = boolVal(val)   ?? point.scrollEnabled
-            case "scroll_speed":        point.scrollSpeed        = floatVal(val)  ?? point.scrollSpeed
-            case "invert_scroll":       point.invertScroll       = boolVal(val)   ?? point.invertScroll
-            case "smoothing":           point.smoothing          = floatVal(val)  ?? point.smoothing
-            default: break
-            }
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty && !trimmed.hasPrefix("#") && tokenize(lines[i]).0 <= parentIndent { return }
             i += 1
         }
     }
@@ -911,8 +902,6 @@ enum GlideConfigParser {
             let (ind, key, val) = tokenize(line)
             if ind <= parentIndent { return }
             switch key {
-            case "app_switcher_step_threshold":  tuning.appSwitcherStepThreshold  = floatVal(val)  ?? tuning.appSwitcherStepThreshold
-            case "app_switcher_debounce":        tuning.appSwitcherDebounce       = doubleVal(val) ?? tuning.appSwitcherDebounce
             case "continuous_step_threshold":     tuning.continuousStepThreshold   = floatVal(val)  ?? tuning.continuousStepThreshold
             case "continuous_debounce":           tuning.continuousDebounce        = doubleVal(val) ?? tuning.continuousDebounce
             case "candidate_frames":             tuning.candidateFrames           = intVal(val)    ?? tuning.candidateFrames
@@ -946,10 +935,10 @@ enum GlideConfigParser {
             let (ind, key, val) = tokenize(line)
             if ind <= parentIndent { return }
             switch key {
-            case "left":    tuning.forceClickMarginLeft    = floatVal(val) ?? tuning.forceClickMarginLeft
-            case "right":   tuning.forceClickMarginRight   = floatVal(val) ?? tuning.forceClickMarginRight
-            case "top":     tuning.forceClickMarginTop     = floatVal(val) ?? tuning.forceClickMarginTop
-            case "bottom":  tuning.forceClickMarginBottom  = floatVal(val) ?? tuning.forceClickMarginBottom
+            case "left": tuning.explicitForceClickMargins.insert("left");    tuning.forceClickMarginLeft    = floatVal(val) ?? tuning.forceClickMarginLeft
+            case "right": tuning.explicitForceClickMargins.insert("right");   tuning.forceClickMarginRight   = floatVal(val) ?? tuning.forceClickMarginRight
+            case "top": tuning.explicitForceClickMargins.insert("top");     tuning.forceClickMarginTop     = floatVal(val) ?? tuning.forceClickMarginTop
+            case "bottom": tuning.explicitForceClickMargins.insert("bottom");  tuning.forceClickMarginBottom  = floatVal(val) ?? tuning.forceClickMarginBottom
             default: break
             }
             i += 1
@@ -975,22 +964,24 @@ enum GlideConfigParser {
         }
     }
 
-    private static func parseGestures(_ lines: [String], from i: inout Int, parentIndent: Int, into gestures: inout [GlideConfig.Gesture]) {
+    private static func parseGestures(_ lines: [String], from i: inout Int, parentIndent: Int, into gestures: inout [GlideConfig.Gesture]) -> Bool {
         while i < lines.count {
             let line = lines[i]
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty || trimmed.hasPrefix("#") { i += 1; continue }
             
             let ind = leadingSpaces(line)
-            if ind <= parentIndent { return }
+            if ind <= parentIndent { return true }
             
             if trimmed.hasPrefix("-") {
                 let g = parseGestureBlock(lines, from: &i, blockIndent: ind)
-                if !g.type.isEmpty && !g.action.isEmpty { gestures.append(g) }
+                guard !g.type.isEmpty && !g.action.isEmpty else { return false }
+                gestures.append(g)
                 continue
             }
             i += 1
         }
+        return true
     }
 
     private static func parseStringList(_ lines: [String], from i: inout Int, parentIndent: Int) -> [String]? {
@@ -1032,15 +1023,11 @@ enum GlideConfigParser {
                                     continuousPositiveKeyboard: nil,
                                     continuousEndKeyboard: nil,
                                     draft: false)
-        let firstLine = lines[i].trimmingCharacters(in: .whitespaces).dropFirst()
-        if let colon = firstLine.firstIndex(of: ":") {
-            let k = String(firstLine[..<colon]).trimmingCharacters(in: .whitespaces)
-            let v = String(firstLine[firstLine.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
-            if k == "type" { g.type = v }
-        }
-        i += 1
+        let firstIndex = i
         while i < lines.count {
-            let line = lines[i]
+            let line = i == firstIndex
+                ? String(repeating: " ", count: blockIndent + 2) + lines[i].trimmingCharacters(in: .whitespaces).dropFirst().trimmingCharacters(in: .whitespaces)
+                : lines[i]
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty || trimmed.hasPrefix("#") { i += 1; continue }
             
@@ -1049,12 +1036,17 @@ enum GlideConfigParser {
             
             let (_, key, val) = tokenize(line)
             switch key {
-            case "type":       g.type      = val ?? g.type
+            case "type":       g.type      = stringVal(val) ?? g.type
             case "name":       g.name      = stringVal(val)
-            case "direction":  g.direction = val
+            case "direction":  g.direction = stringVal(val)
             case "fingers":    g.fingers   = intVal(val) ?? g.fingers
-            case "speed":      g.speed     = val
+            case "speed":      g.speed     = stringVal(val)
             case "action":     g.action    = mapActionSynonym(stringVal(val) ?? g.action)
+            case "device": g.device = stringVal(val) ?? "trackpad"
+            case "app_filters":
+                i += 1
+                g.appFilters = parseStringList(lines, from: &i, parentIndent: ind) ?? []
+                continue
             case "app_filter":    g.appFilter    = nullableStringVal(val)
             case "window_state":    g.windowState    = nullableStringVal(val)
             case "modifier_filter": g.modifierFilter = nullableStringVal(val)
@@ -1066,6 +1058,13 @@ enum GlideConfigParser {
                 g.menuPath = parseStringList(lines, from: &i, parentIndent: menuIndent)
                 continue
             case "shortcut_key_code": g.shortcutKeyCode = intVal(val)
+            case "stage_position": g.desktopOptions.stagePosition = min(32, max(1, intVal(val) ?? 1))
+            case "stage_window_title": g.desktopOptions.windowTitle = stringVal(val) ?? ""
+            case "allow_animated_fallback": g.desktopOptions.allowAnimatedFallback = boolVal(val) ?? false
+            case "stage_apps":
+                i += 1
+                g.desktopOptions.stageApps = parseStringList(lines, from: &i, parentIndent: ind) ?? []
+                continue
             case "shortcut_name":     g.shortcutName    = stringVal(val)
             case "script":            g.script          = stringVal(val)
             case "haptic":            g.haptic          = stringVal(val)
@@ -1178,7 +1177,10 @@ enum GlideConfigParser {
 
     private static func stringVal(_ s: String?) -> String? {
         guard let s else { return nil }
-        if (s.hasPrefix("\"") && s.hasSuffix("\"")) || (s.hasPrefix("'") && s.hasSuffix("'")) {
+        if s.hasPrefix("'") && s.hasSuffix("'") {
+            return String(s.dropFirst().dropLast()).replacingOccurrences(of: "''", with: "'")
+        }
+        if s.hasPrefix("\"") && s.hasSuffix("\"") {
             return unescapeQuotedString(String(s.dropFirst().dropLast()))
         }
         return s
@@ -1189,7 +1191,12 @@ enum GlideConfigParser {
         var escaping = false
         for ch in s {
             if escaping {
-                result.append(ch == "n" ? "\n" : ch)
+                switch ch {
+                case "n": result.append("\n")
+                case "r": result.append("\r")
+                case "t": result.append("\t")
+                default: result.append(ch)
+                }
                 escaping = false
             } else if ch == "\\" {
                 escaping = true
@@ -1236,7 +1243,9 @@ private extension Array {
 //
 final class GlideConfigStore {
     static let shared = GlideConfigStore()
-    private init() {}
+    private let location: URL?
+    private(set) var lastError: String?
+    init(configURL: URL? = nil) { location = configURL }
 
     /// Coalesces rapid preference edits (e.g. slider drags) into a single disk write.
     private var pendingSave: DispatchWorkItem?
@@ -1246,6 +1255,7 @@ final class GlideConfigStore {
     // MARK: Path
 
     var configURL: URL {
+        if let location { return location }
         let dir = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first!
@@ -1282,7 +1292,7 @@ final class GlideConfigStore {
     func save() -> Bool {
         pendingSave?.cancel()
         pendingSave = nil
-        isDirty = false
+        lastError = nil
 
         let url = configURL
         do {
@@ -1290,9 +1300,12 @@ final class GlideConfigStore {
                                                     withIntermediateDirectories: true)
             let yaml = GlideConfigSerializer.serialize(GlideConfig.fromSettings())
             try yaml.write(to: url, atomically: true, encoding: .utf8)
+            isDirty = false
             AppLogger.debug("[Config] Saved → \(url.lastPathComponent)")
             return true
         } catch {
+            isDirty = true
+            lastError = error.localizedDescription
             AppLogger.debug("[Config] Save failed: \(error.localizedDescription)")
             return false
         }
@@ -1320,14 +1333,15 @@ final class GlideConfigStore {
 
     @discardableResult
     func exportTo(_ destination: URL) -> Bool {
-        guard save() else { return false }
+        lastError = nil
         do {
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.copyItem(at: configURL, to: destination)
+            // Atomic replacement never deletes an existing backup first. Serialize
+            // current memory directly, including slider edits awaiting autosave.
+            let yaml = GlideConfigSerializer.serialize(GlideConfig.fromSettings())
+            try yaml.write(to: destination, atomically: true, encoding: .utf8)
             return true
         } catch {
+            lastError = error.localizedDescription
             AppLogger.debug("[Config] Export failed: \(error.localizedDescription)")
             return false
         }
@@ -1397,8 +1411,12 @@ final class GlideConfigStore {
     /// only read and parsed once, with the confirmation step in between.
     @discardableResult
     func apply(_ config: GlideConfig) -> Bool {
+        let previous = GlideConfig.fromSettings()
         Settings.shared.apply(config)
-        save()
+        guard save() else {
+            Settings.shared.apply(previous)
+            return false
+        }
         return true
     }
 

@@ -17,6 +17,8 @@ typedef int (*GLDWMainConnectionID)(void);
 typedef CFArrayRef (*GLDWCopyManagedDisplaySpaces)(int);
 typedef CFArrayRef (*GLDWCopyWindowsWithOptionsAndTags)(int, uint32_t, CFArrayRef, uint32_t, uint64_t *, uint64_t *);
 typedef CFArrayRef (*GLDWCopySpacesForWindows)(int, int, CFArrayRef);
+typedef uint32_t (*GLDWDisplayFromUUID)(CFUUIDRef);
+typedef CFStringRef (*GLDWCopyManagedDisplayForWindow)(int, uint32_t);
 typedef CFStringRef (*GLDWCopyManagedDisplayForSpace)(int, uint64_t);
 typedef CFStringRef (*GLDWCopyActiveMenuBarDisplayIdentifier)(int);
 
@@ -30,6 +32,8 @@ static GLDWMainConnectionID fn_main_connection = NULL;
 static GLDWCopyManagedDisplaySpaces fn_copy_display_spaces = NULL;
 static GLDWCopyWindowsWithOptionsAndTags fn_copy_windows = NULL;
 static GLDWCopySpacesForWindows fn_spaces_for_windows = NULL;
+static GLDWDisplayFromUUID fn_display_from_uuid = NULL;
+static GLDWCopyManagedDisplayForWindow fn_display_for_window = NULL;
 static GLDWCopyManagedDisplayForSpace fn_display_for_space = NULL;
 static GLDWCopyActiveMenuBarDisplayIdentifier fn_active_menubar_display = NULL;
 
@@ -47,6 +51,8 @@ static void init_bridge_symbols(void) {
     fn_copy_display_spaces = (GLDWCopyManagedDisplaySpaces)dlsym(handle, "SLSCopyManagedDisplaySpaces");
     fn_copy_windows = (GLDWCopyWindowsWithOptionsAndTags)dlsym(handle, "SLSCopyWindowsWithOptionsAndTags");
     fn_spaces_for_windows = (GLDWCopySpacesForWindows)dlsym(handle, "SLSCopySpacesForWindows");
+    fn_display_from_uuid = (GLDWDisplayFromUUID)dlsym(RTLD_DEFAULT, "CGDisplayGetDisplayIDFromUUID");
+    fn_display_for_window = (GLDWCopyManagedDisplayForWindow)dlsym(handle, "SLSCopyManagedDisplayForWindow");
     fn_display_for_space = (GLDWCopyManagedDisplayForSpace)dlsym(handle, "SLSCopyManagedDisplayForSpace");
     fn_active_menubar_display =
         (GLDWCopyActiveMenuBarDisplayIdentifier)dlsym(handle, "SLSCopyActiveMenuBarDisplayIdentifier");
@@ -159,6 +165,22 @@ CFArrayRef GLDWCopyWindowIDs(bool current_space_only, bool ordered_in_only) {
     CFRelease(spaces);
     CFRelease(display_spaces);
     return windows;
+}
+
+uint32_t GLDWDisplayForWindow(uint32_t window_id) {
+    if (window_id == 0) return 0;
+    pthread_once(&bridge_init_once, init_bridge_symbols);
+    if (fn_main_connection == NULL || fn_display_for_window == NULL || fn_display_from_uuid == NULL) return 0;
+    int connection = fn_main_connection();
+    if (connection == 0) return 0;
+    CFStringRef name = fn_display_for_window(connection, window_id);
+    if (name == NULL) return 0;
+    CFUUIDRef uuid = CFUUIDCreateFromString(NULL, name);
+    CFRelease(name);
+    if (uuid == NULL) return 0;
+    uint32_t display = fn_display_from_uuid(uuid);
+    CFRelease(uuid);
+    return display;
 }
 
 uint64_t GLDWSpaceForWindow(uint32_t window_id) {

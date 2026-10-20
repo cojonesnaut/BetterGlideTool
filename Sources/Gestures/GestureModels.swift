@@ -11,6 +11,12 @@ struct TouchFrameData {
     let cy: Float
     let spread: Float
     let coherence: Float
+    /// The trackpad's own timestamp for this frame, in seconds. Velocities are
+    /// measured on this rather than on when the frame reached the main thread:
+    /// that arrival time jitters with main-thread load and frame coalescing, and
+    /// the jitter lands directly in every speed the recognizer computes. Zero
+    /// for synthetic frames, which fall back to arrival time.
+    var timestamp: TimeInterval = 0
 }
 
 // ─────────────────────────────────────────────
@@ -42,6 +48,8 @@ struct CandidateData {
     var lastFrameTime: TimeInterval
     var gestureKind: GestureKind = .unknown
     var classificationFrameDelay: Int = 0
+    /// When the contact count first fell below `fingers`, while it stays below.
+    var fingerDropoutStart: TimeInterval?
 }
 
 struct SwipeTrackData {
@@ -63,32 +71,6 @@ struct SwipeTrackData {
     var lockedSpeed: GestureSpeed?
 }
 
-struct AppSwitcherWindow {
-    let id: Int
-    let processIdentifier: pid_t
-    let windowID: CGWindowID?
-    /// Accessibility only exposes windows in the currently active Space for some
-    /// applications. Windows discovered through the WindowServer can therefore
-    /// legitimately have no AX element until their Space is activated.
-    let element: AXUIElement?
-    let title: String
-    let isMinimized: Bool
-    let isOnCurrentSpace: Bool
-    let isApplicationHidden: Bool
-}
-
-struct SwitcherData {
-    var refX: Float; var refY: Float
-    var index: Int; var windowIndex: Int
-    let fingerCount: Int
-    let apps: [NSRunningApplication]
-    let windowsByApp: [[AppSwitcherWindow]]
-    let finderIndex: Int?   // position of windowless Finder, nil if Finder has windows
-    let effectiveMin: Int   // left boundary (tightened if Finder is at left edge)
-    let effectiveMax: Int   // right boundary (tightened if Finder is at right edge)
-    let usesCustomOverlay: Bool
-}
-
 enum GesturePhase {
     case idle
     case candidate(CandidateData)
@@ -96,7 +78,6 @@ enum GesturePhase {
     case ignored
     case fired
     case continuousSwipe(SwipeTrackData)
-    case switchingApps(SwitcherData)
 }
 
 // ─────────────────────────────────────────────
@@ -105,6 +86,7 @@ enum GesturePhase {
 
 struct ReciprocalToken {
     let inverseAction: GestureAction
+    let desktopOptions: DesktopActionOptions
     let fingers: Int
     let direction: GestureDirection
     let sourceRuleID: UUID
@@ -131,7 +113,7 @@ extension GestureDirection {
             return self == .swipeLeft || self == .swipeRight
         case .swipeUp, .swipeDown, .swipeUpDown:
             return self == .swipeUp || self == .swipeDown
-        case .click, .forceClick, .tapHold:
+        case .tapTop, .tapBottom, .circleClockwise, .circleCounterClockwise, .cornerBottomLeft, .cornerBottomRight, .cornerTopLeft, .cornerTopRight, .tipTapThreeLeft, .tipTapThreeRight, .tipSwipeLeftLeft, .tipSwipeLeftRight, .tap, .doubleTap, .tipTapLeft, .tipTapRight, .tipTapTwoLeft, .tipTapTwoMiddle, .tipTapTwoRight, .tipSwipeLeftUp, .tipSwipeLeftDown, .leftTap, .rightTap, .middleTap, .aboveAppleTap, .middleClick, .click, .forceClick, .tapHold:
             return false
         }
     }

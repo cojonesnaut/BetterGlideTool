@@ -9,4 +9,4 @@ Add a shortcut, record the key combination, and assign an action: all actions in
 Because these are system-wide hotkeys, select combinations that do not overlap with existing applications. BetterGlideTool verifies conflicts within its own rules.
 
 ---
-[← Previous: Every action, explained](03-actions.md) · [Back to manual](../USAGE.md) · [Next: App Switcher →](05-app-switcher.md)
+[← Previous: Every action, explained](03-actions.md) · [Back to manual](../USAGE.md) · [Next: Tuning & precision controls →](07-tuning.md)

@@ -9,7 +9,6 @@ import Foundation
 
 enum EdgeAction: String, Codable, CaseIterable, Identifiable {
     case none              = "none"
-    case appSwitcher       = "app_switcher"
     case scroll            = "scroll"
     case volume            = "volume"
     case brightness        = "brightness"
@@ -22,7 +21,6 @@ enum EdgeAction: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .none:              return "None"
-        case .appSwitcher:       return "App Switcher Scrub"
         case .scroll:            return "Scroll"
         case .volume:            return "Volume"
         case .brightness:        return "Display Brightness"
@@ -35,7 +33,6 @@ enum EdgeAction: String, Codable, CaseIterable, Identifiable {
     var iconName: String {
         switch self {
         case .none:              return "slash.circle"
-        case .appSwitcher:       return "rectangle.2.swap"
         case .scroll:            return "arrow.up.arrow.down"
         case .volume:            return "speaker.wave.3.fill"
         case .brightness:        return "sun.max.fill"
@@ -63,11 +60,21 @@ enum EdgeAction: String, Codable, CaseIterable, Identifiable {
         self == .scroll
     }
 
+    /// Driven in the system's quarter steps rather than full notches.
+    var usesFineSteps: Bool {
+        switch self {
+        case .volume, .brightness, .keyboardBacklight:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Whether a haptic tick should fire as the action advances. Notched controls
     /// feel better with one; a continuous action would vibrate every frame.
     var wantsHapticTicks: Bool {
         switch self {
-        case .appSwitcher, .scroll, .none:
+        case .scroll, .none:
             return false
         default:
             return true

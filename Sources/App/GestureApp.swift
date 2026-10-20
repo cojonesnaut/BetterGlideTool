@@ -47,16 +47,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        NativePointerSpeed.shared.apply(restoring: true)
         GlideConfigStore.shared.flushPendingSave()
     }
 
     private func checkAccessibilityPermission() {
-        if AXIsProcessTrusted() { return }
-
-        // Prompt the user — passing `kAXTrustedCheckOptionPrompt` shows the
-        // native macOS dialog and opens Accessibility in System Settings.
-        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
+        AccessibilityPermission.requestAutomaticallyIfNeeded()
     }
 
     @MainActor
@@ -95,7 +91,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let samples: [(name: String, dir: GestureDirection, fingers: Int, zone: TrackpadZone, mod: ModifierFilter, spd: GestureSpeed, cont: Bool, act: GestureAction)] = [
             ("preview_3finger_swipe_fast.png", .swipeRight, 3, .topLeft, .shiftHeld, .fast, false, .switchAppNext),
             ("preview_3finger_swipe_slow.png", .swipeLeft, 3, .any, .any, .slow, false, .missionControl),
-            ("preview_4finger_continuous.png", .swipeLeftRight, 4, .any, .noModifiers, .normal, true, .appSwitcherNext),
+            ("preview_4finger_continuous.png", .swipeLeftRight, 4, .any, .noModifiers, .normal, true, .switchAppNext),
             ("preview_4finger_forceclick.png", .forceClick, 4, .any, .noModifiers, .normal, false, .lockScreen)
         ]
 
@@ -146,7 +142,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 2. Verify Edge detection geometry
         let engine = EdgeGestureEngine(config: EdgeGestureEngine.Configuration(
             isEnabled: true,
-            topAction: .appSwitcher,
+            topAction: .nightShift,
             bottomAction: .keyboardBacklight,
             leftAction: .brightness,
             rightAction: .volume,
@@ -287,7 +283,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Every action, not just scroll — the cursor drifts the same way regardless.
-        for (index, action) in [EdgeAction.volume, .brightness, .scroll, .appSwitcher,
+        for (index, action) in [EdgeAction.volume, .brightness, .scroll,
                                 .keyboardBacklight, .nightShift].enumerated() {
             let engine = suppressionEngine(action)
             let id = Int32(50 + index)
@@ -369,8 +365,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("[TEST-EDGE] Commit hysteresis (loose to keep, strict to start) passed.")
 
         // 2d. Corners belong to no edge. With any real margin the four zones overlap
-        // there, so a corner touch has no correct owner — and it is also where the
-        // TrackPoint's corner activation lives.
+        // there, so a corner touch has no correct owner.
         let cornerEngine = EdgeGestureEngine(config: EdgeGestureEngine.Configuration(
             isEnabled: true,
             topAction: .volume, bottomAction: .volume, leftAction: .volume, rightAction: .volume,
@@ -388,30 +383,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(cornerEngine.activeEdge == .right, "Mid-edge touches must still be accepted")
         cornerEngine.consume(touch: nil, contacts: 0, timestamp: now + 1.04)
 
-        // With TrackPoint corner activation in use, the exclusion has to grow to
-        // cover its zone: 0.198 of the 97.8mm short axis is 19.4mm, so a touch 15.6mm
-        // up the right edge clears the 12mm floor but still lands in the corner zone.
-        func rightEdgeAccepted(cornerZone: Double, y: Float, id: Int32) -> Bool {
-            let engine = EdgeGestureEngine(config: EdgeGestureEngine.Configuration(
-                isEnabled: true,
-                topAction: .none, bottomAction: .none, leftAction: .none, rightAction: .volume,
-                marginMm: 12.0,
-                activationTravelMm: 4.0,
-                trackPointCornerZone: cornerZone
-            ))
-            let touch = GLDTouchPoint(identifier: id, state: 3, x: 0.99, y: y, vx: 0, vy: 0, size: 1)
-            engine.consume(touch: touch, contacts: 1, timestamp: now + 1.06)
-            let accepted = engine.activeEdge == .right
-            engine.consume(touch: nil, contacts: 0, timestamp: now + 1.08)
-            return accepted
-        }
-        assert(rightEdgeAccepted(cornerZone: 0, y: 0.16, id: 42),
-               "15.6mm up the edge is fine when TrackPoint has no corner zone")
-        assert(!rightEdgeAccepted(cornerZone: 0.198, y: 0.16, id: 43),
-               "The same spot must be refused when it falls inside the TrackPoint corner zone")
-        assert(rightEdgeAccepted(cornerZone: 0.198, y: 0.5, id: 44),
-               "The middle of the edge stays available regardless of the corner zone")
-        print("[TEST-EDGE] Corner exclusion (edge overlap + TrackPoint zone) passed.")
+        // Just past the 12mm corner floor is edge territory again: 15.6mm up the edge.
+        let nearCornerTouch = GLDTouchPoint(identifier: 42, state: 3, x: 0.99, y: 0.16, vx: 0, vy: 0, size: 1)
+        cornerEngine.consume(touch: nearCornerTouch, contacts: 1, timestamp: now + 1.06)
+        assert(cornerEngine.activeEdge == .right, "15.6mm up the edge clears the corner exclusion")
+        cornerEngine.consume(touch: nil, contacts: 0, timestamp: now + 1.08)
+        print("[TEST-EDGE] Corner exclusion passed.")
 
         // 2e. Committing must undo the pointer drift the pre-commit travel caused.
         // Suppression only stops drift from the commit onward; the events that moved
@@ -452,12 +429,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("[TEST-EDGE] Pre-commit cursor drift is undone on commit.")
         }
 
-        // 3. Verify App Switcher customization on different edges
-        engine.config.topAction = .appSwitcher
+        // 3. Verify customization on different edges
+        engine.config.topAction = .nightShift
         let topEdgePoint = GLDTouchPoint(identifier: 3, state: 3, x: 0.5, y: 0.98, vx: 0, vy: 0, size: 1)
         engine.consume(touch: topEdgePoint, contacts: 1, timestamp: now + 0.20)
-        assert(engine.activeEdge == .top, "Top edge touch must start top edge gesture (App Switcher)")
-        print("[TEST-EDGE] Customizable App Switcher scrub on Top edge passed.")
+        assert(engine.activeEdge == .top, "Top edge touch must start top edge gesture")
+        print("[TEST-EDGE] Customizable action on Top edge passed.")
 
         // 4. Verify scroll direction mapping.
         // Two coordinate spaces meet here: trackpad travel is positive up/right,
@@ -494,7 +471,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(!EdgeAction.volume.isContinuous, "Notched actions must not be continuous")
         assert(!EdgeAction.scroll.wantsHapticTicks, "Scroll must not fire a haptic per frame")
         assert(EdgeAction.volume.wantsHapticTicks, "Volume must keep its haptic ticks")
-        assert(!EdgeAction.appSwitcher.wantsHapticTicks, "App Switcher keeps its own haptics")
         print("[TEST-EDGE] Continuous-action classification passed.")
 
         // 6. Verify a scroll gesture claims pointer suppression and hands it back.
@@ -577,7 +553,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 7. Verify YAML Serialization round-trip
         var testConfig = GlideConfig()
         testConfig.edgeControls.enabled = true
-        testConfig.edgeControls.topEdge = "app_switcher"
+        testConfig.edgeControls.topEdge = "night_shift"
         testConfig.edgeControls.bottomEdge = "keyboard_backlight"
         testConfig.edgeControls.leftEdge = "brightness"
         testConfig.edgeControls.rightEdge = "volume"
@@ -588,7 +564,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             fatalError("Failed to parse emitted YAML with edge_controls")
         }
         assert(parsed.edgeControls.enabled == true)
-        assert(parsed.edgeControls.topEdge == "app_switcher")
+        assert(parsed.edgeControls.topEdge == "night_shift")
+        // The retired App Switcher edge switches the edge off on import.
+        var retiredEdge = GlideConfig()
+        retiredEdge.edgeControls.leftEdge = "app_switcher"
+        assert(retiredEdge.toEdgeControls().leftEdge == EdgeAction.none, "A retired app_switcher edge must become None")
         assert(parsed.edgeControls.bottomEdge == "keyboard_backlight")
         assert(parsed.edgeControls.leftEdge == "brightness")
         assert(parsed.edgeControls.rightEdge == "volume")
@@ -622,15 +602,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("[TEST-EDGE] Activation travel persistence and clamping passed.")
 
         // 8. Verify the scroll action and its tuning survive a YAML round-trip.
-        // `edge_controls` and `track_point` both carry scroll_speed / invert_scroll,
-        // so this also guards against the two sections bleeding into each other.
         var scrollConfig = GlideConfig()
         scrollConfig.edgeControls.rightEdge = "scroll"
         scrollConfig.edgeControls.scrollSpeed = 37.5
         scrollConfig.edgeControls.invertScroll = true
         scrollConfig.edgeControls.scrollMomentum = false
-        scrollConfig.trackPoint.scrollSpeed = 1234
-        scrollConfig.trackPoint.invertScroll = false
 
         guard let scrollParsed = GlideConfigParser.parse(yaml: GlideConfigSerializer.serialize(scrollConfig)) else {
             fatalError("Failed to parse emitted YAML with edge scroll settings")
@@ -639,8 +615,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(abs(scrollParsed.edgeControls.scrollSpeed - 37.5) < 0.01, "edge scroll_speed must round-trip")
         assert(scrollParsed.edgeControls.invertScroll == true, "edge invert_scroll must round-trip")
         assert(scrollParsed.edgeControls.scrollMomentum == false, "edge scroll_momentum must round-trip")
-        assert(abs(scrollParsed.trackPoint.scrollSpeed - 1234) < 0.01, "track_point scroll_speed must stay independent")
-        assert(scrollParsed.trackPoint.invertScroll == false, "track_point invert_scroll must stay independent")
+        // Files from before 2.11.0 still carry a retired `trackpoint:` block with its
+        // own scroll_speed / invert_scroll. It must import, and must not bleed into
+        // edge controls.
+        let legacyYAML = GlideConfigSerializer.serialize(scrollConfig).replacingOccurrences(
+            of: "  edge_controls:",
+            with: "  trackpoint:\n    enabled: true\n    scroll_speed: 1234.0\n    invert_scroll: false\n\n  edge_controls:")
+        guard let legacyParsed = GlideConfigParser.parse(yaml: legacyYAML) else {
+            fatalError("A config with a retired trackpoint block must still import")
+        }
+        assert(abs(legacyParsed.edgeControls.scrollSpeed - 37.5) < 0.01, "retired trackpoint scroll_speed must not leak")
+        assert(legacyParsed.edgeControls.invertScroll == true, "retired trackpoint invert_scroll must not leak")
 
         let mapped = scrollParsed.toEdgeControls()
         assert(mapped.rightEdge == .scroll, "\"scroll\" must map onto EdgeAction.scroll")
@@ -679,10 +664,13 @@ struct GestureApp: App {
     @StateObject private var engineBridge = EngineBridge.shared
 
     var body: some Scene {
-        MenuBarExtra("BetterGlideTool", systemImage: "hand.draw") {
+        MenuBarExtra {
             MenuBarView()
                 .environmentObject(preferencesStore)
                 .environmentObject(engineBridge)
+        } label: {
+            Image(nsImage: MenuBarIcon.image)
+                .accessibilityLabel("BetterGlideTool")
         }
         .menuBarExtraStyle(.menu)
 
@@ -858,6 +846,16 @@ final class EngineBridge: ObservableObject {
         }
     }
 
+    func recheckAccessibilityPermission() {
+        PreferencesStore.shared.refreshAccessibilityStatus()
+        if AccessibilityPermission.isGranted {
+            if isEnabled { GestureEngine.shared.start() }
+        } else {
+            GestureEngine.shared.stop()
+        }
+        syncTapHealthTimer()
+    }
+
     private func startAccessibilityMonitoring() {
         guard !AXIsProcessTrusted() else {
             PreferencesStore.shared.refreshAccessibilityStatus()
@@ -921,7 +919,8 @@ final class EngineBridge: ObservableObject {
     }
 
     private func resumeEngineIfAccessibilityGranted() {
-        guard AXIsProcessTrusted() else { return }
+        PreferencesStore.shared.refreshAccessibilityStatus()
+        guard AccessibilityPermission.isGranted else { return }
 
         stopAccessibilityMonitoring()
         PreferencesStore.shared.refreshAccessibilityStatus()

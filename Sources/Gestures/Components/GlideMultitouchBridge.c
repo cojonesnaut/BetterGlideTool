@@ -40,10 +40,11 @@ static int32_t last_forwarded_active_count = 0;
 static int32_t last_forwarded_identifiers[32];
 static float last_forwarded_x[32];
 static float last_forwarded_y[32];
+static float last_forwarded_size[32];
+static bool contact_details_enabled = false;
 static GLDTStatus last_start_status = GLDTStatusStartFailed;
-// Gesture rules all need 3+ contacts, so that is the default floor and sparser
-// frames never reach Swift. GLDTSetMinimumContactCount lowers it for features
-// that read fewer fingers (the corner TrackPoint).
+// Primary gesture rules need 3+ contacts. Supplemental taps, edge controls and
+// live contact monitoring lower the floor when they need fewer fingers.
 static int32_t minimum_contact_count = 3;
 
 // MultitouchSupport can deliver substantially faster than the app can display or act on.
@@ -54,22 +55,23 @@ static const double gesture_frame_interval = 1.0 / 60.0;
 // against the last delivered positions so genuine slow movement still accumulates.
 static const float gesture_position_delta = 0.0015f;
 
-// Sparse frames — fewer contacts than any gesture rule needs — exist only for the
-// TrackPoint, which integrates a direction continuously rather than matching a
-// discrete gesture, and so wants every sample the hardware produces.
+// Sparse frames — fewer contacts than any gesture rule needs — feed features that
+// follow one finger continuously, such as edge scrolling, rather than matching a
+// discrete gesture, and so want every sample the hardware produces.
 //
 // The ceiling matters more than it looks: capping at 60 Hz against a trackpad that
 // reports at ~82 Hz beats down to 41 Hz, because every second frame lands inside the
 // interval and is dropped. That is fine for gesture matching and visibly steppy for
-// a pointing stick. Well under the hardware period, so no frame is ever skipped, and
+// continuous motion. Well under the hardware period, so no frame is ever skipped, and
 // the gesture path keeps its own ceiling untouched.
 static const double sparse_frame_interval = 1.0 / 240.0;
 static const float sparse_position_delta = 0.0004f;
 
-static bool contacts_moved_meaningfully(
+static bool contacts_changed_meaningfully(
     const int32_t *identifiers,
     const float *x,
     const float *y,
+    const float *size,
     int32_t active_count,
     float minimum_position_delta
 ) {
@@ -86,7 +88,9 @@ static bool contacts_moved_meaningfully(
         }
         if (previous_index < 0 ||
             fabsf(x[current_index] - last_forwarded_x[previous_index]) >= minimum_position_delta ||
-            fabsf(y[current_index] - last_forwarded_y[previous_index]) >= minimum_position_delta) {
+            fabsf(y[current_index] - last_forwarded_y[previous_index]) >= minimum_position_delta ||
+            (contact_details_enabled &&
+             fabsf(size[current_index] - last_forwarded_size[previous_index]) >= 0.01f)) {
             return true;
         }
     }
@@ -97,6 +101,7 @@ static void remember_forwarded_contacts(
     const int32_t *identifiers,
     const float *x,
     const float *y,
+    const float *size,
     int32_t active_count
 ) {
     last_forwarded_active_count = active_count;
@@ -104,6 +109,7 @@ static void remember_forwarded_contacts(
         last_forwarded_identifiers[index] = identifiers[index];
         last_forwarded_x[index] = x[index];
         last_forwarded_y[index] = y[index];
+        last_forwarded_size[index] = size[index];
     }
 }
 
@@ -130,11 +136,13 @@ static int contact_frame_callback(
     int32_t active_identifiers[32];
     float active_x[32];
     float active_y[32];
+    float active_size[32];
     for (int32_t index = 0; index < count; index++) {
         if (touches[index].state == 3 || touches[index].state == 4) {
             active_identifiers[active_count] = touches[index].identifier;
             active_x[active_count] = touches[index].normalized.position.x;
             active_y[active_count] = touches[index].normalized.position.y;
+            active_size[active_count] = touches[index].size;
             active_count++;
         }
     }
@@ -157,21 +165,29 @@ static int contact_frame_callback(
         bool interval_elapsed =
             timestamp <= last_forwarded_timestamp ||
             timestamp - last_forwarded_timestamp >= minimum_frame_interval;
-        bool moved = contacts_moved_meaningfully(
+        bool changed = contacts_changed_meaningfully(
             active_identifiers,
             active_x,
             active_y,
+            active_size,
             active_count,
             minimum_position_delta
         );
         forwarding_gesture = true;
-        should_forward = started || contact_count_changed || (interval_elapsed && moved);
+        // Supplemental tap recognition needs contact-size growth and evidence
+        // that resting anchors are still present. Without a heartbeat, a long
+        // stationary rest looks like an input outage to the recognizer.
+        bool heartbeat_due = contact_details_enabled &&
+            timestamp - last_forwarded_timestamp >= 0.25;
+        should_forward = started || contact_count_changed ||
+            (interval_elapsed && (changed || heartbeat_due));
         if (should_forward) {
             last_forwarded_timestamp = timestamp;
             remember_forwarded_contacts(
                 active_identifiers,
                 active_x,
                 active_y,
+                active_size,
                 active_count
             );
         }
@@ -246,6 +262,12 @@ bool GLDTIsDeviceRunning(void) {
         return true;
     }
     return current_is_running(current_device);
+}
+
+void GLDTSetContactDetailsEnabled(bool enabled) {
+    pthread_mutex_lock(&state_lock);
+    contact_details_enabled = enabled;
+    pthread_mutex_unlock(&state_lock);
 }
 
 void GLDTSetMinimumContactCount(int32_t count) {
@@ -345,7 +367,7 @@ bool GLDTStart(GLDTFrameCallback callback, void *context) {
         return false;
     }
 
-    // Never feed mouse touches into trackpad-only edge/TrackPoint recognizers.
+    // Never feed mouse touches into trackpad-only edge recognizers.
     typedef int32_t (*GetFamilyFunction)(MTDeviceRef, int32_t *);
     GetFamilyFunction get_family = (GetFamilyFunction)dlsym(handle, "MTDeviceGetFamilyID");
     int32_t family = 0;

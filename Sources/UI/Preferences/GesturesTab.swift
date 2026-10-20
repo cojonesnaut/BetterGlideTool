@@ -8,6 +8,7 @@ import SwiftUI
 // ─────────────────────────────────────────────
 
 struct GesturesTab: View {
+    var device: GestureDevice = .trackpad
     @EnvironmentObject var store: PreferencesStore
     @State private var selectedRule: GestureRule.ID? = nil
     @State private var searchText = ""
@@ -17,7 +18,7 @@ struct GesturesTab: View {
 
     private var visibleGroups: [(fingers: Int, rules: [GestureRule])] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        return store.rulesGroupedByFingers().compactMap { group in
+        return store.rulesGroupedByFingers(device: device).compactMap { group in
             if let f = fingerFilter, group.fingers != f { return nil }
             let rules = q.isEmpty ? group.rules : group.rules.filter {
                 $0.displayName.lowercased().contains(q)
@@ -32,6 +33,10 @@ struct GesturesTab: View {
         HSplitView {
             // ── Left: rule list ──
             VStack(spacing: 0) {
+                if device == .magicMouse {
+                    Button("Magic Mouse Tuning…") { PreferencesNavigator.shared.tab = .tuning }
+                        .padding(8)
+                }
                 listHeader
 
                 List(selection: $selectedRule) {
@@ -53,7 +58,7 @@ struct GesturesTab: View {
                                     }
                             }
                         } header: {
-                            Label("\(group.fingers) Fingers", systemImage: "hand.raised")
+                            Label(group.fingers == 1 ? "Single Finger Gestures" : "\(group.fingers) Finger Gestures", systemImage: "hand.raised")
                                 .font(.caption.bold())
                         }
                     }
@@ -68,7 +73,7 @@ struct GesturesTab: View {
 
                 HStack {
                     Button {
-                        let id = store.addRule()
+                        let id = store.addRule(fingers: fingerFilter ?? (device == .magicMouse ? 2 : 3), device: device)
                         searchText = ""; fingerFilter = nil
                         selectedRule = id
                     } label: {
@@ -79,7 +84,7 @@ struct GesturesTab: View {
 
                     Spacer()
 
-                    Text("\(store.rules.filter(\.isActive).count) active · \(store.rules.filter { !$0.isDraft }.count) total")
+                    Text("\(store.rules.filter { $0.device == device && !$0.isKeyboardBinding && $0.isActive }.count) active · \(store.rules.filter { $0.device == device && !$0.isKeyboardBinding && !$0.isDraft }.count) total")
                         .foregroundStyle(.secondary)
                         .font(.caption)
                         .padding(8)
@@ -148,9 +153,13 @@ struct GesturesTab: View {
 
             Picker("", selection: $fingerFilter) {
                 Text("All").tag(Int?.none)
+                Text("1").tag(Int?.some(1))
+                Text("2").tag(Int?.some(2))
                 Text("3").tag(Int?.some(3))
                 Text("4").tag(Int?.some(4))
-                Text("5").tag(Int?.some(5))
+                if device == .trackpad {
+                    Text("5").tag(Int?.some(5))
+                }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -231,7 +240,7 @@ struct TriggerBadge: View {
                 } else {
                     Image(systemName: directionIcon)
                         .font(.system(size: 11, weight: .bold))
-                    Text(rule.direction.rawValue)
+                    Text(rule.direction.title(fingers: rule.fingers))
                         .font(.system(size: 11, weight: .bold))
                 }
             }
@@ -258,8 +267,8 @@ struct RuleRow: View {
         if rule.direction.hasSpeed && rule.speed != .any {
             parts.append(rule.speed.rawValue)
         }
-        if rule.appFilter != nil {
-            parts.append(store.appFilterLabel(for: rule.appFilter))
+        if !rule.effectiveAppFilters.isEmpty {
+            parts.append(rule.effectiveAppFilters.map { store.appFilterLabel(for: $0) }.joined(separator: ", "))
         }
         return parts.joined(separator: " · ")
     }
@@ -333,9 +342,7 @@ struct RuleEditor: View {
     }
 
     private var categorizedActions: [(String, [GestureAction])] {
-        GestureAction.catalog.map { category, actions in
-            (category, actions.filter { !Settings.isAppSwitcherAction($0) })
-        }
+        [( "Mouse", [GestureAction.leftClick, .rightClick, .middleClick])] + GestureAction.catalog
     }
 
     private var continuousActions: [(String, [GestureAction])] {
@@ -343,6 +350,7 @@ struct RuleEditor: View {
             let filtered = actions.filter {
                 $0 != .openApp && $0 != .customMenuItem
                     && $0 != .runShortcut && $0 != .runShellCommand && $0 != .runAppleScript
+                    && $0 != .stageMatching && $0 != .stagePosition
             }
             return filtered.isEmpty ? nil : (category, filtered)
         }
@@ -350,11 +358,6 @@ struct RuleEditor: View {
 
     private var supportsContinuousGestures: Bool {
         rule.direction == .swipeLeftRight || rule.direction == .swipeUpDown
-    }
-
-    private var reservedBanner: String? {
-        guard store.appSwitcher.enabled else { return nil }
-        return "Plain 3-finger swipes left/right are reserved for App Switcher. Use a modifier key (e.g. Shift) here to assign a different action on the same swipe."
     }
 
     var body: some View {
@@ -408,27 +411,13 @@ struct RuleEditor: View {
 
             Divider()
 
-            // ── Reserved banner ──
-            if let banner = reservedBanner,
-               store.isDirectionReservedByAppSwitcher(fingers: rule.fingers, direction: rule.direction,
-                                                      modifierFilter: rule.modifierFilter) {
-                HStack(spacing: 8) {
-                    Image(systemName: "rectangle.2.swap").foregroundStyle(.orange)
-                    Text(banner).font(.caption).foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.orange.opacity(0.07))
-                Divider()
-            }
-
-            // ── Trackpad gesture animation preview ──
+            // ── Gesture animation, and the device's live contacts ──
             if !rule.isKeyboardBinding {
                 VStack(spacing: 0) {
                     GestureAnimationView(rule: rule)
-                        .padding(.vertical, 12)
+                        .id("\(rule.id)-\(rule.device.rawValue)")
                 }
+                .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)
                 .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
                 Divider()
@@ -458,42 +447,63 @@ struct RuleEditor: View {
                             }
                         }
                     } else {
-                        let availableDirections = GestureDirection.allCases.filter {
-                            !store.isDirectionReservedByAppSwitcher(fingers: rule.fingers, direction: $0,
-                                                                    modifierFilter: rule.modifierFilter)
-                        }
+                        let availableDirections = GestureDirection.available(fingers: rule.fingers, device: rule.device)
 
                         Picker("Fingers", selection: $rule.fingers) {
-                            ForEach(3...5, id: \.self) { f in Text("\(f)").tag(f) }
+                            ForEach(1...(rule.device == .magicMouse ? 4 : 5), id: \.self) { f in Text("\(f)").tag(f) }
                         }
                         .pickerStyle(.segmented)
                         .onChange(of: rule.fingers) { _ in
-                            if store.isDirectionReservedByAppSwitcher(fingers: rule.fingers, direction: rule.direction,
-                                                                      modifierFilter: rule.modifierFilter),
-                               let fallback = availableDirections.first { rule.direction = fallback }
+                            if !GestureDirection.available(fingers: rule.fingers, device: rule.device).contains(rule.direction) {
+                                rule.direction = GestureDirection.available(fingers: rule.fingers, device: rule.device)[0]
+                            }
+                            if rule.fingers <= 2 || rule.device == .magicMouse { rule.speed = .normal; rule.continuous = false; rule.reciprocalEnabled = false }
                         }
 
                         Picker("Gesture", selection: $rule.direction) {
                             ForEach(availableDirections, id: \.self) { dir in
-                                Label(dir.rawValue, systemImage: dir.iconName).tag(dir)
+                                Label(dir.title(fingers: rule.fingers), systemImage: dir.iconName).tag(dir)
                             }
-                        }
-                        .onChange(of: rule.modifierFilter) { _ in
-                            if store.isDirectionReservedByAppSwitcher(fingers: rule.fingers, direction: rule.direction,
-                                                                      modifierFilter: rule.modifierFilter),
-                               let fallback = availableDirections.first { rule.direction = fallback }
                         }
                         .onChange(of: rule.direction) { _ in
                             if !supportsContinuousGestures { rule.continuous = false }
                         }
 
+                        if rule.device == .trackpad && rule.fingers <= 2 {
+                            Text("Tap or swipe once, then lift all fingers. Native pointing, scrolling, and tap-to-click remain enabled; use a modifier to distinguish custom swipes from everyday movement.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if rule.device == .trackpad && (rule.direction.isCircle || rule.direction.isCornerClick || rule.direction == .tapTop || rule.direction == .tapBottom) {
+                            Text(rule.direction.isCircle ? "Draw one closed circle, then lift. If a one-finger swipe is also assigned, it waits for lift so the path can choose one action." : (rule.direction.isCornerClick ? "Place one finger inside the outer 20% of both edges at this corner, then physically click. The normal click also passes through." : "Top and Bottom use the average landing position of all three fingers. A matching regional rule takes priority over a general tap within the same app scope."))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if rule.device == .magicMouse && rule.fingers == 1 {
+                            Text("Middle covers the central 20% of the touch surface. Above Apple covers the lower central area above the logo. A regional tap takes priority over a general tap within the same app scope. Middle Click requires a physical press with one finger in the middle.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if rule.direction.usesThreeFixedFingers {
+                            Text("Rest three fingers first. Tap and lift a fourth finger to their left or right while all three stay still. Keep the resting fingers down to repeat; lift only the tapping finger between taps. Adjust sensitivity and spacing under Tuning → TipTaps.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if rule.direction.usesTwoFixedFingers {
+                            Text(rule.device == .trackpad ? "Rest two fingers, then tap and lift a third. With both Left and Right TipTaps assigned, you can also rest three fingers and lift either outer finger to fire that side. Keep the middle finger down when alternating; lowering a finger does not fire. For TipSwipe, slide the left finger while the other two stay still." : "Rest two fingers first. For TipTap, tap and lift a third finger on the indicated side or between them. For TipSwipe, slide the left finger in the selected direction while the other two stay still. Keep the resting fingers down to repeat; lift the tapping or moving finger between strokes. Timing follows Tuning → TipTap timing.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if rule.direction == .tipTapLeft || rule.direction == .tipTapRight {
+                            Text("Keep one finger resting. Tap to its left or right with the other finger, then lift only the tapping finger. Adjust rest time and minimum tap duration in Tuning → TipTap timing.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if rule.direction == .doubleTap {
+                            Text("Tap with \(rule.fingers) fingers twice within 0.30 seconds. When Double-Tap is assigned, a single Tap waits briefly so both actions cannot fire together.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         Picker("Modifier", selection: $rule.modifierFilter) {
                             ForEach(ModifierFilter.allCases, id: \.self) { m in
                                 Text(m.rawValue).tag(m)
                             }
                         }
 
-                        if rule.direction.hasSpeed {
+                        if rule.device == .trackpad && rule.direction.hasSpeed && rule.fingers >= 3 {
                             Picker("Speed", selection: $rule.speed) {
                                 ForEach(GestureSpeed.allCases, id: \.self) { s in
                                     Text(s.rawValue.capitalized).tag(s)
@@ -524,6 +534,7 @@ struct RuleEditor: View {
                         primaryActionRows
                     }
 
+                    if rule.device == .trackpad {
                     Picker("Haptic", selection: Binding<HapticPattern?>(
                         get: { rule.hapticPattern },
                         set: { newValue in
@@ -542,6 +553,7 @@ struct RuleEditor: View {
                             .onChange(of: rule.continuous) { enabled in
                                 if enabled { rule.reciprocalEnabled = false; rule.reciprocalAction = nil }
                             }
+                    }
                     }
                 } header: {
                     Text("Do")
@@ -574,13 +586,7 @@ struct RuleEditor: View {
                 // CONDITIONS (collapsed by default)
                 Section {
                     DisclosureGroup("Conditions", isExpanded: $showConditions) {
-                        Picker("App", selection: $rule.appFilter) {
-                            Text("Any App").tag(String?.none)
-                            Divider()
-                            ForEach(store.runningApps()) { app in
-                                Text(app.name).tag(String?.some(app.bundleID))
-                            }
-                        }
+                        AppConditionsPicker(rule: $rule)
 
                         Picker("Window State", selection: $rule.windowStateFilter) {
                             ForEach(WindowStateFilter.allCases, id: \.self) { w in
@@ -588,7 +594,7 @@ struct RuleEditor: View {
                             }
                         }
 
-                        if rule.direction.hasSpeed && !rule.continuous {
+                        if rule.device == .trackpad && rule.direction.hasSpeed && rule.fingers >= 3 && !rule.continuous {
                             Toggle("Reverse Gesture Undoes Action", isOn: $rule.reciprocalEnabled)
 
                             if rule.reciprocalEnabled {
@@ -598,7 +604,7 @@ struct RuleEditor: View {
                                 )) {
                                     ForEach(categorizedActions, id: \.0) { cat, actions in
                                         Section(cat) {
-                                            ForEach(actions, id: \.self) { action in
+                                            ForEach(actions.filter { $0 != .stageMatching && $0 != .stagePosition }, id: \.self) { action in
                                                 Label(action.rawValue, systemImage: action.iconName).tag(action)
                                             }
                                         }
@@ -669,6 +675,8 @@ struct RuleEditor: View {
                 .onDisappear { if rule.menuItemPath != nil { store.markRuleConfigured(rule.id) } }
             }
         }
+
+        DesktopActionOptionsView(rule: $rule)
 
         if rule.action == .openApp {
             LabeledContent("App") {
@@ -943,14 +951,16 @@ extension GestureAction {
     var iconName: String {
         switch self {
         // App control
+        case .spaceLeftInstant, .windowSpaceLeft: return "arrow.left.square"
+        case .spaceRightInstant, .windowSpaceRight: return "arrow.right.square"
+        case .stagePosition, .stageNext, .stagePrevious, .stageMatching, .stageMenu, .stageToggle, .stageRecentToggle: return "sidebar.squares.left"
+        case .leftClick, .rightClick, .middleClick: return "computermouse"
         case .quitApp:            return "power"
         case .forceQuitApp:       return "xmark.octagon"
         case .quitFrontmost:      return "stop.circle"
         case .hideApp:            return "eye.slash"
         case .hideOthers:         return "eye.slash.fill"
         case .openApp:            return "app"
-        case .appSwitcherNext:    return "arrow.right.square"
-        case .appSwitcherPrev:    return "arrow.left.square"
         case .switchAppNext:      return "chevron.right.circle"
         case .switchAppPrev:      return "chevron.left.circle"
         case .customMenuItem:     return "list.bullet.rectangle"
@@ -960,28 +970,30 @@ extension GestureAction {
         case .runShellCommand:    return "terminal"
         case .runAppleScript:     return "applescript"
         // Window management
-        case .minimizeWindow:     return "minus.square"
+        case .minimizeWindow:     return "minus.rectangle"
         case .minimizeAllApps:    return "minus.square.fill"
         case .restoreMinimizedApps: return "square.stack"
-        case .maximizeWindow:     return "plus.square"
-        case .restoreWindow:      return "arrow.down.right.and.arrow.up.left"
-        case .closeWindow:        return "xmark.square"
-        case .enterFullscreen:    return "arrow.up.backward.and.arrow.down.forward"
-        case .exitFullscreen:     return "arrow.down.right.and.arrow.up.left.square"
+        case .maximizeWindow:     return "rectangle.arrowtriangle.2.outward"
+        case .restoreWindow:      return "rectangle.arrowtriangle.2.inward"
+        case .closeWindow:        return "xmark.rectangle"
+        case .enterFullscreen:    return "arrow.up.left.and.arrow.down.right.rectangle"
+        case .exitFullscreen:     return "arrow.down.right.and.arrow.up.left.rectangle"
         case .toggleFullscreen:   return "arrow.up.left.and.arrow.down.right"
-        case .cycleWindows:       return "rectangle.on.rectangle"
+        case .cycleWindows:       return "macwindow.on.rectangle"
         case .snapLeft:           return "rectangle.lefthalf.inset.filled"
         case .snapRight:          return "rectangle.righthalf.inset.filled"
-        case .snapTopLeft:        return "rectangle.leadingthird.inset.filled"
-        case .snapTopRight:       return "rectangle.trailingthird.inset.filled"
-        case .snapBottomLeft:     return "square.bottomthird.inset.filled"
-        case .snapBottomRight:    return "square.leadingthird.inset.filled"
-        case .centerWindow:       return "square.center.inset.filled"
+        case .snapTopLeft:        return "rectangle.inset.topleft.filled"
+        case .snapTopRight:       return "rectangle.inset.topright.filled"
+        case .snapBottomLeft:     return "rectangle.inset.bottomleft.filled"
+        case .snapBottomRight:    return "rectangle.inset.bottomright.filled"
+        case .centerWindow:       return "rectangle.center.inset.filled"
+        case .tileFill:           return "rectangle.inset.filled"
+        case .tileRestore:        return "arrow.uturn.backward.square"
         case .moveNextDisplay:    return "display.2"
         // Mission Control
         case .missionControl:     return "rectangle.3.group"
         case .appExpose:          return "uiwindow.split.2x1"
-        case .showDesktop:        return "macwindow"
+        case .showDesktop:        return "menubar.dock.rectangle"
         case .launchpad:          return "square.grid.3x3"
         // Screenshots
         case .screenshotArea:           return "viewfinder"
@@ -1014,7 +1026,12 @@ extension GestureAction {
 extension GestureDirection {
     var iconName: String {
         switch self {
-        case .click: return "hand.point.up.left"
+        case .circleClockwise: return "arrow.clockwise"
+        case .circleCounterClockwise: return "arrow.counterclockwise"
+        case .cornerBottomLeft, .cornerBottomRight, .cornerTopLeft, .cornerTopRight: return "hand.point.up.left"
+        case .tapTop, .tapBottom, .tipTapThreeLeft, .tipTapThreeRight, .tipSwipeLeftLeft, .tipSwipeLeftRight, .doubleTap, .tipTapLeft, .tipTapRight, .tipTapTwoLeft, .tipTapTwoMiddle, .tipTapTwoRight, .tipSwipeLeftUp, .tipSwipeLeftDown, .leftTap, .rightTap, .middleTap, .aboveAppleTap: return "hand.tap"
+        case .tap: return "hand.tap"
+        case .click, .middleClick: return "hand.point.up.left"
         case .forceClick: return "hand.point.up.left.fill"
         case .tapHold: return "hand.tap.fill"
         case .swipeLeftRight: return "arrow.left.and.right"
