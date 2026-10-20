@@ -143,7 +143,7 @@ The four-finger menu offers **4 Finger Click** and **4 Finger Swipe Up/Down/Left
 
 ## Trackpad additions and TipTap controls (2.10)
 
-Trackpad now also offers one-finger clockwise/counter-clockwise circles, the four corner clicks, **3 Finger Tap Top/Bottom**, horizontal **TipSwipe Left Finger Left/Right (2 Fingers Fix)**, **4 Finger Tap**, **4 Finger Double Tap**, and **TipTap Left/Right (3 Fingers Fix)**. Existing four-finger click, force-click and swipes remain available. Circles execute on lift; if a one-finger swipe is also assigned, the completed path chooses one action.
+Trackpad now also offers one-finger clockwise/counter-clockwise circles, the four corner clicks, **3 Finger Tap Top/Bottom**, horizontal **TipSwipe Left Finger Left/Right (2 Fingers Fix)**, **4 Finger Tap**, **4 Finger Double Tap**, and **TipTap Left/Right (3 Fingers Fix)**. Existing four-finger click, force-click and swipes remain available. Circles fire while you draw, at 0.8 of a turn and again for every further full turn; if a one-finger swipe is also assigned, a straight path fires it on lift. The Magic Mouse offers the same one-finger circles; there the page keeps scrolling under the finger, and a straight path beside a circle binding counts as a swipe only if it was a flick.
 
 Each device’s **Tuning → TipTaps** has separate contact-size sensitivity controls. Trackpad adds finger-movement and spacing controls; Magic Mouse adds **Allow sensitive TipTaps**, initially off to reduce accidental touches. Timing controls above still apply. These settings do not change macOS preferences. See the [gesture and tuning notes](docs/14-trackpad-additions.md).
 

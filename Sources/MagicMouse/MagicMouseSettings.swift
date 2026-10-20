@@ -31,7 +31,7 @@ enum MagicMouseGesture: String, CaseIterable, Codable, Identifiable {
     var isCircle: Bool { self == .circleClockwise || self == .circleCounterClockwise }
     var usesThreeFixedFingers: Bool { self == .tipTapThreeLeft || self == .tipTapThreeRight }
     var usesFixedFingers: Bool { usesTwoFixedFingers || usesThreeFixedFingers }
-    var trackpadOnly: Bool { isCornerClick || isCircle || usesThreeFixedFingers || [.fourFingerTap, .fourFingerDoubleTap, .tipSwipeLeftLeft, .tipSwipeLeftRight].contains(self) }
+    var trackpadOnly: Bool { isCornerClick || usesThreeFixedFingers || [.fourFingerTap, .fourFingerDoubleTap, .tipSwipeLeftLeft, .tipSwipeLeftRight].contains(self) }
     var usesSupplementalTrackpadRecognizer: Bool {
         (fingers <= 2 && ![.middleTap, .aboveAppleTap, .oneFingerMiddleClick].contains(self)) ||
         [.threeFingerTap, .threeFingerDoubleTap, .fourFingerTap, .fourFingerDoubleTap].contains(self) || usesFixedFingers
@@ -178,6 +178,15 @@ struct MagicMouseSettings: Equatable {
     static let flickDistance = 0.12
     /// Speed is taken over at least this window, as in the measurements.
     static let flickWindow = 0.045
+    /// One-finger circles fire live, BetterTouchTool-style: at this fraction
+    /// of a full turn (its default, 0.8), then once per further full turn.
+    static let circleTurns = 0.8
+    /// For a first trigger at one turn or less, the circle must come within
+    /// this many seconds of the touch, as in BetterTouchTool, so a slowly
+    /// curving scroll never becomes a circle.
+    static let circleTimeLimit = 2.5
+    /// Smallest span of the loop on either axis, against tiny jitter loops.
+    static let circleMinimumSize = 0.06
     func isFlick(fingers: Int) -> Bool {
         (fingers == 1 && tipTapSpacingGeometry == .magicMouse) || (fingers == 2 && tipTapSpacingGeometry == .surface)
     }

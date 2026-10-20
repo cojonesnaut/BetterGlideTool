@@ -63,7 +63,14 @@ enum GestureDirection: String, Codable, CaseIterable {
             return shared + (device == .trackpad ? [.tapTop, .tapBottom, .tipSwipeLeftLeft, .tipSwipeLeftRight, .forceClick, .tapHold, .swipeLeftRight, .swipeUpDown] : [])
         }
         if fingers == 2 { return [.tap, .doubleTap, .tipTapLeft, .tipTapRight, .click, .swipeLeft, .swipeRight, .swipeUp, .swipeDown] }
-        if fingers == 1 { return (device == .magicMouse ? [.tap, .leftTap, .rightTap, .middleClick, .middleTap, .aboveAppleTap] : [.tap, .circleClockwise, .circleCounterClockwise, .cornerBottomLeft, .cornerBottomRight, .cornerTopLeft, .cornerTopRight]) + [.swipeLeft, .swipeRight, .swipeUp, .swipeDown] }
+        if fingers == 1 {
+            if device == .magicMouse {
+                return [.tap, .leftTap, .rightTap, .middleClick, .middleTap, .aboveAppleTap, .swipeLeft, .swipeRight, .swipeUp, .swipeDown,
+                        .circleClockwise, .circleCounterClockwise]
+            }
+            return [.tap, .circleClockwise, .circleCounterClockwise, .cornerBottomLeft, .cornerBottomRight, .cornerTopLeft, .cornerTopRight,
+                    .swipeLeft, .swipeRight, .swipeUp, .swipeDown]
+        }
         if device == .magicMouse { return [.tap] }
         return [.click, .forceClick, .tapHold, .swipeLeftRight, .swipeUpDown, .swipeLeft, .swipeRight, .swipeUp, .swipeDown]
     }

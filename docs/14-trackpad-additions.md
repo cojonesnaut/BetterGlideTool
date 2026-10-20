@@ -2,7 +2,7 @@
 
 ## Gestures
 
-- **1 Finger Circle Clockwise / Counter-Clockwise:** draw a closed loop, then lift. The path must span at least 10% of each sensor dimension and finish within three seconds. Very small loops, open arcs, backtracking and additional fingers are rejected. When one-finger swipes are also assigned, a straight path fires its swipe on lift instead of firing halfway around a circle. Normal pointer motion continues.
+- **1 Finger Circle Clockwise / Counter-Clockwise:** draw a circle; it fires while you draw, once the finger has turned 0.8 of a full turn, and again for every further full turn (as BetterTouchTool does). The first trigger must come within 2.5 seconds of the touch. Reversing or turning back the other way starts over, and the loop must span at least 6% of each sensor dimension. When one-finger swipes are also assigned, a straight path fires its swipe on lift. Normal pointer motion continues.
 - **Corner Click Bottom Left / Bottom Right / Top Left / Top Right:** one finger in the outer 20% of both corresponding edges plus a physical click. The native click also passes through. Unidentified devices do not trigger custom corner clicks.
 - **3 Finger Tap Top / Bottom:** the average initial position of all three contacts is in the upper/lower half. App conditions take priority, then regional rules, then the general three-finger tap. Double-tap arbitration still postpones the matching single tap.
 - **TipSwipe Left Finger Left / Right (2 Fingers Fix):** rest two fingers, then place another to their left and slide it horizontally while both anchors stay still. Existing up/down TipSwipes remain available.

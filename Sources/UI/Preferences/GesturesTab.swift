@@ -411,12 +411,13 @@ struct RuleEditor: View {
 
             Divider()
 
-            // ── Trackpad gesture animation preview ──
+            // ── Gesture animation, and the device's live contacts ──
             if !rule.isKeyboardBinding {
                 VStack(spacing: 0) {
                     GestureAnimationView(rule: rule)
-                        .padding(.vertical, 12)
+                        .id("\(rule.id)-\(rule.device.rawValue)")
                 }
+                .padding(.vertical, 12)
                 .frame(maxWidth: .infinity)
                 .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
                 Divider()
@@ -952,7 +953,7 @@ extension GestureAction {
         // App control
         case .spaceLeftInstant, .windowSpaceLeft: return "arrow.left.square"
         case .spaceRightInstant, .windowSpaceRight: return "arrow.right.square"
-        case .stagePosition, .stageNext, .stagePrevious, .stageMatching, .stageMenu, .stageToggle, .stageRecentToggle: return "rectangle.leadingthird.inset.filled"
+        case .stagePosition, .stageNext, .stagePrevious, .stageMatching, .stageMenu, .stageToggle, .stageRecentToggle: return "sidebar.squares.left"
         case .leftClick, .rightClick, .middleClick: return "computermouse"
         case .quitApp:            return "power"
         case .forceQuitApp:       return "xmark.octagon"
@@ -969,30 +970,30 @@ extension GestureAction {
         case .runShellCommand:    return "terminal"
         case .runAppleScript:     return "applescript"
         // Window management
-        case .minimizeWindow:     return "minus.square"
+        case .minimizeWindow:     return "minus.rectangle"
         case .minimizeAllApps:    return "minus.square.fill"
         case .restoreMinimizedApps: return "square.stack"
-        case .maximizeWindow:     return "plus.square"
-        case .restoreWindow:      return "arrow.down.right.and.arrow.up.left"
-        case .closeWindow:        return "xmark.square"
-        case .enterFullscreen:    return "arrow.up.backward.and.arrow.down.forward"
-        case .exitFullscreen:     return "arrow.down.right.and.arrow.up.left.square"
+        case .maximizeWindow:     return "rectangle.arrowtriangle.2.outward"
+        case .restoreWindow:      return "rectangle.arrowtriangle.2.inward"
+        case .closeWindow:        return "xmark.rectangle"
+        case .enterFullscreen:    return "arrow.up.left.and.arrow.down.right.rectangle"
+        case .exitFullscreen:     return "arrow.down.right.and.arrow.up.left.rectangle"
         case .toggleFullscreen:   return "arrow.up.left.and.arrow.down.right"
-        case .cycleWindows:       return "rectangle.on.rectangle"
+        case .cycleWindows:       return "macwindow.on.rectangle"
         case .snapLeft:           return "rectangle.lefthalf.inset.filled"
         case .snapRight:          return "rectangle.righthalf.inset.filled"
-        case .snapTopLeft:        return "rectangle.leadingthird.inset.filled"
-        case .snapTopRight:       return "rectangle.trailingthird.inset.filled"
-        case .snapBottomLeft:     return "square.bottomthird.inset.filled"
-        case .snapBottomRight:    return "square.leadingthird.inset.filled"
-        case .centerWindow:       return "square.center.inset.filled"
+        case .snapTopLeft:        return "rectangle.inset.topleft.filled"
+        case .snapTopRight:       return "rectangle.inset.topright.filled"
+        case .snapBottomLeft:     return "rectangle.inset.bottomleft.filled"
+        case .snapBottomRight:    return "rectangle.inset.bottomright.filled"
+        case .centerWindow:       return "rectangle.center.inset.filled"
         case .tileFill:           return "rectangle.inset.filled"
         case .tileRestore:        return "arrow.uturn.backward.square"
         case .moveNextDisplay:    return "display.2"
         // Mission Control
         case .missionControl:     return "rectangle.3.group"
         case .appExpose:          return "uiwindow.split.2x1"
-        case .showDesktop:        return "macwindow"
+        case .showDesktop:        return "menubar.dock.rectangle"
         case .launchpad:          return "square.grid.3x3"
         // Screenshots
         case .screenshotArea:           return "viewfinder"

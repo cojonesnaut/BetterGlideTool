@@ -397,13 +397,14 @@ struct MagicMouseTests {
         for (sign, gesture) in [(-1.0, MagicMouseGesture.circleClockwise), (1.0, .circleCounterClockwise)] {
             settings = MagicMouseSettings(); settings.bindings = [gesture: .showDesktop, .oneFingerSwipeLeft: .snapLeft, .oneFingerSwipeRight: .snapRight]
             r.reset()
+            var fires: [Int] = []
             for index in 0...48 {
                 let angle = Double(index) / 48 * .pi * 2 * sign
                 let result = r.consume([MouseContact(id: 1, x: 0.5 + cos(angle) * 0.15, y: 0.5 + sin(angle) * 0.13)], timestamp: 350 + Double(index) * 0.02, settings: settings)
-                expect(result == nil, "Circle cannot prematurely fire a swipe or tap")
+                if let result { expect(result == gesture, "Circle follows its winding direction"); fires.append(index) }
             }
-            expect(r.consume([], timestamp: 351, settings: settings) == gesture, "Closed circle follows its winding direction")
-            expect(r.consume([], timestamp: 351.1, settings: settings) == nil, "Circle only fires once")
+            expect(fires.count == 1 && (36...42).contains(fires[0]), "Circle fires once, live, at 0.8 of a turn")
+            expect(r.consume([], timestamp: 351, settings: settings) == nil, "A fired circle does not fire again on lift")
             r.reset()
             for index in 0...20 {
                 let angle = Double(index) / 40 * .pi * 2 * sign
@@ -411,6 +412,45 @@ struct MagicMouseTests {
             }
             expect(r.consume([], timestamp: 352.5, settings: settings) == nil, "Open arc is neither circle nor straight swipe")
         }
+        // Magic Mouse circles: one finger also scrolls there, so a straight
+        // stroke beside a circle binding is a swipe only as a flick.
+        for (sign, gesture) in [(-1.0, MagicMouseGesture.circleClockwise), (1.0, .circleCounterClockwise)] {
+            settings = MagicMouseSettings(); settings.tipTapSpacingGeometry = .magicMouse
+            settings.bindings = [gesture: .showDesktop, .oneFingerSwipeLeft: .snapLeft, .oneFingerSwipeRight: .snapRight]
+            r.reset()
+            var fired = 0
+            for index in 0...144 {
+                let angle = Double(index) / 48 * .pi * 2 * sign
+                if let result = r.consume([MouseContact(id: 1, x: 0.5 + cos(angle) * 0.2, y: 0.5 + sin(angle) * 0.2)], timestamp: 360 + Double(index) * 0.015, settings: settings) {
+                    expect(result == gesture, "Magic Mouse circle follows its winding direction"); fired += 1
+                }
+            }
+            expect(fired == 3, "Each further full circle triggers again")
+            _ = r.consume([], timestamp: 363, settings: settings)
+            r.reset()
+            var slow = 0
+            for index in 0...48 {
+                let angle = Double(index) / 48 * .pi * 2 * sign
+                if r.consume([MouseContact(id: 1, x: 0.5 + cos(angle) * 0.2, y: 0.5 + sin(angle) * 0.2)], timestamp: 370 + Double(index) * 0.07, settings: settings) != nil { slow += 1 }
+            }
+            expect(slow == 0, "A first circle must come within 2.5 s of the touch")
+            _ = r.consume([], timestamp: 374, settings: settings)
+            r.reset()
+            var wiggle = 0
+            for index in 0...60 {
+                let angle = sin(Double(index) / 6) * 1.2 * sign
+                if r.consume([MouseContact(id: 1, x: 0.5 + cos(angle) * 0.2, y: 0.5 + sin(angle) * 0.2)], timestamp: 380 + Double(index) * 0.015, settings: settings) != nil { wiggle += 1 }
+            }
+            expect(wiggle == 0, "Arcing back and forth is not a circle")
+            _ = r.consume([], timestamp: 382, settings: settings)
+            r.reset()
+            for step in 0...10 { _ = r.consume(points(1, x: 0.2 + Double(step) * 0.04, y: 0.5), timestamp: 362 + Double(step) * 0.1, settings: settings) }
+            expect(r.consume([], timestamp: 363.1, settings: settings) == nil, "A slow pan beside a circle binding is not a swipe")
+            r.reset()
+            for step in 0...4 { _ = r.consume(points(1, x: 0.7 - Double(step) * 0.08, y: 0.5), timestamp: 364 + Double(step) * 0.02, settings: settings) }
+            expect(r.consume([], timestamp: 364.1, settings: settings) == .oneFingerSwipeLeft, "A flick beside a circle binding is a swipe on lift")
+        }
+        settings.tipTapSpacingGeometry = .surface
         r.reset()
         _ = r.consume(points(1, x: 0.2), timestamp: 360, settings: settings)
         _ = r.consume(points(1, x: 0.5), timestamp: 360.2, settings: settings)

@@ -14,9 +14,18 @@ struct LiveContactsReadout: View {
     var body: some View {
         HStack(spacing: 0) {
             GeometryReader { geometry in
+                // The device's own outline, sized to its proportions, above the status line.
+                let surface = DeviceSurfaceShape.fitted(device,
+                    in: CGSize(width: geometry.size.width, height: max(1, geometry.size.height - 34)), inset: 18)
                 ZStack(alignment: .bottomLeading) {
                     LinearGradient(colors: [Color(red: 0.20, green: 0.13, blue: 0.23), Color(red: 0.105, green: 0.105, blue: 0.12)],
                                    startPoint: .topLeading, endPoint: .bottomTrailing)
+                    DeviceSurfaceShape(device: device)
+                        .path(in: surface)
+                        .fill(Color.white.opacity(0.045))
+                    DeviceSurfaceShape(device: device)
+                        .path(in: surface)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1.2)
                     if !stale {
                         ForEach(frame.contacts) { contact in
                             ZStack {
@@ -27,8 +36,8 @@ struct LiveContactsReadout: View {
                                     Text("\(contact.id)").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(.white)
                                 }
                             }
-                            .position(x: 24 + min(1, max(0, contact.x)) * max(1, geometry.size.width - 48),
-                                      y: 24 + (1 - min(1, max(0, contact.y))) * max(1, geometry.size.height - 72))
+                            .position(x: surface.minX + min(1, max(0, contact.x)) * surface.width,
+                                      y: surface.minY + (1 - min(1, max(0, contact.y))) * surface.height)
                             .accessibilityLabel("Contact \(contact.id), \(contact.role)")
                         }
                     }
@@ -40,7 +49,9 @@ struct LiveContactsReadout: View {
                                 .font(.callout)
                             Text("Keep gestures enabled to see contacts").font(.caption)
                         }.foregroundStyle(Color.white.opacity(0.42))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .multilineTextAlignment(.center)
+                            .frame(width: surface.width, height: surface.height)
+                            .position(x: surface.midX, y: surface.midY)
                     }
                     HStack(spacing: 7) {
                         Circle().fill(stale ? Color.gray : Color.green).frame(width: 5, height: 5)

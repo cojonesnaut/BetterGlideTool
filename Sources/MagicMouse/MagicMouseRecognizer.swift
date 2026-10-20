@@ -864,56 +864,106 @@ private struct FixedFingerRecognizer {
     }
 }
 
-/// Bounded path history, evaluated on lift. When a circle and single-finger swipe
-/// are both assigned, the path chooses one action after lift rather than firing
-/// a swipe halfway around the circle. No timer or pointer interception is needed.
+/// One-finger circles, recognised the way BetterTouchTool does: live, from how
+/// far the finger's heading has turned. The first trigger comes at
+/// `circleTurns` of a full turn — within 2.5 s of the touch, so a slowly curving
+/// scroll is never a circle — and each further full turn triggers again. Turning
+/// back the other way or reversing starts over. A straight path, when a
+/// one-finger swipe is also bound, is judged on lift (see `fastest`).
 private struct CirclePathRecognizer {
     private var points: [MouseContact] = []
+    private var times: [Double] = []
     private var started = 0.0
     private var invalid = false
+    private var anchor: MouseContact?
+    private var heading: Double?
+    private var turned = 0.0
+    private var peakTurn = 0.0
+    private var loop: [MouseContact] = []
+    private var fired = 0
     mutating func cancel() { invalid = true }
     mutating func consume(_ contacts: [MouseContact], timestamp: Double, settings: MagicMouseSettings) -> MagicMouseGesture? {
         if contacts.isEmpty {
             defer { self = Self() }
-            guard !invalid, let first = points.first, let last = points.last, timestamp - started <= 3 else { return nil }
+            guard !invalid, fired == 0, let first = points.first, let last = points.last, timestamp - started <= 3 else { return nil }
             let travel = zip(points, points.dropFirst()).reduce(0.0) { $0 + hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }
             let dx = last.x - first.x, dy = last.y - first.y
             let straight = hypot(dx, dy)
-            if straight >= settings.swipeDistance, travel <= straight * 1.2 {
-                let gesture: MagicMouseGesture?
-                if abs(dx) > abs(dy) * MagicMouseSettings.swipeAxisDominance { gesture = dx > 0 ? .oneFingerSwipeRight : .oneFingerSwipeLeft }
-                else if abs(dy) > abs(dx) * MagicMouseSettings.swipeAxisDominance { gesture = dy > 0 ? .oneFingerSwipeUp : .oneFingerSwipeDown }
-                else { gesture = nil }
-                return gesture.flatMap { settings.action(for: $0) != .none ? $0 : nil }
+            // On a Magic Mouse one finger also scrolls, so its swipes are flicks
+            // here too: judged on the finished path, a pan is never a swipe.
+            let flick = settings.isFlick(fingers: 1)
+            guard straight >= (flick ? MagicMouseSettings.flickDistance : settings.swipeDistance), travel <= straight * 1.2 else { return nil }
+            let gesture: MagicMouseGesture?
+            if abs(dx) > abs(dy) * MagicMouseSettings.swipeAxisDominance { gesture = dx > 0 ? .oneFingerSwipeRight : .oneFingerSwipeLeft }
+            else if abs(dy) > abs(dx) * MagicMouseSettings.swipeAxisDominance { gesture = dy > 0 ? .oneFingerSwipeUp : .oneFingerSwipeDown }
+            else { gesture = nil }
+            if flick, let gesture {
+                let horizontal = gesture == .oneFingerSwipeLeft || gesture == .oneFingerSwipeRight
+                guard fastest(along: horizontal, sign: horizontal ? dx : dy) >= MagicMouseSettings.flickSpeed else { return nil }
             }
-            guard points.count >= 12 else { return nil }
-            let minX = points.map(\.x).min()!, maxX = points.map(\.x).max()!
-            let minY = points.map(\.y).min()!, maxY = points.map(\.y).max()!
-            let width = maxX - minX, height = maxY - minY
-            guard min(width, height) >= 0.10, max(width, height) / min(width, height) <= 2.2,
-                  straight <= min(width, height) * 0.35 else { return nil }
-            let cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
-            var signed = 0.0, total = 0.0
-            for (a, b) in zip(points, points.dropFirst()) {
-                let ax = (a.x - cx) / width, ay = (a.y - cy) / height
-                let bx = (b.x - cx) / width, by = (b.y - cy) / height
-                guard hypot(ax, ay) >= 0.2, hypot(bx, by) >= 0.2 else { return nil }
-                let turn = atan2(ax * by - ay * bx, ax * bx + ay * by)
-                guard abs(turn) <= .pi / 2 else { return nil }
-                signed += turn; total += abs(turn)
-            }
-            guard abs(signed) >= .pi * 1.7, total <= abs(signed) * 1.15 else { return nil }
-            let gesture: MagicMouseGesture = signed < 0 ? .circleClockwise : .circleCounterClockwise
-            return settings.action(for: gesture) != .none ? gesture : nil
+            return gesture.flatMap { settings.action(for: $0) != .none ? $0 : nil }
         }
         guard !invalid, contacts.count == 1 else { invalid = true; return nil }
         let point = contacts[0]
-        if points.isEmpty { points = [point]; started = timestamp; return nil }
-        guard point.id == points[0].id, timestamp - started <= 3 else { invalid = true; return nil }
-        if let last = points.last, hypot(point.x - last.x, point.y - last.y) >= 0.003 {
-            if points.count >= 256 { points = points.enumerated().compactMap { $0.offset % 2 == 0 ? $0.element : nil } }
-            points.append(point)
+        if points.isEmpty { points = [point]; times = [timestamp]; started = timestamp; anchor = point; loop = [point]; return nil }
+        guard point.id == points[0].id else { invalid = true; return nil }
+        if let last = points.last, hypot(point.x - last.x, point.y - last.y) >= 0.003, timestamp - started <= 3 {
+            if points.count >= 256 {
+                points = points.enumerated().compactMap { $0.offset % 2 == 0 ? $0.element : nil }
+                times = times.enumerated().compactMap { $0.offset % 2 == 0 ? $0.element : nil }
+            }
+            points.append(point); times.append(timestamp)
         }
-        return nil
+        return turn(to: point, at: timestamp, settings: settings)
+    }
+
+    private mutating func turn(to point: MouseContact, at timestamp: Double, settings: MagicMouseSettings) -> MagicMouseGesture? {
+        guard let from = anchor, hypot(point.x - from.x, point.y - from.y) >= Self.segment else { return nil }
+        let direction = atan2(point.y - from.y, point.x - from.x)
+        anchor = point
+        if loop.count < 512 { loop.append(point) }
+        defer { heading = direction }
+        guard let heading else { return nil }
+        var change = direction - heading
+        if change > .pi { change -= 2 * .pi } else if change < -.pi { change += 2 * .pi }
+        // A sharp corner is a reversal, not part of a circle.
+        guard abs(change) <= .pi * 2 / 3 else { restart(at: point); return nil }
+        turned += change
+        peakTurn = max(peakTurn, abs(turned))
+        if peakTurn - abs(turned) > Self.unwind { restart(at: point); return nil }
+        let required = MagicMouseSettings.circleTurns + Double(fired)
+        guard abs(turned) >= required * 2 * .pi else { return nil }
+        if fired == 0 {
+            if MagicMouseSettings.circleTurns <= 1, timestamp - started > MagicMouseSettings.circleTimeLimit { return nil }
+            let xs = loop.map(\.x), ys = loop.map(\.y)
+            guard min(xs.max()! - xs.min()!, ys.max()! - ys.min()!) >= MagicMouseSettings.circleMinimumSize else { return nil }
+        }
+        fired += 1
+        let gesture: MagicMouseGesture = turned < 0 ? .circleClockwise : .circleCounterClockwise
+        return settings.action(for: gesture) != .none ? gesture : nil
+    }
+
+    private mutating func restart(at point: MouseContact) {
+        turned = 0; peakTurn = 0; fired = 0; loop = [point]
+    }
+
+    /// Heading is measured over segments at least this long, so sensor jitter
+    /// does not read as turning.
+    static let segment = 0.012
+    /// Turning back this far (radians) the other way abandons the circle.
+    static let unwind = 0.6
+
+    /// Fastest motion along one axis, in the stroke's direction, over windows
+    /// of at least `flickWindow` — the same measure the live flick uses.
+    private func fastest(along horizontal: Bool, sign: Double) -> Double {
+        var best = 0.0, base = 0
+        for index in points.indices {
+            while base + 1 < index, times[index] - times[base + 1] >= MagicMouseSettings.flickWindow { base += 1 }
+            let dt = times[index] - times[base]
+            guard dt >= MagicMouseSettings.flickWindow else { continue }
+            let moved = horizontal ? points[index].x - points[base].x : points[index].y - points[base].y
+            best = max(best, moved * (sign < 0 ? -1 : 1) / dt)
+        }
+        return best
     }
 }

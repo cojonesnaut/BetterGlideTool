@@ -359,8 +359,9 @@ final class MagicMouseInput: ObservableObject {
     private func dispatch(_ gesture: MagicMouseGesture, token: Int, modifiers: CapturedModifiers, recognizedAt: Double, location: MouseContact? = nil) {
         // A physical click can land just after a whole-hand tap's release frame,
         // so those wait 40 ms for it. A TipTap keeps a finger resting, and its
-        // click would arrive before the tip lifts: dispatch it at once.
-        let wait = gesture.isSwipe || gesture.isPhysicalClick || gesture.rawValue.hasPrefix("tip_") ? 0 : 0.04
+        // click would arrive before the tip lifts; a circle fires mid-stroke.
+        // Dispatch those at once.
+        let wait = gesture.isSwipe || gesture.isPhysicalClick || gesture.isCircle || gesture.rawValue.hasPrefix("tip_") ? 0 : 0.04
         DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
             guard let self else { return }
             self.lock.lock()

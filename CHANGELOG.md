@@ -1,5 +1,39 @@
 # Changelog
 
+## BetterGlideTool 2.12.6 (local)
+
+- The Live View animates even with Reduce Motion on. With it on (as on this Mac), the view showed only a still of the finished stroke — and before 2.12.4, the old animation was still as well — so the demonstration never moved. BetterTouchTool plays its Live View regardless; the motion is the demonstration, and it plays only inside that box.
+- Each demonstration loops as soon as its stroke has faded (0.6 s fade, 0.2 s pause) instead of after a fixed 2.6–2.9 s, so there is less blank time between repeats.
+
+## BetterGlideTool 2.12.5 (local)
+
+- The Live View only demonstrates how to perform the selected gesture, on a loop, as BetterTouchTool's does. It no longer switches to real input: with a hand on the Magic Mouse to work in Preferences, the resting finger kept replacing the demonstration. Real contacts stay in Input Monitoring.
+
+## BetterGlideTool 2.12.4 (local)
+
+- The Live View now demonstrates how to perform each gesture, drawn the way BetterTouchTool draws a circle: fingers land as purple dots, each finger's path builds up behind it, the finished stroke lingers with a faint mark where each finger lifted, then fades and repeats. Every gesture on both devices has its own script — taps and double-taps, clicks and force clicks with a press ripple, tap & hold, swipes in each direction and continuous left/right or up/down, circles, every TipTap and TipSwipe with its resting fingers, Magic Mouse regions (left, right, middle, above the Apple), trackpad corners and top/bottom taps, and trackpad zones. Touch the device and your own fingers take over in the same style; the box lights up when the gesture fires. With Reduce Motion, it shows the finished stroke still.
+- The old animation (finger clusters, ghost trails, badges) is gone: the view went from 835 lines to about 230, plus the gesture scripts.
+
+## BetterGlideTool 2.12.3 (local)
+
+- One Live View, as in BetterTouchTool: the gesture editor's animated demonstration and 2.12.2's separate live panel are now a single black box, for both the trackpad and the Magic Mouse. Solid purple dots demonstrate the selected gesture — swiping, tapping, holding, resting while one finger taps or swipes, or circling a faint guide — and give way to your real fingers, with a short trail, while you touch the device; the box lights up when the gesture fires. The old speed and modifier badges, glass chassis and keycaps are gone (the summary line below still names speed, zone and modifier).
+- Input Monitoring draws the device: a Magic Mouse–shaped oval for the Magic Mouse and a wide rounded trackpad for the trackpad, with contacts placed on that surface.
+
+## BetterGlideTool 2.12.2 (local)
+
+- Live View in the gesture editor, after BetterTouchTool's: beside the animated demo, a small black panel shows the selected device's fingers as they touch it, with a short fading trail (so a circle's path is visible as you draw it), and flashes "Triggered" when the selected gesture fires. It reads the existing Live Contacts feed, which only runs while a view is watching it, so nothing is processed while Preferences is closed.
+
+## BetterGlideTool 2.12.1 (local)
+
+- Circles now work as in BetterTouchTool. They used to fire only on lift, and only for a nearly closed, evenly round loop, so most circles drawn on the Magic Mouse missed. A circle now fires while you draw, once the finger's heading has turned 0.8 of a full turn (BetterTouchTool's "Required Circles Before Trigger"), and again for every further full turn. As in BetterTouchTool, a first trigger must come within 2.5 s of the touch, so a slowly curving scroll never counts. A sharp reversal or turning back the other way starts over, and the loop must span at least 6% of the surface on each axis. Applies to the Magic Mouse and the trackpad; a straight one-finger swipe bound alongside a circle is still judged on lift, as a flick on the Magic Mouse.
+- Circles dispatch immediately instead of waiting 40 ms for a possible click.
+- Action menu icons: Center Window had no icon (its symbol does not exist); window actions now draw as windows — corner snaps show their corner, Center and Fill show the window's placement, Maximize/Restore and Full Screen show their direction, and Stage Manager actions show the stage strip.
+
+## BetterGlideTool 2.12.0 (local)
+
+- Add 1 Finger Circle Clockwise and Counter-Clockwise to the Magic Mouse, as BetterTouchTool offers them. Circles were trackpad-only; the Magic Mouse now uses the same recogniser (a closed loop spanning at least 10% of each axis, judged on lift). One finger also scrolls a Magic Mouse, so the page keeps scrolling while you draw, and when a circle and a one-finger swipe are both bound, a straight path is chosen on lift and counts as a swipe only if it was a flick (2.0 surface widths per second), as without a circle binding.
+- The rest of the requested set was already available on the Magic Mouse: TipTap Middle (2 Fingers Fix); 3 Finger Tap, Double-Tap, Click and Swipe Up/Down/Left/Right; and 1 Finger Tap Above Apple.
+
 ## BetterGlideTool 2.11.13 (local)
 
 - Swipes made with the fingers a device scrolls with — one finger on the Magic Mouse, two on the trackpad — now fire on speed, as flicks, and never withhold the scroll. Panning a TradingView chart sideways used to send the swipe's ⌘←/⌘→ too: on the trackpad every slow pan did (the scroll itself always reached the app), and on the Magic Mouse any pan past 0.29. Recorded on TradingView with spoken cues, slow pans peaked at 0.44–0.75 surface widths per second on the Magic Mouse and 0.32–0.50 on the trackpad, flicks at 3.5–9.6 and 6.1–7.1. A flick now needs 2.0 widths per second over at least 45 ms and 0.12 of travel. Replayed through the recogniser, none of the 11 recorded pans fire and every recorded flick does. Magic Mouse swipes with two or more fingers, and trackpad swipes with one or three or more, are unchanged.
