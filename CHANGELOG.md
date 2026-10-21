@@ -1,5 +1,10 @@
 # Changelog
 
+## BetterGlideTool 2.12.7 (local)
+
+- A native Liquid Glass app icon. `assets/AppIcon.icon` is an Icon Composer document — a filled `hand.draw` glyph as a glass layer over a system-managed violet fill — compiled by Xcode's asset compiler into `Assets.car` and `CFBundleIconName`. macOS 26 and later render it like Apple's own icons in Default, Dark, Clear Light, Clear Dark and Tinted; macOS 13–15 get the matching flat `AppIcon.icns`. The old icon was a flat image with baked-in lighting, so it could not follow the dark or clear icon styles.
+- `build.sh` compiles the icon when Xcode is installed, and otherwise uses the compiled copies in `assets/`.
+
 ## BetterGlideTool 2.12.6 (local)
 
 - The Live View animates even with Reduce Motion on. With it on (as on this Mac), the view showed only a still of the finished stroke — and before 2.12.4, the old animation was still as well — so the demonstration never moved. BetterTouchTool plays its Live View regardless; the motion is the demonstration, and it plays only inside that box.
