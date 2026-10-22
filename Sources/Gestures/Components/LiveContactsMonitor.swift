@@ -128,6 +128,21 @@ struct LiveContactsRecording: Codable {
 
 /// Callback input is copied under a lock. At most one 60 Hz UI update is queued;
 /// recordings retain every delivered frame independently of visual refresh rate.
+/// BetterTouchTool's "Block Real Gesture Triggering": while Input Monitoring is
+/// open, recognised gestures are logged but their actions do not run, so they
+/// can be practised without side effects. It only applies while a monitoring
+/// view is visible — closing it can never leave gestures silently disabled.
+final class GestureActionBlock: ObservableObject {
+    static let shared = GestureActionBlock()
+    @Published var isOn = false
+    private init() {}
+
+    /// Whether a recognised gesture's action must be withheld right now.
+    var blocksActions: Bool {
+        isOn && (LiveContactsMonitor.shared.isEnabled || LiveContactsMonitor.mouse.isEnabled)
+    }
+}
+
 final class LiveContactsMonitor: ObservableObject {
     static let shared = LiveContactsMonitor(device: .trackpad)
     static let mouse = LiveContactsMonitor(device: .magicMouse)

@@ -193,9 +193,41 @@ fi
 # Copy app icon
 # ─────────────────────────────────────────────────────────────
 
-if [[ -f "$SCRIPT_DIR/assets/AppIcon.icns" ]]; then
-    cp "$SCRIPT_DIR/assets/AppIcon.icns" "$RESOURCES/AppIcon.icns"
-    echo "Icon: AppIcon.icns copied"
+# assets/AppIcon.icon is the Icon Composer document: a glass hand over a
+# system-managed fill, which macOS 26 renders as Liquid Glass in Default, Dark,
+# Clear and Tinted. Xcode's asset compiler turns it into Assets.car (the
+# layered icon) and AppIcon.icns (the flat icon for macOS 13–15). Without
+# Xcode, the compiled copies committed next to it are used.
+ICON_DOC="$SCRIPT_DIR/assets/AppIcon.icon"
+XCODE_DEVELOPER="${XCODE_DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+ICON_TMP=""
+if [[ -d "$ICON_DOC" && -d "$XCODE_DEVELOPER" ]] && DEVELOPER_DIR="$XCODE_DEVELOPER" xcrun --find actool >/dev/null 2>&1; then
+    ICON_TMP="$(mktemp -d)"
+    if DEVELOPER_DIR="$XCODE_DEVELOPER" xcrun actool "$ICON_DOC" --compile "$ICON_TMP" --platform macosx \
+        --minimum-deployment-target 13.0 --app-icon AppIcon \
+        --output-partial-info-plist "$ICON_TMP/partial.plist" >/dev/null 2>&1 \
+        && [[ -f "$ICON_TMP/Assets.car" && -f "$ICON_TMP/AppIcon.icns" ]]; then
+        # Refresh the committed copies only when the icon itself changed: the
+        # compiler's output differs byte-for-byte on every run.
+        if [[ ! -f "$SCRIPT_DIR/assets/AppIcon.car" ]] || [[ -n "$(find "$ICON_DOC" -newer "$SCRIPT_DIR/assets/AppIcon.car" -print -quit)" ]]; then
+            cp "$ICON_TMP/Assets.car" "$SCRIPT_DIR/assets/AppIcon.car"
+            cp "$ICON_TMP/AppIcon.icns" "$SCRIPT_DIR/assets/AppIcon.icns"
+        fi
+        echo "Icon: compiled AppIcon.icon with Xcode's asset compiler (Liquid Glass)"
+    else
+        echo "Icon: asset compiler failed; using the committed compiled icon"
+    fi
+fi
+ICON_SOURCE="$SCRIPT_DIR/assets"; ICON_CAR="$ICON_SOURCE/AppIcon.car"
+if [[ -n "$ICON_TMP" && -f "$ICON_TMP/Assets.car" && -f "$ICON_TMP/AppIcon.icns" ]]; then
+    ICON_SOURCE="$ICON_TMP"; ICON_CAR="$ICON_TMP/Assets.car"
+fi
+if [[ -f "$ICON_CAR" ]]; then
+    cp "$ICON_CAR" "$RESOURCES/Assets.car"
+fi
+if [[ -f "$ICON_SOURCE/AppIcon.icns" ]]; then
+    cp "$ICON_SOURCE/AppIcon.icns" "$RESOURCES/AppIcon.icns"
+    echo "Icon: Assets.car and AppIcon.icns copied"
 fi
 
 

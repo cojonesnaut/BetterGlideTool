@@ -1,8 +1,6 @@
 # BetterGlideTool
 
-A renamed fork of [Glide by Vatsal057](https://github.com/Vatsal057/Glide): a native macOS utility for trackpad and Magic Mouse gestures, window management, edge sliders, and global shortcuts.
-
-BetterGlideTool retains Glide's gesture engine and uses its own app name, bundle identifier (`com.betterglidetool.app`), configuration directory, and release artifacts. The original MIT license and copyright are preserved in [LICENSE](LICENSE). The upstream history, changelog, artwork, and internal implementation names are retained for attribution and easier upstream merges.
+A native macOS utility for trackpad and Magic Mouse gestures, window management, edge sliders, and global shortcuts.
 
 ## Build
 
@@ -39,31 +37,43 @@ Drag the app into Applications and grant **BetterGlideTool** Accessibility acces
 ## Features and configuration
 
 - Customizable multi-finger trackpad swipes, clicks, force-clicks, and holds.
-- Magic Mouse regional taps and one- through four-finger swipes, with middle-click, window, app, and media actions.
-- Window snapping, maximizing, restoring, and Stage Manager and Space switching.
+- Magic Mouse regional taps, one- through four-finger swipes, flicks and circles, with middle-click, window, app, and media actions.
+- TipTaps and TipSwipes on the trackpad and Magic Mouse.
+- Window snapping, macOS window tiling (Fill, Center, Restore), and Stage Manager and Space switching.
 - Trackpad edge controls for volume, brightness, and scrolling.
 - Global keyboard shortcuts.
+- A Live View that demonstrates every gesture, Input Monitoring with a practice mode, and tuning tabs for each device.
 - Native preferences, configuration import/export, and launch at login.
+
+## Install
+
+1. Download the latest `BetterGlideTool-vX.Y.Z.dmg` from [Releases](https://github.com/cojonesnaut/BetterGlideTool/releases/latest) and open it.
+2. Drag **BetterGlideTool** into **Applications**.
+3. BetterGlideTool isn't notarized by Apple. If macOS says the app is damaged or can't be opened, run:
+
+   ```sh
+   xattr -cr /Applications/BetterGlideTool.app
+   ```
+
+4. Open BetterGlideTool and grant Accessibility access in **System Settings → Privacy & Security → Accessibility**.
+
+Apple Silicon Macs only. Once installed, **Preferences → General → Check for Updates** installs new releases itself.
 
 Open the menu bar hand icon for preferences. See the [usage manual](USAGE.md) and [detailed guides](docs/).
 
-Settings are stored at `~/Library/Application Support/BetterGlideTool/config.yaml`. Existing Glide settings are left untouched. Import an exported Glide YAML configuration through Preferences to copy settings deliberately.
+Settings are stored at `~/Library/Application Support/BetterGlideTool/config.yaml`. Import or export a YAML configuration in **Preferences → Configuration**.
 
-## Fork releases and updates
+## Releases and updates
 
-Local builds do not contact Glide's release feed. Until a BetterGlideTool repository is configured, automatic update checks are disabled and a manual check explains that releases are not configured.
+Until a release repository is built in, automatic update checks are disabled and a manual check explains that releases are not configured.
 
-Build with the fork repository name to enable its own update feed:
+Build with the repository name to enable its update feed:
 
 ```sh
 BETTERGLIDETOOL_REPOSITORY=cojonesnaut/BetterGlideTool ./build.sh --dmg
 ```
 
 The included GitHub Actions release workflow uses `GITHUB_REPOSITORY` automatically when a `v*` tag is pushed. It packages `BetterGlideTool-vX.Y.Z.dmg` with a SHA-256 checksum. A release must be published before update checks can find it. Signing and notarization depend on the build machine's credentials; local builds use ad-hoc signing when no certificate is available.
-
-## Attribution
-
-Original project: [Vatsal057/Glide](https://github.com/Vatsal057/Glide). Copyright (c) 2026 Vatsal057. Licensed under the [MIT License](LICENSE).
 
 ## Build toolchain note
 

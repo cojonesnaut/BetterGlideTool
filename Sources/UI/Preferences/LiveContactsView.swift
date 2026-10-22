@@ -26,21 +26,7 @@ struct LiveContactsReadout: View {
                     DeviceSurfaceShape(device: device)
                         .path(in: surface)
                         .stroke(Color.white.opacity(0.2), lineWidth: 1.2)
-                    if !stale {
-                        ForEach(frame.contacts) { contact in
-                            ZStack {
-                                Circle().fill(RadialGradient(colors: [Color.purple.opacity(0.35), Color.purple.opacity(0)], center: .center, startRadius: 2, endRadius: 25)).frame(width: 50, height: 50)
-                                Circle().fill(RadialGradient(colors: [Color(red: 0.85, green: 0.57, blue: 0.89), Color(red: 0.61, green: 0.34, blue: 0.67)], center: .center, startRadius: 0, endRadius: 14))
-                                    .frame(width: diameter(contact), height: diameter(contact))
-                                if showIDs {
-                                    Text("\(contact.id)").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundStyle(.white)
-                                }
-                            }
-                            .position(x: surface.minX + min(1, max(0, contact.x)) * surface.width,
-                                      y: surface.minY + (1 - min(1, max(0, contact.y))) * surface.height)
-                            .accessibilityLabel("Contact \(contact.id), \(contact.role)")
-                        }
-                    }
+                    FingerDots(frame: frame, live: !stale, surface: surface, showIDs: showIDs)
                     if stale {
                         VStack(spacing: 7) {
                             Image(systemName: device == .trackpad ? "rectangle.and.hand.point.up.left" : "magicmouse")
@@ -107,8 +93,72 @@ struct LiveContactsReadout: View {
         .environment(\.colorScheme, .dark)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
-    private func diameter(_ contact: LiveContact) -> CGFloat {
-        CGFloat(14 + min(1, max(0, contact.size)) * 10)
+}
+
+/// Fingers drawn as BetterTouchTool draws them in its Live View: a solid purple
+/// dot per contact that fades and grows in as the finger lands, follows it, and
+/// fades out as it lifts.
+private struct FingerDots: View {
+    let frame: LiveContactFrame
+    let live: Bool
+    let surface: CGRect
+    let showIDs: Bool
+    @State private var touches: [Int32: Touch] = [:]
+
+    private struct Touch { var x: Double; var y: Double; var landed: Double; var lifted: Double? }
+    private static let fadeIn = 0.12
+    private static let fadeOut = 0.25
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: touches.isEmpty)) { timeline in
+            let now = timeline.date.timeIntervalSinceReferenceDate
+            Canvas { context, _ in draw(in: &context, now: now) }
+        }
+        .allowsHitTesting(false)
+        .onAppear { update() }
+        .onChange(of: frame) { _ in update() }
+        .onChange(of: live) { _ in update() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(frame.contacts.count) contacts")
+    }
+
+    private func update() {
+        let now = Date.timeIntervalSinceReferenceDate
+        let down = live ? frame.contacts.filter { $0.state == 3 || $0.state == 4 } : []
+        for contact in down {
+            if var touch = touches[contact.id], touch.lifted == nil {
+                touch.x = contact.x; touch.y = contact.y
+                touches[contact.id] = touch
+            } else {
+                touches[contact.id] = Touch(x: contact.x, y: contact.y, landed: now)
+            }
+        }
+        for (id, touch) in touches where touch.lifted == nil && !down.contains(where: { $0.id == id }) {
+            touches[id]?.lifted = now
+            // Forget it once faded, so nothing animates while no finger is down.
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.fadeOut + 0.05) {
+                if let lifted = touches[id]?.lifted, Date.timeIntervalSinceReferenceDate - lifted >= Self.fadeOut { touches[id] = nil }
+            }
+        }
+    }
+
+    private func draw(in context: inout GraphicsContext, now: Double) {
+        let radius = max(7, min(surface.width, surface.height) * 0.055)
+        for (id, touch) in touches {
+            let appear = min(1, (now - touch.landed) / Self.fadeIn)
+            let vanish = touch.lifted.map { max(0, 1 - (now - $0) / Self.fadeOut) } ?? 1
+            let alpha = appear * vanish
+            guard alpha > 0 else { continue }
+            let r = radius * (0.55 + 0.45 * appear)
+            let center = CGPoint(x: surface.minX + min(1, max(0, touch.x)) * surface.width,
+                                 y: surface.minY + (1 - min(1, max(0, touch.y))) * surface.height)
+            context.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
+                         with: .color(Color.accentColor.opacity(alpha)))
+            if showIDs {
+                context.draw(Text("\(id)").font(.system(size: 9, weight: .bold, design: .monospaced)).foregroundColor(.white.opacity(alpha)),
+                             at: center)
+            }
+        }
     }
 }
 
@@ -151,6 +201,7 @@ struct LiveContactsView: View {
     @State private var message: String?
     @State private var showIDs = false
     @State private var showDetails = false
+    @ObservedObject private var actionBlock = GestureActionBlock.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -158,6 +209,8 @@ struct LiveContactsView: View {
                 Label(device.monitoringTitle, systemImage: device == .trackpad ? "rectangle.and.hand.point.up.left" : "magicmouse")
                     .font(.callout.weight(.semibold))
                 Spacer(minLength: 8)
+                Toggle("Block Real Gesture Triggering", isOn: $actionBlock.isOn).toggleStyle(.checkbox)
+                    .help("Gestures are recognised and logged, but their actions do not run — only while Input Monitoring is open.")
                 Toggle("Show IDs", isOn: $showIDs).toggleStyle(.checkbox)
                 Toggle("Details", isOn: $showDetails).toggleStyle(.checkbox)
                 if !floating {

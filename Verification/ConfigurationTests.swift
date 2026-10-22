@@ -76,6 +76,13 @@ struct ConfigurationTests {
     }
     @MainActor
     static func main() {
+        // The default gestures are the shipped YAML list, parsed in full.
+        let defaults = Settings.defaultRules
+        precondition(defaults.count == 25, "every default gesture parses (got \(defaults.count))")
+        precondition(defaults.filter { $0.device == .magicMouse }.count == 10 && defaults.filter { $0.device == .trackpad }.count == 15)
+        precondition(defaults.contains { $0.device == .magicMouse && $0.direction == .tipTapTwoLeft && $0.action == .stageNext })
+        precondition(defaults.contains { $0.device == .trackpad && $0.direction == .swipeUp && $0.fingers == 3 && $0.customShortcut?.keyCode == 17 && $0.customShortcut?.command == true })
+        precondition(defaults.contains { $0.direction == .forceClick && $0.zone == .topRight && $0.action == .screenshotAreaClipboard })
         try! verifyLiveContacts()
         try! renderLiveContactsPreviewIfRequested()
         verifyTrackpadNativeEvents()

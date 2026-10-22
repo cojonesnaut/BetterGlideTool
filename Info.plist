@@ -9,14 +9,16 @@
     <key>CFBundleIdentifier</key>
     <string>com.betterglidetool.app</string>
     <key>CFBundleVersion</key>
-    <string>2.12.6</string>
+    <string>3.0.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.12.6</string>
+    <string>3.0.0</string>
     <key>CFBundleExecutable</key>
     <string>BetterGlideTool</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
     <string>AppIcon</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>

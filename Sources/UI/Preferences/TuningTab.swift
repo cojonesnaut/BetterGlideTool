@@ -12,148 +12,197 @@ import SwiftUI
 
 struct TuningTab: View {
     @EnvironmentObject var store: PreferencesStore
-    @State private var showAdvanced = false
+
+    enum Page: String, CaseIterable, Identifiable {
+        case general = "General", swipes = "Swipes", tipTaps = "TipTaps", palm = "Palm & Edges"
+        case forceClick = "Force Click", repeating = "Repeating", advanced = "Advanced"
+        var id: String { rawValue }
+    }
+    @AppStorage("tuningPage.trackpad") private var page: Page = .general
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-
-                DeviceTuningCard(device: .trackpad)
-                TipTapTuningCard(device: .trackpad)
-
-                presetsCard
-
-                TuningSection(title: "Swipes", icon: "hand.draw") {
-                    FriendlySlider(
-                        title: "Sensitivity",
-                        subtitle: "How far your fingers travel before a swipe counts.",
-                        leftLabel: "Deliberate", rightLabel: "Featherlight",
-                        value: mapped(\.initialThreshold, range: (0.035, 0.006))
-                    )
-                    Divider().padding(.horizontal, 12)
-                    FriendlySlider(
-                        title: "Diagonal strictness",
-                        subtitle: "Stricter means a swipe must be clearly up, down, left, or right — sloppy diagonals are ignored.",
-                        leftLabel: "Easygoing", rightLabel: "Strict",
-                        value: mapped(\.swipeAngleTolerance, range: (45, 25))
-                    )
-                    AngleToleranceCompass(angleDegrees: Double(store.tuning.swipeAngleTolerance))
-                        .frame(height: 180)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
-                }
-
-                TuningSection(title: "Accident Protection", icon: "hand.raised.slash") {
-                    FriendlySlider(
-                        title: "Protection level",
-                        subtitle: "Stops zooms, pinches, and resting fingers from being mistaken for swipes. Turn it up if gestures fire when you don't mean them to; turn it down if your real swipes get ignored.",
-                        leftLabel: "Off-ish", rightLabel: "Paranoid",
-                        value: protectionBinding
-                    )
-                }
-
-                TuningSection(title: "Swipe Speed", icon: "speedometer") {
-                    explainer("Only matters for gestures you've set to trigger on a Fast or Slow swipe.")
-                    VStack(alignment: .leading, spacing: 4) {
-                        Picker("Detection method", selection: speedLogicBinding) {
-                            Text("Simple").tag(SpeedLogic.simple)
-                            Text("Classic").tag(SpeedLogic.classic)
-                        }
-                        .pickerStyle(.segmented)
-                        Text(store.tuning.speedLogic == .simple
-                             ? "Simple: one average-speed reading decides the tier. Predictable and consistent."
-                             : "Classic: reads peak speed, acceleration, and timing. Snappier flicks, more nuanced but less consistent.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            // Categories along the top, as in BetterTouchTool's settings, so
+            // each page fits without long scrolling.
+            Picker("Tuning category", selection: $page) {
+                ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    switch page {
+                    case .general:
+                        DeviceTuningCard(device: .trackpad, parts: [.pointer, .sensitivity])
+                        presetsCard
+                        resetAllRow
+                    case .swipes:
+                        swipesCard
+                        swipeSpeedCard
+                    case .tipTaps:
+                        DeviceTuningCard(device: .trackpad, parts: [.tipTapTiming])
+                        TipTapTuningCard(device: .trackpad)
+                    case .palm:
+                        protectionCard
+                        edgesCard
+                    case .forceClick:
+                        forceClickCard
+                    case .repeating:
+                        repeatingCard
+                    case .advanced:
+                        advancedSection
+                        resetAllRow
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 4)
-                    Divider().padding(.horizontal, 12)
-                    FriendlySlider(
-                        title: "Flick detection",
-                        subtitle: "How easily a quick flick counts as a “fast” swipe.",
-                        leftLabel: "Needs a real flick", rightLabel: "Easily fast",
-                        value: mapped(\.fastVelocityThreshold, range: (0.016, 0.005))
-                    )
-                    Divider().padding(.horizontal, 12)
-                    FriendlySlider(
-                        title: "Slow swipe detection",
-                        subtitle: "How gentle a swipe can be and still count as “slow”.",
-                        leftLabel: "Very gentle only", rightLabel: "Easily slow",
-                        value: mapped(\.slowVelocityThreshold, range: 0.002...0.007)
-                    )
                 }
+                .padding()
+            }
+        }
+    }
 
-                TuningSection(title: "Repeating Gestures", icon: "repeat") {
-                    explainer("For continuous gestures — ones that keep firing while you hold and swipe, like volume or brightness.")
-                    FriendlySlider(
-                        title: "Repeat rate",
-                        subtitle: "How rapidly the action repeats as you keep swiping.",
-                        leftLabel: "Relaxed", rightLabel: "Rapid-fire",
-                        value: repeatRateBinding
-                    )
+    @ViewBuilder private var swipesCard: some View {
+        TuningSection(title: "Swipes", icon: "hand.draw") {
+            FriendlySlider(
+                title: "Sensitivity",
+                subtitle: "How far your fingers travel before a swipe counts.",
+                leftLabel: "Deliberate", rightLabel: "Featherlight",
+                value: mapped(\.initialThreshold, range: (0.035, 0.006))
+            )
+            Divider().padding(.horizontal, 12)
+            FriendlySlider(
+                title: "Diagonal strictness",
+                subtitle: "Stricter means a swipe must be clearly up, down, left, or right — sloppy diagonals are ignored.",
+                leftLabel: "Easygoing", rightLabel: "Strict",
+                value: mapped(\.swipeAngleTolerance, range: (45, 25))
+            )
+            AngleToleranceCompass(angleDegrees: Double(store.tuning.swipeAngleTolerance))
+                .frame(height: 180)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+        }
+
+    }
+
+    @ViewBuilder private var protectionCard: some View {
+        TuningSection(title: "Accident Protection", icon: "hand.raised.slash") {
+            FriendlySlider(
+                title: "Protection level",
+                subtitle: "Stops zooms, pinches, and resting fingers from being mistaken for swipes. Turn it up if gestures fire when you don't mean them to; turn it down if your real swipes get ignored.",
+                leftLabel: "Off-ish", rightLabel: "Paranoid",
+                value: protectionBinding
+            )
+        }
+
+    }
+
+    @ViewBuilder private var swipeSpeedCard: some View {
+        TuningSection(title: "Swipe Speed", icon: "speedometer") {
+            explainer("Only matters for gestures you've set to trigger on a Fast or Slow swipe.")
+            VStack(alignment: .leading, spacing: 4) {
+                Picker("Detection method", selection: speedLogicBinding) {
+                    Text("Simple").tag(SpeedLogic.simple)
+                    Text("Classic").tag(SpeedLogic.classic)
                 }
+                .pickerStyle(.segmented)
+                Text(store.tuning.speedLogic == .simple
+                     ? "Simple: one average-speed reading decides the tier. Predictable and consistent."
+                     : "Classic: reads peak speed, acceleration, and timing. Snappier flicks, more nuanced but less consistent.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 4)
+            Divider().padding(.horizontal, 12)
+            FriendlySlider(
+                title: "Flick detection",
+                subtitle: "How easily a quick flick counts as a “fast” swipe.",
+                leftLabel: "Needs a real flick", rightLabel: "Easily fast",
+                value: mapped(\.fastVelocityThreshold, range: (0.016, 0.005))
+            )
+            Divider().padding(.horizontal, 12)
+            FriendlySlider(
+                title: "Slow swipe detection",
+                subtitle: "How gentle a swipe can be and still count as “slow”.",
+                leftLabel: "Very gentle only", rightLabel: "Easily slow",
+                value: mapped(\.slowVelocityThreshold, range: 0.002...0.007)
+            )
+        }
 
-                TuningSection(title: "Trackpad Regions", icon: "rectangle.inset.filled") {
-                    Toggle("Ignore touches that start near the edges", isOn: tuningBinding(\.edgeMarginEnabled))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+    }
 
-                    if store.tuning.edgeMarginEnabled {
-                        explainer("Helps when your palm or thumb brushes the trackpad rim. Fingers already inside keep working normally.")
-                        FriendlySlider(
-                            title: "Dead zone size",
-                            subtitle: "Set each edge separately under Advanced.",
-                            leftLabel: "Sliver", rightLabel: "Wide",
-                            value: edgeSizeBinding
-                        )
-                    }
+    @ViewBuilder private var repeatingCard: some View {
+        TuningSection(title: "Repeating Gestures", icon: "repeat") {
+            explainer("For continuous gestures — ones that keep firing while you hold and swipe, like volume or brightness.")
+            FriendlySlider(
+                title: "Repeat rate",
+                subtitle: "How rapidly the action repeats as you keep swiping.",
+                leftLabel: "Relaxed", rightLabel: "Rapid-fire",
+                value: repeatRateBinding
+            )
+        }
 
-                    Divider().padding(.horizontal, 12).padding(.vertical, 4)
+    }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Force-Click Zones")
-                            .font(.body.weight(.medium))
-                        Text("Define the size of the corner/edge zones for zoned force-clicks.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 12)
+    @ViewBuilder private var edgesCard: some View {
+        TuningSection(title: "Edge Dead Zones", icon: "rectangle.dashed") {
+            Toggle("Ignore touches that start near the edges", isOn: tuningBinding(\.edgeMarginEnabled))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
 
-                    marginSlider(label: "Left Zone",   keyPath: \.forceClickMargin.left, range: 15...45, hint: "Left force-click zone reach.")
-                    marginSlider(label: "Right Zone",  keyPath: \.forceClickMargin.right, range: 15...45, hint: "Right force-click zone reach.")
-                    marginSlider(label: "Top Zone",    keyPath: \.forceClickMargin.top, range: 15...45, hint: "Top force-click zone reach.")
-                    marginSlider(label: "Bottom Zone", keyPath: \.forceClickMargin.bottom, range: 15...45, hint: "Bottom force-click zone reach.")
-
-                    TrackpadPreview(
-                        edgeLeft:   store.tuning.edgeMarginEnabled ? Double(store.tuning.edgeMargin.left) : 0,
-                        edgeRight:  store.tuning.edgeMarginEnabled ? Double(store.tuning.edgeMargin.right) : 0,
-                        edgeTop:    store.tuning.edgeMarginEnabled ? Double(store.tuning.edgeMargin.top) : 0,
-                        edgeBottom: store.tuning.edgeMarginEnabled ? Double(store.tuning.edgeMargin.bottom) : 0,
-                        forceLeft:  Double(store.tuning.forceClickMargin.left),
-                        forceRight: Double(store.tuning.forceClickMargin.right),
-                        forceTop:   Double(store.tuning.forceClickMargin.top),
-                        forceBottom: Double(store.tuning.forceClickMargin.bottom)
-                    )
-                    .frame(height: 170)
-                    .padding(.horizontal, 12)
+            if store.tuning.edgeMarginEnabled {
+                explainer("Helps when your palm or thumb brushes the trackpad rim. Fingers already inside keep working normally.")
+                FriendlySlider(
+                    title: "Dead zone size",
+                    subtitle: "Sets all four edges at once; adjust each below.",
+                    leftLabel: "Sliver", rightLabel: "Wide",
+                    value: edgeSizeBinding
+                )
+                marginSlider(label: "Left Edge",   keyPath: \.edgeMargin.left)
+                marginSlider(label: "Right Edge",  keyPath: \.edgeMargin.right)
+                marginSlider(label: "Top Edge",    keyPath: \.edgeMargin.top)
+                marginSlider(label: "Bottom Edge", keyPath: \.edgeMargin.bottom)
                     .padding(.bottom, 8)
-                }
+            }
+        }
+    }
 
-                advancedSection
+    @ViewBuilder private var forceClickCard: some View {
+        TuningSection(title: "Force-Click Zones", icon: "rectangle.inset.filled") {
+            explainer("How far the corner and edge zones reach for zoned force clicks. Dashed areas in the preview are the edge dead zones from Palm & Edges.")
 
-                HStack {
-                    Spacer()
-                    Button("Reset All to Defaults") {
-                        withAnimation {
-                            store.resetTuning()
-                            store.updateDeviceTuning { $0.trackpadSensitivity = 0.5; $0.trackpadPointerSpeed = 1; $0.trackpadTipTapMinimum = 0.08; $0.trackpadTipTapAnchor = 0.25 }
-                        }
-                    }
-                    .buttonStyle(.bordered)
+            marginSlider(label: "Left Zone",   keyPath: \.forceClickMargin.left, range: 15...45, hint: "Left force-click zone reach.")
+            marginSlider(label: "Right Zone",  keyPath: \.forceClickMargin.right, range: 15...45, hint: "Right force-click zone reach.")
+            marginSlider(label: "Top Zone",    keyPath: \.forceClickMargin.top, range: 15...45, hint: "Top force-click zone reach.")
+            marginSlider(label: "Bottom Zone", keyPath: \.forceClickMargin.bottom, range: 15...45, hint: "Bottom force-click zone reach.")
+
+            TrackpadPreview(
+                edgeLeft:   store.tuning.edgeMarginEnabled ? Double(store.tuning.edgeMargin.left) : 0,
+                edgeRight:  store.tuning.edgeMarginEnabled ? Double(store.tuning.edgeMargin.right) : 0,
+                edgeTop:    store.tuning.edgeMarginEnabled ? Double(store.tuning.edgeMargin.top) : 0,
+                edgeBottom: store.tuning.edgeMarginEnabled ? Double(store.tuning.edgeMargin.bottom) : 0,
+                forceLeft:  Double(store.tuning.forceClickMargin.left),
+                forceRight: Double(store.tuning.forceClickMargin.right),
+                forceTop:   Double(store.tuning.forceClickMargin.top),
+                forceBottom: Double(store.tuning.forceClickMargin.bottom)
+            )
+            .frame(height: 170)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+        }
+    }
+
+    @ViewBuilder private var resetAllRow: some View {
+        HStack {
+            Spacer()
+            Button("Reset All to Defaults") {
+                withAnimation {
+                    store.resetTuning()
+                    store.updateDeviceTuning { $0.trackpadSensitivity = 0.5; $0.trackpadPointerSpeed = 1; $0.trackpadTipTapMinimum = 0.08; $0.trackpadTipTapAnchor = 0.25 }
                 }
             }
-            .padding()
+            .buttonStyle(.bordered)
         }
     }
 
@@ -237,7 +286,7 @@ struct TuningTab: View {
                 }
             }
             .padding(10)
-            Text("Pick a starting point — every slider below fine-tunes from there.")
+            Text("Pick a starting point — the sliders in the other tabs fine-tune from there.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -348,7 +397,9 @@ struct TuningTab: View {
     // MARK: - Advanced
 
     private var advancedSection: some View {
-        DisclosureGroup(isExpanded: $showAdvanced) {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Advanced — raw values", systemImage: "gearshape.2")
+                .font(.headline)
             GroupBox {
                 VStack(alignment: .leading, spacing: 0) {
                     SliderRow(label: "Initial Threshold", value: tuningBinding(\.initialThreshold),
@@ -384,18 +435,9 @@ struct TuningTab: View {
                     SliderRow(label: "Continuous Debounce", value: tuningBinding(\.continuousDebounce),
                               range: 0.0...0.25, format: "%.2fs",
                               hint: "Minimum time between repeats.")
-                    if store.tuning.edgeMarginEnabled {
-                        marginSlider(label: "Left Edge",   keyPath: \.edgeMargin.left)
-                        marginSlider(label: "Right Edge",  keyPath: \.edgeMargin.right)
-                        marginSlider(label: "Top Edge",    keyPath: \.edgeMargin.top)
-                        marginSlider(label: "Bottom Edge", keyPath: \.edgeMargin.bottom)
-                    }
                 }
                 .frame(maxWidth: .infinity)
             }
-        } label: {
-            Label("Advanced — raw values", systemImage: "gearshape.2")
-                .font(.headline)
         }
     }
 

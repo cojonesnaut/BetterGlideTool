@@ -1012,83 +1012,12 @@ final class Settings {
     /// The gesture set a new install starts with, and what "Reset to Defaults"
     /// restores.
     ///
-    /// Organised by finger count rather than by action, because that is how a
-    /// hand learns it: three fingers act on the *system*, four on the *window*,
-    /// five jump straight to fullscreen. Nothing here needs a speed tier, an app
-    /// to be installed, or a script to run — the set has to work on a machine
-    /// it has never seen.
-    ///
-    /// **Ordering is load-bearing.** When two rules match the same gesture the
-    /// later one wins, so a broad rule is listed first and its window-state
-    /// override follows.
-    static let defaultRules: [GestureRule] = {
-        /// `zone` and `hapticPattern` aren't initializer parameters, so the
-        /// helpers set them afterwards.
-        func swipe(_ fingers: Int,
-                   _ direction: GestureDirection,
-                   _ action: GestureAction,
-                   state: WindowStateFilter = .any,
-                   reciprocal: Bool = true,
-                   haptic: HapticPattern? = nil) -> GestureRule {
-            var rule = GestureRule(fingers: fingers,
-                                   direction: direction,
-                                   action: action,
-                                   windowStateFilter: state,
-                                   reciprocalEnabled: reciprocal)
-            rule.hapticPattern = haptic
-            return rule
-        }
-
-        func forceClick(_ fingers: Int,
-                        _ zone: TrackpadZone,
-                        _ action: GestureAction,
-                        haptic: HapticPattern? = nil) -> GestureRule {
-            var rule = GestureRule(fingers: fingers, direction: .forceClick, action: action)
-            rule.zone = zone
-            rule.hapticPattern = haptic
-            return rule
-        }
-
-        return [
-            // ── 3 fingers — the system layer ──
-            // Horizontal is left free for your own assignments.
-            swipe(3, .swipeUp,   .missionControl,  haptic: .doubleTap),
-            swipe(3, .swipeDown, .minimizeAllApps, haptic: .falling),
-
-            GestureRule(fingers: 3, direction: .click, action: .quitFrontmost),
-            // Quitting Finder, or BetterGlideTool itself while its window is open, is never
-            // what the gesture meant. Listed after the broad rule so they win.
-            GestureRule(fingers: 3, direction: .click, action: .closeWindow,
-                        appFilter: "com.apple.finder"),
-            GestureRule(fingers: 3, direction: .click, action: .closeWindow,
-                        appFilter: "com.betterglidetool.app"),
-
-            // Screenshots are silent: the shutter is the feedback, and a haptic
-            // on top of it reads as a second, phantom capture.
-            forceClick(3, .topLeft,  .screenshotFullClipboard, haptic: .none),
-            forceClick(3, .topRight, .screenshotAreaClipboard, haptic: .none),
-
-            // ── 4 fingers — the window layer ──
-            // A ladder, one rung per swipe: up grows the window (normal →
-            // maximized → fullscreen), down walks the same steps back and then
-            // minimizes. The window's current state picks the rung, so the same
-            // gesture keeps doing "more" or "less" without anything to remember.
-            swipe(4, .swipeUp,   .maximizeWindow,  reciprocal: false),
-            swipe(4, .swipeUp,   .enterFullscreen, state: .maximized),
-            swipe(4, .swipeDown, .minimizeWindow,  state: .notMaximized, reciprocal: false),
-            swipe(4, .swipeDown, .restoreWindow,   state: .maximized),
-            swipe(4, .swipeDown, .exitFullscreen,  state: .fullscreen),
-
-            swipe(4, .swipeLeft,  .snapLeft),
-            swipe(4, .swipeRight, .snapRight),
-
-            forceClick(4, .any, .hideApp),
-
-            // ── 5 fingers — straight to fullscreen ──
-            swipe(5, .swipeUp,   .enterFullscreen, state: .notFullscreen),
-            swipe(5, .swipeDown, .exitFullscreen,  state: .fullscreen),
-        ]
-    }()
+    /// The starter gestures: Finder close and screenshots on three-finger
+    /// clicks, the four-finger window ladder, Magic Mouse and trackpad TipTaps
+    /// and swipes for tabs and history in the main browsers, Stage Manager on
+    /// Magic Mouse TipTaps, and Magic Mouse TipSwipes to size the window. The
+    /// list itself is YAML in DefaultGestures.swift.
+    static let defaultRules: [GestureRule] = DefaultGestures.rules
 }
 
 

@@ -253,9 +253,10 @@ struct GeneralTab: View {
                     Button("Welcome Tour") {
                         OnboardingController.shared.show()
                     }
-                    Button(UpdateChecker.repositoryURL == nil ? "Original Glide" : "GitHub") {
-                        NSWorkspace.shared.open(UpdateChecker.repositoryURL ?? URL(string: "https://github.com/Vatsal057/Glide")!)
+                    Button("GitHub") {
+                        NSWorkspace.shared.open(UpdateChecker.repositoryURL ?? URL(string: "https://github.com/cojonesnaut/BetterGlideTool")!)
                     }
+                    .help("Open BetterGlideTool on GitHub")
                 }
 
                 SquiggleDivider()

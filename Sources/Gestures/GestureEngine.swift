@@ -337,6 +337,9 @@ final class GestureEngine {
         clearReciprocalToken()
         phase = .fired
 
+        if logIfBlocked(rule.direction.title(fingers: rule.fingers), action: rule.action, device: rule.device) {
+            updateObservableState(); return
+        }
         let monitoring = recordMonitoredGesture(rule)
         if rule.action == .quitApp {
             WindowTargeting.shared.quitAppAtCursor(NSEvent.mouseLocation)
@@ -370,7 +373,17 @@ final class GestureEngine {
             action: rule.action.rawValue, appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
     }
 
+    /// With Block Real Gesture Triggering on, log the gesture as blocked and
+    /// report true so the caller skips its action.
+    private func logIfBlocked(_ gesture: String, action: GestureAction, device: GestureDevice) -> Bool {
+        guard GestureActionBlock.shared.blocksActions else { return false }
+        _ = LiveContactsMonitor.forDevice(device).recordGesture(gesture, action: "Blocked · \(action.rawValue)",
+            appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
+        return true
+    }
+
     func executeGestureRuleAction(_ rule: GestureRule) {
+        if logIfBlocked(rule.direction.title(fingers: rule.fingers), action: rule.action, device: rule.device) { return }
         let monitoring = recordMonitoredGesture(rule)
         if rule.device == .trackpad { Haptic.forRule(rule) }
         ActionExecutor.shared.execute(rule.action, appPath: rule.appPath,
@@ -382,6 +395,7 @@ final class GestureEngine {
 
     func executeSwipeRule(_ rule: GestureRule, fingers: Int, direction: GestureDirection) {
         LowFingerTrackpadInput.shared.cancelCurrentGesture()
+        if logIfBlocked(rule.direction.title(fingers: rule.fingers), action: rule.action, device: rule.device) { return }
         executeGestureRuleAction(rule)
 
         // Track what just fired so we can detect back-to-back same-direction toggles.
@@ -420,6 +434,7 @@ final class GestureEngine {
         clearReciprocalToken()
         lastFiredSwipe = nil   // reciprocal consumed — reset toggle tracking
         LowFingerTrackpadInput.shared.cancelCurrentGesture()
+        if logIfBlocked(direction.title(fingers: fingers), action: token.inverseAction, device: .trackpad) { return true }
         Haptic.reciprocal()
         let monitoring = LiveContactsMonitor.shared.recordGesture(direction.title(fingers: fingers), action: token.inverseAction.rawValue,
             appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
@@ -443,6 +458,7 @@ final class GestureEngine {
     func clearReciprocalToken() { reciprocalToken = nil; isReciprocalActive = false }
 
     func executeContinuousAction(_ action: GestureAction, shortcut: KeyboardShortcut? = nil, keyboard: [KeyboardInputStep] = [], gesture: String = "Continuous gesture") {
+        if logIfBlocked(gesture, action: action, device: .trackpad) { return }
         let monitoring = LiveContactsMonitor.shared.recordGesture(gesture, action: action.rawValue, appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
         LowFingerTrackpadInput.shared.cancelCurrentGesture()
         Haptic.forAction(action)
