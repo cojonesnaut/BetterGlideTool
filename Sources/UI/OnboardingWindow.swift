@@ -108,23 +108,23 @@ private struct OnboardingView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .font(.system(size: 32, weight: .bold, design: .rounded))
-            Text("Your trackpad, but with superpowers.")
+            Text("Your trackpad and Magic Mouse, with superpowers.")
                 .font(.title3)
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 14) {
                 featureRow(icon: "hand.draw.fill", color: .blue,
-                           title: "Custom gestures",
-                           detail: "Swipe, click, or force-click with 3, 4, or 5 fingers.")
+                           title: "Gestures for both devices",
+                           detail: "Swipes, clicks and force clicks on the trackpad; TipTaps, TipSwipes, flicks and circles on the trackpad and Magic Mouse.")
                 featureRow(icon: "bolt.fill", color: .orange,
                            title: "Instant actions",
-                           detail: "Snap windows, switch apps, take screenshots, and more.")
+                           detail: "Cycle Stage Manager, tile and size windows, switch tabs, take screenshots, or send any shortcut.")
                 featureRow(icon: "slider.horizontal.3", color: .purple,
-                           title: "Fully tunable",
-                           detail: "Per-app rules, modifier keys, speed, and sensitivity.")
+                           title: "Per-app and tunable",
+                           detail: "Rules for each app, a Live View of every gesture, and tuning tabs for each device.")
             }
             .padding(.top, 12)
-            .padding(.horizontal, 60)
+            .padding(.horizontal, 50)
             Spacer()
         }
     }
@@ -142,7 +142,7 @@ private struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
-            TrackpadDemoView()
+            StarterGestureTour()
                 .padding(.top, 4)
             Spacer(minLength: 16)
         }
@@ -156,12 +156,15 @@ private struct OnboardingView: View {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(.quaternary)
                     .frame(width: 220, height: 34)
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     Image(systemName: "wifi")
                     Image(systemName: "battery.75")
-                    Image(systemName: "hand.draw")
-                        .foregroundStyle(.blue)
-                        .padding(5)
+                    // The real menu bar icon: a hand over a trackpad.
+                    Image(nsImage: MenuBarIcon.image)
+                        .renderingMode(.template)
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 3)
                         .background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 5))
                     Image(systemName: "magnifyingglass")
                 }
@@ -170,13 +173,14 @@ private struct OnboardingView: View {
 
             Text("BetterGlideTool lives in your menu bar")
                 .font(.system(size: 26, weight: .bold, design: .rounded))
-            Text("Click the hand icon any time to open Preferences,\npause gestures, or quit.")
+            Text("Click its icon any time to open Preferences,\npause gestures, or quit.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 10) {
-                tipRow("Try it now: swipe up with 3 fingers for Mission Control.")
-                tipRow("Add your own gestures in Preferences → Gestures.")
+                tipRow("Try it now: in Safari or Brave, swipe up with three fingers on the trackpad for a new tab.")
+                tipRow("Every gesture in Preferences → Gestures shows a Live View of how to perform it.")
+                tipRow("Tune each device in Preferences → Tuning, and watch your touches in Input Monitoring.")
             }
             .padding(.top, 8)
             Spacer()
@@ -314,100 +318,67 @@ private struct PermissionStepView: View {
 }
 
 // ─────────────────────────────────────────────
-// MARK: - Trackpad demo (animated)
+// MARK: - Starter gestures (animated)
 // ─────────────────────────────────────────────
 
-private struct GestureDemo {
-    let caption: String
-    let fingers: Int
-    /// Finger travel over one loop, in trackpad-relative units.
-    let travel: CGSize
-    /// Click-style gestures pulse instead of sliding.
-    let isClick: Bool
-}
-
-struct TrackpadDemoView: View {
-    private let demos: [GestureDemo] = [
-        GestureDemo(caption: "3-finger swipe up — Mission Control", fingers: 3,
-                    travel: CGSize(width: 0, height: -0.42), isClick: false),
-        GestureDemo(caption: "3-finger click — quit app under cursor", fingers: 3,
-                    travel: .zero, isClick: true),
-        GestureDemo(caption: "4-finger swipe left — snap window left", fingers: 4,
-                    travel: CGSize(width: -0.42, height: 0), isClick: false),
-        GestureDemo(caption: "5-finger swipe up — enter fullscreen", fingers: 5,
-                    travel: CGSize(width: 0, height: -0.42), isClick: false),
+/// Cycles through the default gestures, each demonstrated the way the gesture
+/// editor's Live View shows it.
+struct StarterGestureTour: View {
+    private struct Starter: Identifiable {
+        let id = UUID()
+        let device: GestureDevice
+        let direction: GestureDirection
+        let fingers: Int
+        let does: String
+    }
+    private let starters: [Starter] = [
+        Starter(device: .magicMouse, direction: .tipTapTwoLeft, fingers: 3, does: "Next Stage Manager stage"),
+        Starter(device: .magicMouse, direction: .tipSwipeLeftUp, fingers: 3, does: "Maximize the window"),
+        Starter(device: .magicMouse, direction: .swipeUp, fingers: 2, does: "New tab in your browser"),
+        Starter(device: .magicMouse, direction: .swipeRight, fingers: 1, does: "Flick for Back in your browser"),
+        Starter(device: .trackpad, direction: .tipTapTwoRight, fingers: 3, does: "Next tab in your browser"),
+        Starter(device: .trackpad, direction: .swipeDown, fingers: 3, does: "Close the tab in your browser"),
+        Starter(device: .trackpad, direction: .forceClick, fingers: 3, does: "Screenshot to the clipboard"),
+        Starter(device: .trackpad, direction: .swipeUp, fingers: 4, does: "Maximize, then full screen"),
     ]
-
-    @State private var demoIndex = 0
-    @State private var progress: CGFloat = 0   // 0 → 1 finger travel
-    @State private var pressed = false
-    private let tick = Timer.publish(every: 2.4, tolerance: 0.3, on: .main, in: .common).autoconnect()
+    @State private var index = 0
+    private let tick = Timer.publish(every: 3.2, tolerance: 0.3, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        let demo = demos[demoIndex]
-
-        VStack(spacing: 18) {
+        let starter = starters[index]
+        VStack(spacing: 14) {
             ZStack {
-                // Trackpad
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.quaternary.opacity(0.5))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .strokeBorder(.tertiary, lineWidth: 1)
-                    )
-
-                // Fingers
-                fingerDots(for: demo)
+                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.black)
+                GestureHowToLayer(device: starter.device,
+                                  demo: GestureHowTo(direction: starter.direction, fingers: starter.fingers, device: starter.device,
+                                                     zone: starter.direction == .forceClick ? .topLeft : .any))
+                    .id(starter.id)
             }
-            .frame(width: 320, height: 230)
+            .frame(width: 300, height: 200)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-            Text(demo.caption)
-                .font(.headline)
-                .contentTransition(.opacity)
-                .frame(height: 22)
+            VStack(spacing: 4) {
+                Label(starter.device == .magicMouse ? "Magic Mouse" : "Trackpad",
+                      systemImage: starter.device == .magicMouse ? "magicmouse" : "rectangle.and.hand.point.up.left")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(starter.direction.title(fingers: starter.fingers))
+                    .font(.headline)
+                Text(starter.does)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(height: 62)
 
             HStack(spacing: 6) {
-                ForEach(0..<demos.count, id: \.self) { i in
+                ForEach(starters.indices, id: \.self) { i in
                     Capsule()
-                        .fill(i == demoIndex ? Color.accentColor : Color.secondary.opacity(0.25))
-                        .frame(width: i == demoIndex ? 18 : 6, height: 6)
+                        .fill(i == index ? Color.accentColor : Color.secondary.opacity(0.25))
+                        .frame(width: i == index ? 18 : 6, height: 6)
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: demoIndex)
+            .animation(.easeInOut(duration: 0.25), value: index)
         }
-        .onAppear { runCurrentDemo() }
-        .onReceive(tick) { _ in
-            demoIndex = (demoIndex + 1) % demos.count
-            runCurrentDemo()
-        }
-    }
-
-    private func fingerDots(for demo: GestureDemo) -> some View {
-        let spacing: CGFloat = 34
-        let baseOffset = CGFloat(demo.fingers - 1) / 2
-        return ZStack {
-            ForEach(0..<demo.fingers, id: \.self) { i in
-                Circle()
-                    .fill(Color.accentColor.gradient)
-                    .frame(width: 26, height: 26)
-                    .scaleEffect(pressed ? 0.78 : 1.0)
-                    .shadow(color: .accentColor.opacity(0.45), radius: pressed ? 2 : 7)
-                    .offset(x: (CGFloat(i) - baseOffset) * spacing)
-            }
-        }
-        .offset(x: demo.travel.width * 160 * progress + (demo.travel.width == 0 ? 0 : -demo.travel.width * 80),
-                y: demo.travel.height * 160 * progress + (demo.travel.height == 0 ? 0 : -demo.travel.height * 80))
-    }
-
-    private func runCurrentDemo() {
-        let demo = demos[demoIndex]
-        progress = 0
-        pressed = false
-        if demo.isClick {
-            withAnimation(.easeInOut(duration: 0.28).delay(0.5)) { pressed = true }
-            withAnimation(.easeInOut(duration: 0.28).delay(1.1)) { pressed = false }
-        } else {
-            withAnimation(.easeInOut(duration: 1.5).delay(0.35)) { progress = 1 }
-        }
+        .onReceive(tick) { _ in index = (index + 1) % starters.count }
     }
 }

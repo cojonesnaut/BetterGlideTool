@@ -1,5 +1,37 @@
 # Changelog
 
+## BetterGlideTool 3.0.0
+
+The first BetterGlideTool release on its own, gathering 2.11.0 through 2.12.11.
+
+- **Gestures that feel like BetterTouchTool**, measured against it: smoother edge scrolling; reliable swipes and thumb-arc swipes; TipTaps that act within a few milliseconds and never click through; Tip swipes that never scroll the page; one-finger Magic Mouse and two-finger trackpad swipes that fire on a flick and leave panning alone; and live circles on the Magic Mouse and trackpad.
+- **Stage Manager and windows:** fast stage cycling with the strip hidden, and macOS window tiling for Fill, Center and Restore.
+- **Live View** in the gesture editor demonstrates how to perform every gesture on both devices. Input Monitoring draws device-shaped surfaces with fading finger dots and can block gesture actions while you practise.
+- **Tuning** is split into tabs for each device. **Settings…** (⌘,) opens General.
+- **New default gestures** and an updated welcome tour.
+- **A native Liquid Glass app icon**, rendered by macOS in Default, Dark, Clear and Tinted.
+- The About section's **GitHub** button opens this project's repository.
+- Removed: TrackPoint and the App Switcher. Apple Silicon only.
+
+## BetterGlideTool 2.12.11 (local)
+
+- New default gestures — what a new install starts with and what Reset to Defaults restores: trackpad three-finger clicks for Finder close and zoned screenshots, the four-finger maximize/full-screen ladder, Magic Mouse Stage Manager TipTaps and maximize/restore TipSwipes, and, in X, Safari, Brave, Craft and Helium, TipTaps for previous/next tab, swipes for new/close tab and flicks for Back/Forward on both devices, plus four-finger tap for middle click in Brave and Helium. The list is stored as Configuration-tab YAML and parsed by the same importer, so it matches an import exactly.
+- The welcome tour describes the current app: gestures for the trackpad and Magic Mouse, Stage Manager, window tiling, tabs and shortcuts, per-app rules, Live View and tuning tabs. "Learn the moves" now cycles through the new starter gestures with the same Live View demonstration the gesture editor uses, and the menu bar page shows the actual menu bar icon (a hand over a trackpad) instead of a stand-in symbol.
+
+## BetterGlideTool 2.12.10 (local)
+
+- Tuning is split into tabs for each device, as in BetterTouchTool's settings, so each page fits without long scrolling. Trackpad: General (pointer speed, gesture sensitivity, Quick Setup), Swipes (distance, diagonal strictness, speed tiers), TipTaps (timing, sensitivity, spacing), Palm & Edges (accident protection and edge dead zones, now with each edge's slider here), Force Click (zones and preview), Repeating, and Advanced (raw values, shown open). Magic Mouse: General (on/off, connection, pointer speed, sensitivity), Taps & TipTaps, Swipes, Scrolling. Each device remembers its last tab. No setting was removed.
+
+## BetterGlideTool 2.12.9 (local)
+
+- BetterGlideTool ▸ Settings… (⌘,) opens the Preferences window on General. It used to open an empty "BetterGlideTool Settings" window, an unused placeholder scene that has been removed.
+
+## BetterGlideTool 2.12.8 (local)
+
+- Input Monitoring draws fingers the way BetterTouchTool's live view does: a solid purple dot per contact that fades and grows in as the finger lands, follows it, and fades out as it lifts — in the Input Monitoring tab and its Float window. The Float window itself is unchanged.
+- New **Block Real Gesture Triggering** checkbox in Input Monitoring (tab and Float window), as in BetterTouchTool's live view: gestures are still recognised and appear in the Gesture Log, marked "Blocked", but their actions do not run, so you can practise them without side effects. It covers rule gestures, clicks, reciprocal swipes and continuous swipes, and applies only while an Input Monitoring view is open, so closing it never leaves gestures silently disabled.
+- Builds no longer rewrite the committed compiled icon unless `AppIcon.icon` changed.
+
 ## BetterGlideTool 2.12.7 (local)
 
 - A native Liquid Glass app icon. `assets/AppIcon.icon` is an Icon Composer document — a filled `hand.draw` glyph as a glass layer over a system-managed violet fill — compiled by Xcode's asset compiler into `Assets.car` and `CFBundleIconName`. macOS 26 and later render it like Apple's own icons in Default, Dark, Clear Light, Clear Dark and Tinted; macOS 13–15 get the matching flat `AppIcon.icns`. The old icon was a flat image with baked-in lighting, so it could not follow the dark or clear icon styles.

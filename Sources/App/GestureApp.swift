@@ -683,8 +683,25 @@ struct GestureApp: App {
         .windowToolbarStyle(.unified)
         .defaultSize(width: 820, height: 600)
         .windowResizability(.contentMinSize)
+        .commands {
+            // BetterGlideTool ▸ Settings… (⌘,) opens Preferences on General,
+            // instead of an empty Settings window.
+            CommandGroup(replacing: .appSettings) { SettingsMenuItem() }
+        }
+    }
+}
 
-        SwiftUI.Settings { EmptyView() }
+private struct SettingsMenuItem: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Settings…") {
+            PreferencesNavigator.shared.tab = .general
+            NSApp.setActivationPolicy(.regular)
+            openWindow(id: "preferences")
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        .keyboardShortcut(",", modifiers: .command)
     }
 }
 import SwiftUI
