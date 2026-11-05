@@ -17,6 +17,7 @@ private struct BasicTouchRecognizer {
     private var lastTimestamp = 0.0
     private var peak = 0
     private var maxMovement = 0.0
+    private var peakSize = 0.0
     private var tapX = 0.5
     private var cancelled = false
     private var tapCancelled = false
@@ -57,8 +58,13 @@ private struct BasicTouchRecognizer {
         guard settings.enabled else { reset(); return nil }
         if contacts.isEmpty {
             defer { reset() }
+            var longest = settings.tapDuration
+            if peak == 1, settings.tipTapSpacingGeometry == .magicMouse, peakSize <= MagicMouseTouchRegion.fingertipSize,
+               let origin = tapLocation, MagicMouseTouchRegion.isAboveApple(x: origin.x, y: origin.y) {
+                longest = max(longest, MagicMouseTouchRegion.aboveAppleTapDuration)
+            }
             guard isTouching, !cancelled, !tapCancelled, !emitted, !physicalButtonDown,
-                  timestamp - start >= 0.025, timestamp - start <= settings.tapDuration,
+                  timestamp - start >= 0.025, timestamp - start <= longest,
                   maxMovement <= settings.tapMovement else { return nil }
             switch peak {
             case 1: return tapX < 0.5 ? .leftTap : .rightTap
@@ -84,6 +90,7 @@ private struct BasicTouchRecognizer {
         }
         previousIDs = ids
         peak = max(peak, contacts.count)
+        peakSize = max(peakSize, contacts.map(\.size).max() ?? 0)
         var dx = 0.0, dy = 0.0
         var deltas: [(Double, Double)] = []
         for contact in contacts {

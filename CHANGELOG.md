@@ -1,5 +1,9 @@
 # Changelog
 
+## BetterGlideTool 3.0.1
+
+- Fix Tap Above Apple on the Magic Mouse. Taps just above the Apple logo land on the very back edge of the touch sensor (recorded at x 0.50–0.54, y 0.04–0.05), but the region started at y 0.15, so it never matched. It now covers the centre of the back edge (x 0.30–0.70, y up to 0.12). Back-edge taps also read longer — recorded ones lasted up to 0.56 s — so a tap there may last up to 0.6 s, as long as the finger stays still and fingertip-sized; a palm resting on the back of the mouse still never counts. Replaying the recording, all five taps now trigger the gesture; before, none did.
+
 ## BetterGlideTool 3.0.0
 
 The first BetterGlideTool release on its own, gathering 2.11.0 through 2.12.11.

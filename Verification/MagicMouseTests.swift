@@ -97,6 +97,20 @@ struct MagicMouseTests {
         expect(r.consume([], timestamp: 1.1, settings: settings) == .leftTap, "First device independent")
         expect(other.consume([], timestamp: 1.1, settings: settings) == .rightTap, "Second device independent")
         // Single-finger swipes are opt-in and never borrow a two-finger binding.
+        // Tap Above Apple: recorded taps landed on the sensor's back edge
+        // (x 0.50–0.54, y 0.04–0.05) and some lasted over half a second.
+        expect(MagicMouseTouchRegion.isAboveApple(x: 0.52, y: 0.045), "A recorded above-Apple tap is in the region")
+        expect(!MagicMouseTouchRegion.isAboveApple(x: 0.52, y: 0.3) && !MagicMouseTouchRegion.isAboveApple(x: 0.1, y: 0.05), "Mid-mouse and corner taps are not above the Apple")
+        var apple = MagicMouseSettings(); apple.tipTapSpacingGeometry = .magicMouse
+        apple.bindings = [.leftTap: .showDesktop, .rightTap: .showDesktop]
+        for (y, size, expected, label) in [(0.04, 1.6, MagicMouseGesture?.some(.rightTap), "A slow back-edge tap counts"),
+                                           (0.6, 1.6, nil, "The same slow tap mid-mouse is too long"),
+                                           (0.04, 3.4, nil, "A palm on the back edge is not a tap")] {
+            r.reset()
+            _ = r.consume([MouseContact(id: 1, x: 0.52, y: y, size: size)], timestamp: 1, settings: apple)
+            _ = r.consume([MouseContact(id: 1, x: 0.525, y: y + 0.005, size: size)], timestamp: 1.3, settings: apple)
+            expect(r.consume([], timestamp: 1.55, settings: apple) == expected, label)
+        }
         // One finger scrolls a Magic Mouse and two scroll a trackpad: those swipes
         // are flicks, fired on speed so a slow pan never triggers them.
         for (gesture, dx, dy) in [(MagicMouseGesture.oneFingerSwipeRight, 0.3, 0.0), (.oneFingerSwipeLeft, -0.3, 0.0), (.oneFingerSwipeUp, 0.0, 0.3), (.oneFingerSwipeDown, 0.0, -0.3)] {

@@ -254,7 +254,15 @@ struct MagicMouseSettings: Equatable {
 /// Above Apple is the lower central patch, above the printed logo.
 enum MagicMouseTouchRegion {
     static func isMiddle(x: Double) -> Bool { (0.4...0.6).contains(x) }
-    static func isAboveApple(x: Double, y: Double) -> Bool { (0.35...0.65).contains(x) && (0.15...0.4).contains(y) }
+    /// Just above the Apple logo is the very back edge of the touch sensor:
+    /// recorded taps there landed at x 0.50–0.54, y 0.04–0.05. (The old box
+    /// started at y 0.15, so no real tap ever reached it.)
+    static func isAboveApple(x: Double, y: Double) -> Bool { (0.3...0.7).contains(x) && y <= 0.12 }
+    /// Taps on the back edge read longer — recorded ones lasted up to 0.56 s —
+    /// so a tap there may last this long. Only a still, fingertip-sized
+    /// contact counts, so a palm resting on the back of the mouse never does.
+    static let aboveAppleTapDuration = 0.6
+    static let fingertipSize = 2.5
 }
 
 /// Touch-size thresholds are sensor units, not Force Touch pressure. Keeping this

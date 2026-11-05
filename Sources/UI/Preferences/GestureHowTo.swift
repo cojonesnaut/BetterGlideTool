@@ -120,7 +120,7 @@ struct GestureHowTo {
         case .leftTap: return (0.3, 0.62)
         case .rightTap: return (0.7, 0.62)
         case .middleTap, .middleClick: return (0.5, 0.62)
-        case .aboveAppleTap: return (0.5, 0.28)
+        case .aboveAppleTap: return (0.5, 0.07)
         case .tapTop: return (0.5, 0.78)
         case .tapBottom: return (0.5, 0.22)
         case .cornerTopLeft: return (0.1, 0.88)

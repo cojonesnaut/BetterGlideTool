@@ -297,7 +297,7 @@ struct ConfigurationTests {
             let regionalRecognition = MouseRuleBridge.recognitionSettings(rules: [mouseRule(direction)], device: .magicMouse)
             precondition(regionalRecognition.action(for: .leftTap) != .none && regionalRecognition.action(for: .rightTap) != .none)
         }
-        func regionalMatch(_ rules: [GestureRule], x: Double = 0.48, y: Double = 0.25, app: String? = nil, modifiers: CapturedModifiers = CapturedModifiers([]), fullscreen: Bool = false) -> GestureRule? {
+        func regionalMatch(_ rules: [GestureRule], x: Double = 0.48, y: Double = 0.05, app: String? = nil, modifiers: CapturedModifiers = CapturedModifiers([]), fullscreen: Bool = false) -> GestureRule? {
             MouseRuleBridge.resolve(in: rules, gesture: x < 0.5 ? .leftTap : .rightTap, device: .magicMouse,
                 modifiers: modifiers, location: MouseContact(id: 1, x: x, y: y), bundleID: app, isFullscreen: fullscreen)
         }
