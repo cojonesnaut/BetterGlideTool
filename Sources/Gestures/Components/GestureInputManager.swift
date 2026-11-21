@@ -228,6 +228,12 @@ final class GestureInputManager {
                     // cancel. The TipTap already acted on the same finger.
                     return nil
                 }
+                if EdgeTapClaims.claimsNativeClick(type, uptime: ProcessInfo.processInfo.systemUptime,
+                                                   isTrackpad: { identity.isTrackpad(event) }) {
+                    // The tap-to-click of a corner or media strip tap: the tap is
+                    // half of a double-tap, not a click on whatever is under the pointer.
+                    return nil
+                }
                 LowFingerTrackpadInput.shared.observeNativeEvent(type, confirmedTrackpad: identity.isTrackpad(event))
                 guard type == .leftMouseDown else { return Unmanaged.passUnretained(event) }
                 let count = TouchTracker.getThreeFingerCount()

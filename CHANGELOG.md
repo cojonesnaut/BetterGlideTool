@@ -1,5 +1,24 @@
 # Changelog
 
+## BetterGlideTool 3.2.0
+
+- **A redesigned Edge Controls page.** It opens on a trackpad diagram showing what each edge and corner does, with live volume and brightness filling the strips that control them. Settings are sorted into categories along the top, like the Tuning page: Edges, Corners, While Sliding and Feedback. Clicking an edge or corner on the diagram opens its category.
+- **Media Strip:** a new edge action. Swipe along it to skip to the next or previous track (one track per swipe), and double-tap it to play or pause. Both can be reversed or turned off.
+- **Corner double-taps:** each of the four trackpad corners can run an action when you double-tap it: mute, play/pause, next or previous track, Mission Control, App Exposé, Show Desktop, Notification Center, Spotlight, a screenshot, Lock Screen, or one of your Shortcuts. The taps never click, even with Tap to Click on.
+- **Where side slides can start:** the full edge, or only its top or bottom ¾, half or quarter.
+- **Only While Holding Fn or Option**, for anyone who wants slides only on purpose.
+- **Pause While Typing:** the edges ignore a touch that lands within half a second of a key press, so a resting palm never changes the volume. On by default.
+- **Precise Sliding** can now be turned off to move volume and brightness a full notch at a time, and a new **Sensitivity** slider sets how far a slide moves them.
+- **Haptic Feedback** for edge slides: Off, Light, Medium or Strong.
+- **Swap Sides** swaps the left and right edge actions in one click.
+- The menu bar menu's **Open Preferences…** is now **Settings…**, matching the app menu.
+- **Enable Edge Controls** in the menu bar menu, under Enable Gestures. It is the same setting as the switch at the top of the Edge Controls page.
+- Config files gain the matching `edge_controls` keys; older configs import unchanged.
+
+## BetterGlideTool 3.1.1
+
+- The Magic Mouse gesture list no longer has a **Magic Mouse Tuning…** button above the search field, matching the trackpad list. Tuning is still in the sidebar.
+
 ## BetterGlideTool 3.1.0
 
 - **Turkish language support.** Every screen — Preferences, Tuning, Input Monitoring, Live View, the welcome tour, the menu bar menu, alerts and gesture/action names — is translated into Turkish. Trackpad and Magic Mouse keep their names, and the rest uses macOS's own Turkish terms (Kuvvetli Tıklama, Sahne Yöneticisi, Erişilebilirlik).

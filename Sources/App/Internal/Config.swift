@@ -42,6 +42,22 @@ struct GlideConfig {
         var scrollSpeed: Double = 26.0
         var invertScroll: Bool = false
         var scrollMomentum: Bool = true
+        var activeArea: String = "full"
+        var requireModifier: Bool = false
+        var pauseWhileTyping: Bool = true
+        var preciseSliding: Bool = true
+        var sensitivity: Double = 1.0
+        var hapticLevel: String = "medium"
+        var mediaReverseSwipe: Bool = false
+        var mediaDoubleTapPlayPause: Bool = true
+        var topLeftCorner: String = "none"
+        var topRightCorner: String = "none"
+        var bottomLeftCorner: String = "none"
+        var bottomRightCorner: String = "none"
+        var topLeftShortcut: String = ""
+        var topRightShortcut: String = ""
+        var bottomLeftShortcut: String = ""
+        var bottomRightShortcut: String = ""
     }
 
     struct Tuning {
@@ -163,6 +179,22 @@ extension GlideConfig {
         cfg.edgeControls.scrollSpeed = s.edgeControls.scrollSpeed
         cfg.edgeControls.invertScroll = s.edgeControls.invertScroll
         cfg.edgeControls.scrollMomentum = s.edgeControls.scrollMomentum
+        cfg.edgeControls.activeArea = s.edgeControls.activeArea.rawValue
+        cfg.edgeControls.requireModifier = s.edgeControls.requireModifier
+        cfg.edgeControls.pauseWhileTyping = s.edgeControls.pauseWhileTyping
+        cfg.edgeControls.preciseSliding = s.edgeControls.preciseSliding
+        cfg.edgeControls.sensitivity = s.edgeControls.sensitivity
+        cfg.edgeControls.hapticLevel = s.edgeControls.hapticLevel.rawValue
+        cfg.edgeControls.mediaReverseSwipe = s.edgeControls.mediaReverseSwipe
+        cfg.edgeControls.mediaDoubleTapPlayPause = s.edgeControls.mediaDoubleTapPlayPause
+        cfg.edgeControls.topLeftCorner = s.edgeControls.topLeftCorner.rawValue
+        cfg.edgeControls.topRightCorner = s.edgeControls.topRightCorner.rawValue
+        cfg.edgeControls.bottomLeftCorner = s.edgeControls.bottomLeftCorner.rawValue
+        cfg.edgeControls.bottomRightCorner = s.edgeControls.bottomRightCorner.rawValue
+        cfg.edgeControls.topLeftShortcut = s.edgeControls.shortcutName(for: .topLeft) ?? ""
+        cfg.edgeControls.topRightShortcut = s.edgeControls.shortcutName(for: .topRight) ?? ""
+        cfg.edgeControls.bottomLeftShortcut = s.edgeControls.shortcutName(for: .bottomLeft) ?? ""
+        cfg.edgeControls.bottomRightShortcut = s.edgeControls.shortcutName(for: .bottomRight) ?? ""
 
         cfg.tuning.continuousStepThreshold   = t.continuousStepThreshold
         cfg.tuning.continuousDebounce        = t.continuousDebounce
@@ -287,6 +319,24 @@ extension GlideConfig {
         e.scrollSpeed = edgeControls.scrollSpeed
         e.invertScroll = edgeControls.invertScroll
         e.scrollMomentum = edgeControls.scrollMomentum
+        e.activeArea = EdgeActiveArea(rawValue: edgeControls.activeArea) ?? .full
+        e.requireModifier = edgeControls.requireModifier
+        e.pauseWhileTyping = edgeControls.pauseWhileTyping
+        e.preciseSliding = edgeControls.preciseSliding
+        e.sensitivity = edgeControls.sensitivity
+        e.hapticLevel = EdgeHapticLevel(rawValue: edgeControls.hapticLevel) ?? .medium
+        e.mediaReverseSwipe = edgeControls.mediaReverseSwipe
+        e.mediaDoubleTapPlayPause = edgeControls.mediaDoubleTapPlayPause
+        let corners: [(TrackpadCorner, String, String)] = [
+            (.topLeft, edgeControls.topLeftCorner, edgeControls.topLeftShortcut),
+            (.topRight, edgeControls.topRightCorner, edgeControls.topRightShortcut),
+            (.bottomLeft, edgeControls.bottomLeftCorner, edgeControls.bottomLeftShortcut),
+            (.bottomRight, edgeControls.bottomRightCorner, edgeControls.bottomRightShortcut),
+        ]
+        for (corner, action, shortcut) in corners {
+            e.setCornerAction(EdgeCornerAction(rawValue: action) ?? .none, for: corner)
+            e.setShortcutName(shortcut, for: corner)
+        }
         return EdgeControlsSettings.normalized(e)
     }
 
@@ -500,6 +550,28 @@ enum GlideConfigSerializer {
             "    scroll_speed: \(String(config.edgeControls.scrollSpeed))",
             "    invert_scroll: \(config.edgeControls.invertScroll ? "true" : "false")",
             "    scroll_momentum: \(config.edgeControls.scrollMomentum ? "true" : "false")",
+            "    # Where a side slide may start: full, top_three_quarters, top_half,",
+            "    # top_quarter, bottom_three_quarters, bottom_half or bottom_quarter.",
+            "    active_area: \(config.edgeControls.activeArea)",
+            "    require_modifier: \(config.edgeControls.requireModifier ? "true" : "false")",
+            "    pause_while_typing: \(config.edgeControls.pauseWhileTyping ? "true" : "false")",
+            "    precise_sliding: \(config.edgeControls.preciseSliding ? "true" : "false")",
+            "    sensitivity: \(String(config.edgeControls.sensitivity))",
+            "    # off, light, medium or strong.",
+            "    haptic_level: \(config.edgeControls.hapticLevel)",
+            "    media_reverse_swipe: \(config.edgeControls.mediaReverseSwipe ? "true" : "false")",
+            "    media_double_tap_play_pause: \(config.edgeControls.mediaDoubleTapPlayPause ? "true" : "false")",
+            "    # Double-tap actions: none, mute, play_pause, next_track, previous_track,",
+            "    # mission_control, app_expose, show_desktop, notification_center, spotlight,",
+            "    # screenshot_area, screenshot_toolbar, lock_screen or run_shortcut.",
+            "    top_left_corner: \(config.edgeControls.topLeftCorner)",
+            "    top_right_corner: \(config.edgeControls.topRightCorner)",
+            "    bottom_left_corner: \(config.edgeControls.bottomLeftCorner)",
+            "    bottom_right_corner: \(config.edgeControls.bottomRightCorner)",
+            "    top_left_shortcut: \"\(escape(config.edgeControls.topLeftShortcut))\"",
+            "    top_right_shortcut: \"\(escape(config.edgeControls.topRightShortcut))\"",
+            "    bottom_left_shortcut: \"\(escape(config.edgeControls.bottomLeftShortcut))\"",
+            "    bottom_right_shortcut: \"\(escape(config.edgeControls.bottomRightShortcut))\"",
             "",
             "  # ── Tuning ─────────────────────────────────────────",
             "  tuning:",
@@ -888,6 +960,22 @@ enum GlideConfigParser {
             case "scroll_speed": edge.scrollSpeed  = doubleVal(val) ?? edge.scrollSpeed
             case "invert_scroll": edge.invertScroll = boolVal(val)  ?? edge.invertScroll
             case "scroll_momentum": edge.scrollMomentum = boolVal(val) ?? edge.scrollMomentum
+            case "active_area":     edge.activeArea = stringVal(val) ?? edge.activeArea
+            case "require_modifier": edge.requireModifier = boolVal(val) ?? edge.requireModifier
+            case "pause_while_typing": edge.pauseWhileTyping = boolVal(val) ?? edge.pauseWhileTyping
+            case "precise_sliding": edge.preciseSliding = boolVal(val) ?? edge.preciseSliding
+            case "sensitivity":     edge.sensitivity = doubleVal(val) ?? edge.sensitivity
+            case "haptic_level":    edge.hapticLevel = stringVal(val) ?? edge.hapticLevel
+            case "media_reverse_swipe": edge.mediaReverseSwipe = boolVal(val) ?? edge.mediaReverseSwipe
+            case "media_double_tap_play_pause": edge.mediaDoubleTapPlayPause = boolVal(val) ?? edge.mediaDoubleTapPlayPause
+            case "top_left_corner":     edge.topLeftCorner = stringVal(val) ?? edge.topLeftCorner
+            case "top_right_corner":    edge.topRightCorner = stringVal(val) ?? edge.topRightCorner
+            case "bottom_left_corner":  edge.bottomLeftCorner = stringVal(val) ?? edge.bottomLeftCorner
+            case "bottom_right_corner": edge.bottomRightCorner = stringVal(val) ?? edge.bottomRightCorner
+            case "top_left_shortcut":     edge.topLeftShortcut = stringVal(val) ?? edge.topLeftShortcut
+            case "top_right_shortcut":    edge.topRightShortcut = stringVal(val) ?? edge.topRightShortcut
+            case "bottom_left_shortcut":  edge.bottomLeftShortcut = stringVal(val) ?? edge.bottomLeftShortcut
+            case "bottom_right_shortcut": edge.bottomRightShortcut = stringVal(val) ?? edge.bottomRightShortcut
             default: break
             }
             i += 1

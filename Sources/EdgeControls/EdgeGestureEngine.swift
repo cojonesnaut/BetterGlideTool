@@ -58,6 +58,73 @@ final class EdgeGestureEngine {
         var rightAction: EdgeAction = .volume
         var marginMm: Double = 12.0
         var activationTravelMm: Double = 4.0
+
+        var activeArea: EdgeActiveArea = .full
+        var requireModifier: Bool = false
+        var pauseWhileTyping: Bool = false
+        var preciseSliding: Bool = true
+        var sensitivity: Double = 1.0
+        var hapticLevel: EdgeHapticLevel = .medium
+        var mediaReverseSwipe: Bool = false
+        var mediaDoubleTapPlayPause: Bool = true
+        var corners: [TrackpadCorner: EdgeCornerAction] = [:]
+        var cornerShortcuts: [TrackpadCorner: String] = [:]
+
+        func action(for edge: TrackpadPhysicalEdge) -> EdgeAction {
+            switch edge {
+            case .top:    return topAction
+            case .bottom: return bottomAction
+            case .left:   return leftAction
+            case .right:  return rightAction
+            }
+        }
+
+        init(isEnabled: Bool = true,
+             topAction: EdgeAction = .none, bottomAction: EdgeAction = .none,
+             leftAction: EdgeAction = .brightness, rightAction: EdgeAction = .volume,
+             marginMm: Double = 12.0, activationTravelMm: Double = 4.0) {
+            self.isEnabled = isEnabled
+            self.topAction = topAction
+            self.bottomAction = bottomAction
+            self.leftAction = leftAction
+            self.rightAction = rightAction
+            self.marginMm = marginMm
+            self.activationTravelMm = activationTravelMm
+        }
+
+        init(settings s: EdgeControlsSettings) {
+            self.init(isEnabled: s.enabled,
+                      topAction: s.topEdge, bottomAction: s.bottomEdge,
+                      leftAction: s.leftEdge, rightAction: s.rightEdge,
+                      marginMm: s.marginMm, activationTravelMm: s.activationTravelMm)
+            activeArea = s.activeArea
+            requireModifier = s.requireModifier
+            pauseWhileTyping = s.pauseWhileTyping
+            preciseSliding = s.preciseSliding
+            sensitivity = s.sensitivity
+            hapticLevel = s.hapticLevel
+            mediaReverseSwipe = s.mediaReverseSwipe
+            mediaDoubleTapPlayPause = s.mediaDoubleTapPlayPause
+            for corner in TrackpadCorner.allCases {
+                corners[corner] = s.cornerAction(for: corner)
+                cornerShortcuts[corner] = s.shortcutName(for: corner)
+            }
+        }
+    }
+
+    /// Where a tap landed, for matching the two halves of a double-tap.
+    enum TapZone: Equatable {
+        case corner(TrackpadCorner)
+        case strip(TrackpadPhysicalEdge)
+    }
+
+    private struct TapCandidate {
+        let touchId: Int32
+        let zone: TapZone
+        let start: CGPoint
+        let startTime: TimeInterval
+        var lastTime: TimeInterval
+        var maxDeviationMm: Double = 0
     }
 
     private struct ActiveGesture {
@@ -76,7 +143,67 @@ final class EdgeGestureEngine {
         /// Where the cursor sat when the finger landed, so the drift it picks up
         /// before the gesture is recognised can be undone on commit.
         let cursorOrigin: CGPoint?
+
+        /// A media strip swipe skips one track per slide.
+        var mediaSkipped = false
     }
+
+    // MARK: - System hooks
+    //
+    // Everything the engine reads from or does to the rest of the system goes
+    // through these, so the `--test-edge-controls` suite can drive the engine
+    // without pressing keys, posting events or playing media.
+
+    /// Whether Fn or Option is held right now.
+    var modifierHeld: () -> Bool = {
+        let flags = CGEventSource.flagsState(.combinedSessionState)
+        return flags.contains(.maskSecondaryFn) || flags.contains(.maskAlternate)
+    }
+
+    /// Seconds since the last key press anywhere. Needs no extra permission.
+    var secondsSinceKeyPress: () -> Double = {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+    }
+
+    var performCorner: (EdgeCornerAction, String?) -> Void = { action, shortcutName in
+        guard let gestureAction = action.gestureAction else { return }
+        if gestureAction == .runShortcut && shortcutName == nil { return }
+        ActionExecutor.shared.execute(gestureAction, shortcutName: shortcutName)
+    }
+
+    var sendMediaKey: (SystemActions.MediaKey) -> Void = { SystemActions.sendMediaKey($0) }
+
+    var playHaptic: (HapticPattern) -> Void = { HapticEngine.shared.play($0) }
+
+    // MARK: - Tap tuning
+
+    /// The square in each corner where a double-tap counts. Matches the minimum
+    /// corner exclusion of the edge strips, so corners and slides never overlap.
+    static let cornerSizeMm = 12.0
+
+    /// How deep the media strip's double-tap zone reaches, at most. Kept shallow
+    /// so ordinary taps near the bottom of the pad still click.
+    static let stripTapDepthMm = 8.0
+
+    static let maxTapDuration: TimeInterval = 0.30
+    static let maxTapMovementMm = 3.0
+    static let maxDoubleTapGap: TimeInterval = 0.45
+
+    /// Ignore the edges this long after a key press when `pauseWhileTyping` is on.
+    static let typingPause: TimeInterval = 0.5
+
+    /// Travel along the media strip that skips a track.
+    static let mediaSkipTravelMm = 15.0
+
+    private var tapCandidate: TapCandidate?
+    private var lastTap: (zone: TapZone, time: TimeInterval)?
+
+    /// The touch whose landing has already been examined, so a touch is judged
+    /// once when it lands rather than on every frame.
+    private var landedTouchId: Int32?
+
+    /// Actions the last double-taps fired, newest last — for the test suite.
+    private(set) var firedTapActions: [TapZone] = []
 
     // MARK: - Activation tuning
 
@@ -146,22 +273,49 @@ final class EdgeGestureEngine {
         guard config.isEnabled else {
             if activeGesture != nil { reset() }
             disqualifiedTouchIds.removeAll(keepingCapacity: true)
+            tapCandidate = nil
+            lastTap = nil
+            landedTouchId = nil
             return
         }
 
         // Edge controls strictly require exactly 1 contact.
         // 2 contacts is scroll/pinch, 3+ contacts is Glide gesture.
         guard contacts == 1, let touch else {
+            if contacts == 0 {
+                finishTap(at: timestamp)
+            } else {
+                // A second finger makes it something else entirely.
+                tapCandidate = nil
+                lastTap = nil
+            }
+            landedTouchId = nil
             if activeGesture != nil { reset() }
             disqualifiedTouchIds.removeAll(keepingCapacity: true)
             return
         }
 
+        let currentPos = CGPoint(x: CGFloat(touch.x), y: CGFloat(touch.y))
+
+        if landedTouchId != touch.identifier {
+            // A different finger without a lift frame in between: settle the old
+            // one's tap as of the last frame it was seen.
+            if let candidate = tapCandidate, candidate.touchId != touch.identifier {
+                finishTap(at: candidate.lastTime)
+            }
+            landedTouchId = touch.identifier
+            if !acceptsLanding(touch: touch, position: currentPos, timestamp: timestamp) {
+                disqualifiedTouchIds.insert(touch.identifier)
+                if activeGesture != nil { reset() }
+                return
+            }
+        } else {
+            trackTap(touch: touch, position: currentPos, timestamp: timestamp)
+        }
+
         if disqualifiedTouchIds.contains(touch.identifier) {
             return
         }
-
-        let currentPos = CGPoint(x: CGFloat(touch.x), y: CGFloat(touch.y))
 
         if let current = activeGesture, current.touchId == touch.identifier {
             advance(current: current, touch: touch, currentPos: currentPos, timestamp: timestamp)
@@ -172,6 +326,101 @@ final class EdgeGestureEngine {
         }
     }
 
+    // MARK: - Landing and taps
+
+    /// Judges a finger the moment it lands. Returns false when the touch should
+    /// be ignored for its whole lifetime — a palm landing while typing.
+    private func acceptsLanding(touch: GLDTouchPoint, position: CGPoint, timestamp: TimeInterval) -> Bool {
+        if config.pauseWhileTyping && secondsSinceKeyPress() < Self.typingPause {
+            tapCandidate = nil
+            return false
+        }
+        if let zone = tapZone(for: position) {
+            tapCandidate = TapCandidate(touchId: touch.identifier, zone: zone, start: position,
+                                        startTime: timestamp, lastTime: timestamp)
+        } else {
+            tapCandidate = nil
+        }
+        return true
+    }
+
+    private func trackTap(touch: GLDTouchPoint, position: CGPoint, timestamp: TimeInterval) {
+        guard var candidate = tapCandidate, candidate.touchId == touch.identifier else { return }
+        let dx = Double(position.x - candidate.start.x) * surfaceSize.width
+        let dy = Double(position.y - candidate.start.y) * surfaceSize.height
+        candidate.maxDeviationMm = max(candidate.maxDeviationMm, (dx * dx + dy * dy).squareRoot())
+        candidate.lastTime = timestamp
+        if candidate.maxDeviationMm > Self.maxTapMovementMm
+            || timestamp - candidate.startTime > Self.maxTapDuration {
+            // Moved or held: not a tap, and it breaks any double-tap in progress.
+            tapCandidate = nil
+            lastTap = nil
+            return
+        }
+        tapCandidate = candidate
+    }
+
+    /// The finger lifted. A short, still touch in a tap zone is a tap; two in the
+    /// same zone close together are a double-tap.
+    private func finishTap(at timestamp: TimeInterval) {
+        guard let candidate = tapCandidate else { return }
+        tapCandidate = nil
+        guard timestamp - candidate.startTime <= Self.maxTapDuration,
+              candidate.maxDeviationMm <= Self.maxTapMovementMm else {
+            lastTap = nil
+            return
+        }
+
+        // Claim the tap-to-click macOS is about to generate for this tap.
+        EdgeTapClaims.recordTap(uptime: ProcessInfo.processInfo.systemUptime)
+
+        if let previous = lastTap, previous.zone == candidate.zone,
+           timestamp - previous.time <= Self.maxDoubleTapGap {
+            lastTap = nil
+            fireDoubleTap(in: candidate.zone)
+        } else {
+            lastTap = (candidate.zone, timestamp)
+        }
+    }
+
+    private func fireDoubleTap(in zone: TapZone) {
+        firedTapActions.append(zone)
+        if firedTapActions.count > 16 { firedTapActions.removeFirst() }
+        switch zone {
+        case .corner(let corner):
+            let action = config.corners[corner] ?? EdgeCornerAction.none
+            AppLogger.debug("[Edge] double-tap \(corner.rawValue) → \(action.rawValue)")
+            performCorner(action, config.cornerShortcuts[corner])
+        case .strip(let edge):
+            AppLogger.debug("[Edge] double-tap media strip on \(edge.rawValue) → play/pause")
+            sendMediaKey(.play)
+        }
+        playHaptic(config.hapticLevel.confirmation)
+    }
+
+    /// The corner or media strip a point lands in, if it is assigned an action.
+    func tapZone(for point: CGPoint) -> TapZone? {
+        let size = Self.cornerSizeMm
+        let nearLeft = distanceToEdgeMm(point, edge: .left) <= size
+        let nearRight = distanceToEdgeMm(point, edge: .right) <= size
+        let nearTop = distanceToEdgeMm(point, edge: .top) <= size
+        let nearBottom = distanceToEdgeMm(point, edge: .bottom) <= size
+        if (nearLeft || nearRight) && (nearTop || nearBottom) {
+            let corner: TrackpadCorner = nearTop
+                ? (nearLeft ? .topLeft : .topRight)
+                : (nearLeft ? .bottomLeft : .bottomRight)
+            return (config.corners[corner] ?? EdgeCornerAction.none) == .none ? nil : .corner(corner)
+        }
+        guard config.mediaDoubleTapPlayPause else { return nil }
+        for edge in TrackpadPhysicalEdge.allCases where config.action(for: edge) == .media {
+            let depth = min(config.marginMm, Self.stripTapDepthMm)
+            if distanceToEdgeMm(point, edge: edge) <= depth {
+                return .strip(edge)
+            }
+        }
+        return nil
+    }
+
     // MARK: - Gesture Lifecycle
 
     private func beginIfNeeded(touch: GLDTouchPoint, currentPos: CGPoint, timestamp: TimeInterval) {
@@ -179,6 +428,13 @@ final class EdgeGestureEngine {
         guard let (edge, action) = detectEdge(for: currentPos, depth: config.marginMm),
               action != .none else {
             // Touch landed away from the edge; disqualify for its entire lifetime
+            disqualifiedTouchIds.insert(touch.identifier)
+            return
+        }
+
+        // With the modifier requirement on, a finger that lands without Fn or
+        // Option held is ordinary pointer movement for its whole lifetime.
+        if config.requireModifier && !modifierHeld() {
             disqualifiedTouchIds.insert(touch.identifier)
             return
         }
@@ -311,6 +567,19 @@ final class EdgeGestureEngine {
             return
         }
 
+        // The media strip skips one track per slide, once the finger has travelled
+        // far enough along it. Right or up is the next track unless reversed.
+        if updated.action == .media {
+            if !updated.mediaSkipped && abs(alongAxisMm) >= Self.mediaSkipTravelMm {
+                updated.mediaSkipped = true
+                let forward = (alongAxisMm > 0) != config.mediaReverseSwipe
+                sendMediaKey(forward ? .next : .previous)
+                playHaptic(config.hapticLevel.confirmation)
+            }
+            activeGesture = updated
+            return
+        }
+
         // 4. Continuous actions map travel straight onto output and skip the tick
         // quantizer entirely — see EdgeAction.isContinuous for why.
         if updated.action.isContinuous {
@@ -330,15 +599,15 @@ final class EdgeGestureEngine {
             for _ in 0..<outcome.count {
                 dispatchAction(updated.action, directionPositive: isPositive)
             }
-            if updated.action.wantsHapticTicks {
-                var playHaptic = true
-                if updated.action.usesFineSteps {
+            if updated.action.wantsHapticTicks && config.hapticLevel != .off {
+                var shouldPlay = true
+                if updated.action.usesFineSteps && config.preciseSliding {
                     updated.fineTicksSinceHaptic += outcome.count
-                    playHaptic = updated.fineTicksSinceHaptic >= Self.fineStepsPerNotch
-                    if playHaptic { updated.fineTicksSinceHaptic %= Self.fineStepsPerNotch }
+                    shouldPlay = updated.fineTicksSinceHaptic >= Self.fineStepsPerNotch
+                    if shouldPlay { updated.fineTicksSinceHaptic %= Self.fineStepsPerNotch }
                 }
-                if playHaptic {
-                    HapticEngine.shared.play(outcome.isAttenuated ? .softTick : .tap)
+                if shouldPlay {
+                    playHaptic(config.hapticLevel.pattern(attenuated: outcome.isAttenuated))
                 }
             }
         }
@@ -416,15 +685,15 @@ final class EdgeGestureEngine {
         switch action {
         case .none:
             break
-        case .scroll:
-            // Continuous: applied in `advance` without passing through ticks.
+        case .scroll, .media:
+            // Handled in `advance` without passing through ticks.
             break
         case .volume:
-            SystemActions.sendMediaKey(directionPositive ? .volumeUp : .volumeDown, fine: true)
+            SystemActions.sendMediaKey(directionPositive ? .volumeUp : .volumeDown, fine: config.preciseSliding)
         case .brightness:
-            SystemActions.sendMediaKey(directionPositive ? .brightnessUp : .brightnessDown, fine: true)
+            SystemActions.sendMediaKey(directionPositive ? .brightnessUp : .brightnessDown, fine: config.preciseSliding)
         case .keyboardBacklight:
-            SystemActions.sendMediaKey(directionPositive ? .illuminationUp : .illuminationDown, fine: true)
+            SystemActions.sendMediaKey(directionPositive ? .illuminationUp : .illuminationDown, fine: config.preciseSliding)
         case .microphone:
             let mic = AudioDeviceVolume.defaultInput()
             if let current = mic.read() {
@@ -457,6 +726,7 @@ final class EdgeGestureEngine {
         var best: (edge: TrackpadPhysicalEdge, action: EdgeAction, distance: Double)?
         for (edge, action) in edgesToCheck {
             guard action != .none else { continue }
+            if !edge.isHorizontal && !config.activeArea.allows(y: Double(point.y)) { continue }
             let distance = distanceToEdgeMm(point, edge: edge)
             guard distance <= depth else { continue }
             guard distanceFromEdgeEndsMm(point, edge: edge) >= cornerExclusionMm(for: edge, depth: depth)
@@ -509,28 +779,34 @@ final class EdgeGestureEngine {
         distanceToEdgeMm(point, edge: edge) <= depth
     }
 
-    private func makeTickConfiguration(for action: EdgeAction) -> TickConfiguration {
+    func makeTickConfiguration(for action: EdgeAction) -> TickConfiguration {
         var cfg = TickConfiguration.default
+        // Sensitivity shortens or lengthens the travel per step. The rate ceiling
+        // rises with it, so a sensitive slide is not held back by the cap.
+        let sensitivity = config.sensitivity.clamped(to: EdgeControlsSettings.sensitivityRange)
+        let rateBoost = max(1.0, sensitivity)
         switch action {
         case .volume, .brightness, .keyboardBacklight:
             // Same ~70 mm for the full range as before, but in the system's quarter
             // steps: 64 levels at ~1.1 mm each, so the level follows the finger
             // instead of jumping a notch at a time. The rate ceiling and per-frame
             // cap scale with it, or a brisk slide would hit them and fall behind.
-            cfg.stepSize = 4.5 / Double(Self.fineStepsPerNotch)
-            cfg.maximumTickRate = 24.0 * Double(Self.fineStepsPerNotch)
-            cfg.maximumTicksPerSample = 2 * Self.fineStepsPerNotch
+            // With precise sliding off it moves a full notch per step instead.
+            let steps = config.preciseSliding ? Self.fineStepsPerNotch : 1
+            cfg.stepSize = 4.5 / Double(steps) / sensitivity
+            cfg.maximumTickRate = 24.0 * Double(steps) * rateBoost
+            cfg.maximumTicksPerSample = Int((2.0 * Double(steps) * rateBoost).rounded(.up))
             cfg.attenuationVelocity = 160.0
         case .microphone:
             // ~70mm travel for 16 notches => ~4.375mm per tick
-            cfg.stepSize = 4.5
-            cfg.maximumTickRate = 24.0
+            cfg.stepSize = 4.5 / sensitivity
+            cfg.maximumTickRate = 24.0 * rateBoost
             cfg.attenuationVelocity = 160.0
         case .nightShift:
-            cfg.stepSize = 6.0
-            cfg.maximumTickRate = 20.0
+            cfg.stepSize = 6.0 / sensitivity
+            cfg.maximumTickRate = 20.0 * rateBoost
             cfg.attenuationVelocity = 160.0
-        case .none, .scroll:
+        case .none, .scroll, .media:
             // Continuous or inert: the accumulator is built but never consulted.
             break
         }

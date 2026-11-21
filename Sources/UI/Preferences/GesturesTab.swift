@@ -33,10 +33,6 @@ struct GesturesTab: View {
         HSplitView {
             // ── Left: rule list ──
             VStack(spacing: 0) {
-                if device == .magicMouse {
-                    Button("Magic Mouse Tuning…") { PreferencesNavigator.shared.tab = .tuning }
-                        .padding(8)
-                }
                 listHeader
 
                 List(selection: $selectedRule) {

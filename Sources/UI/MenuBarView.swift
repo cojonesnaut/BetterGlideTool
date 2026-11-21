@@ -8,7 +8,7 @@ struct MenuBarView: View {
     @Environment(\.openWindow) var openWindow
 
     var body: some View {
-        Button("Open Preferences…") {
+        Button("Settings…") {
             showPreferences()
         }
         .keyboardShortcut(",", modifiers: .command)
@@ -16,6 +16,12 @@ struct MenuBarView: View {
         Divider()
 
         Toggle("Enable Gestures", isOn: $engineBridge.isEnabled)
+
+        // The same setting as the switch at the top of Preferences ▸ Edge Controls.
+        Toggle("Enable Edge Controls", isOn: Binding(
+            get: { preferencesStore.edgeControls.enabled },
+            set: { value in preferencesStore.updateEdgeControls { $0.enabled = value } }
+        ))
 
         if !preferencesStore.accessibilityGranted {
             Button("⚠️ Grant Accessibility Access…") {
