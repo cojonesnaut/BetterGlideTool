@@ -57,12 +57,7 @@ final class MultitouchBridge {
 
     /// Coordinates every low-contact feature's requirement so none overrides another.
     func updateMinimumContactCount() {
-        let edgeControlsActive = Settings.shared.edgeControls.enabled && (
-            Settings.shared.edgeControls.topEdge != .none ||
-            Settings.shared.edgeControls.bottomEdge != .none ||
-            Settings.shared.edgeControls.leftEdge != .none ||
-            Settings.shared.edgeControls.rightEdge != .none
-        )
+        let edgeControlsActive = Settings.shared.edgeControls.isActive
         let lowFingerActive = LowFingerTrackpadInput.recognitionSettings(rules: Settings.shared.rules).enabled
         let liveContactsActive = LiveContactsMonitor.shared.isEnabled
         GLDTSetContactDetailsEnabled(lowFingerActive || liveContactsActive)

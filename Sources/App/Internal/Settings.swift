@@ -700,15 +700,60 @@ struct EdgeControlsSettings: Codable, Equatable {
     /// Whether an edge scroll keeps gliding after the finger lifts.
     var scrollMomentum: Bool = true
 
+    // ── Sliding ──
+
+    /// Where along a side edge a slide may start.
+    var activeArea: EdgeActiveArea = .full
+
+    /// Slides only start while Fn or Option is held as the finger lands.
+    var requireModifier: Bool = false
+
+    /// Ignores the edges for a moment after a key press, so a palm resting on
+    /// the trackpad while typing never changes the volume.
+    var pauseWhileTyping: Bool = true
+
+    /// Volume and brightness move in the system's quarter steps. Off moves them
+    /// a full notch at a time.
+    var preciseSliding: Bool = true
+
+    /// How much a slide changes volume, brightness and the other stepped
+    /// controls for the same finger travel. 1 is the original feel.
+    var sensitivity: Double = 1.0
+
+    var hapticLevel: EdgeHapticLevel = .medium
+
+    // ── Media strip ──
+
+    /// Swapping which way along the strip is next and previous.
+    var mediaReverseSwipe: Bool = false
+
+    /// A double-tap on the media strip plays or pauses.
+    var mediaDoubleTapPlayPause: Bool = true
+
+    // ── Corners (double-tap) ──
+
+    var topLeftCorner: EdgeCornerAction = .none
+    var topRightCorner: EdgeCornerAction = .none
+    var bottomLeftCorner: EdgeCornerAction = .none
+    var bottomRightCorner: EdgeCornerAction = .none
+
+    /// Shortcut names for corners set to Run Shortcut, keyed by `TrackpadCorner.rawValue`.
+    var cornerShortcuts: [String: String] = [:]
+
     static let marginMmRange: ClosedRange<Double> = 3.0...30.0
     static let scrollSpeedRange: ClosedRange<Double> = 5.0...80.0
     static let activationTravelMmRange: ClosedRange<Double> = 2.0...15.0
+    static let sensitivityRange: ClosedRange<Double> = 0.5...2.0
 
     static func normalized(_ s: EdgeControlsSettings) -> EdgeControlsSettings {
         var n = s
         n.marginMm           = n.marginMm.clamped(to: marginMmRange)
         n.scrollSpeed        = n.scrollSpeed.clamped(to: scrollSpeedRange)
         n.activationTravelMm = n.activationTravelMm.clamped(to: activationTravelMmRange)
+        n.sensitivity        = n.sensitivity.clamped(to: sensitivityRange)
+        n.cornerShortcuts    = n.cornerShortcuts.filter {
+            !$0.value.trimmingCharacters(in: .whitespaces).isEmpty
+        }
         return n
     }
 
@@ -717,6 +762,66 @@ struct EdgeControlsSettings: Codable, Equatable {
     var usesScroll: Bool {
         topEdge == .scroll || bottomEdge == .scroll || leftEdge == .scroll || rightEdge == .scroll
     }
+
+    var usesMedia: Bool {
+        topEdge == .media || bottomEdge == .media || leftEdge == .media || rightEdge == .media
+    }
+
+    func action(for edge: TrackpadPhysicalEdge) -> EdgeAction {
+        switch edge {
+        case .top:    return topEdge
+        case .bottom: return bottomEdge
+        case .left:   return leftEdge
+        case .right:  return rightEdge
+        }
+    }
+
+    mutating func setAction(_ action: EdgeAction, for edge: TrackpadPhysicalEdge) {
+        switch edge {
+        case .top:    topEdge = action
+        case .bottom: bottomEdge = action
+        case .left:   leftEdge = action
+        case .right:  rightEdge = action
+        }
+    }
+
+    func cornerAction(for corner: TrackpadCorner) -> EdgeCornerAction {
+        switch corner {
+        case .topLeft:     return topLeftCorner
+        case .topRight:    return topRightCorner
+        case .bottomLeft:  return bottomLeftCorner
+        case .bottomRight: return bottomRightCorner
+        }
+    }
+
+    mutating func setCornerAction(_ action: EdgeCornerAction, for corner: TrackpadCorner) {
+        switch corner {
+        case .topLeft:     topLeftCorner = action
+        case .topRight:    topRightCorner = action
+        case .bottomLeft:  bottomLeftCorner = action
+        case .bottomRight: bottomRightCorner = action
+        }
+    }
+
+    func shortcutName(for corner: TrackpadCorner) -> String? {
+        cornerShortcuts[corner.rawValue]
+    }
+
+    mutating func setShortcutName(_ name: String?, for corner: TrackpadCorner) {
+        let trimmed = name?.trimmingCharacters(in: .whitespaces) ?? ""
+        cornerShortcuts[corner.rawValue] = trimmed.isEmpty ? nil : trimmed
+    }
+
+    var hasAnyEdge: Bool {
+        topEdge != .none || bottomEdge != .none || leftEdge != .none || rightEdge != .none
+    }
+
+    var hasAnyCorner: Bool {
+        TrackpadCorner.allCases.contains { cornerAction(for: $0) != .none }
+    }
+
+    /// Whether Edge Controls needs single-finger contact frames at all.
+    var isActive: Bool { enabled && (hasAnyEdge || hasAnyCorner) }
 }
 
 extension Comparable {

@@ -15,6 +15,7 @@ enum EdgeAction: String, Codable, CaseIterable, Identifiable {
     case keyboardBacklight = "keyboard_backlight"
     case microphone        = "microphone"
     case nightShift        = "night_shift"
+    case media             = "media"
 
     var id: String { rawValue }
 
@@ -28,6 +29,7 @@ enum EdgeAction: String, Codable, CaseIterable, Identifiable {
         case .keyboardBacklight: return "Keyboard Backlight"
         case .microphone:        return "Microphone Gain"
         case .nightShift:        return "Night Shift Warmth"
+        case .media:             return "Media Strip"
         }
     }
 
@@ -40,6 +42,7 @@ enum EdgeAction: String, Codable, CaseIterable, Identifiable {
         case .keyboardBacklight: return "keyboard.fill"
         case .microphone:        return "mic.fill"
         case .nightShift:        return "moon.stars.fill"
+        case .media:             return "music.note"
         }
     }
 
@@ -75,10 +78,20 @@ enum EdgeAction: String, Codable, CaseIterable, Identifiable {
     /// feel better with one; a continuous action would vibrate every frame.
     var wantsHapticTicks: Bool {
         switch self {
-        case .scroll, .none:
+        case .scroll, .none, .media:
             return false
         default:
             return true
+        }
+    }
+
+    /// What one slide along the edge does, for the edge rows in Preferences.
+    var hint: String {
+        switch self {
+        case .none:   return L("Off")
+        case .scroll: return L("Scrolls the window under the pointer")
+        case .media:  return L("Swipe to skip tracks, double-tap to play or pause")
+        default:      return L("Slide to adjust")
         }
     }
 }

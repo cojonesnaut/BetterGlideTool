@@ -13,7 +13,7 @@ Complete reference for all BetterGlideTool capabilities, organized into topic gu
 7. [Your configuration file](docs/09-configuration-file.md): Editing, exporting, and importing `config.yaml`.
 8. [Permissions BetterGlideTool asks for](docs/10-permissions.md): Accessibility and Automation requirements.
 9. [Troubleshooting](docs/11-troubleshooting.md): Common configuration issues and solutions.
-10. [Trackpad Edge Controls](docs/12-edge-controls.md): Physical rim sliders for volume, brightness, backlight, scrolling, and app switching.
+10. [Trackpad Edge Controls](docs/12-edge-controls.md): Rim sliders for volume, brightness, backlight, scrolling and music, plus corner double-taps.
 
 Each guide links to the preceding and following topics for step-by-step reading.
 

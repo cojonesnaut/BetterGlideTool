@@ -22,8 +22,12 @@ final class EdgeControlsController: ObservableObject {
 
     private let engine = EdgeGestureEngine()
 
+    /// Whether any corner has a double-tap action.
+    private var hasCorners = false
+
     var hasActiveEdgeControls: Bool {
-        isEnabled && (topEdge != .none || bottomEdge != .none || leftEdge != .none || rightEdge != .none)
+        isEnabled && (topEdge != .none || bottomEdge != .none || leftEdge != .none || rightEdge != .none
+                      || hasCorners)
     }
 
     private init() {
@@ -41,15 +45,8 @@ final class EdgeControlsController: ObservableObject {
         self.rightEdge  = settings.rightEdge
         self.marginMm   = settings.marginMm
 
-        engine.config = EdgeGestureEngine.Configuration(
-            isEnabled: settings.enabled,
-            topAction: settings.topEdge,
-            bottomAction: settings.bottomEdge,
-            leftAction: settings.leftEdge,
-            rightAction: settings.rightEdge,
-            marginMm: settings.marginMm,
-            activationTravelMm: settings.activationTravelMm
-        )
+        engine.config = EdgeGestureEngine.Configuration(settings: settings)
+        hasCorners = settings.hasAnyCorner
 
         TouchTracker.updateEdgeControlsCache(enabled: hasActiveEdgeControls)
         MultitouchBridge.shared.updateMinimumContactCount()
@@ -83,15 +80,8 @@ final class EdgeControlsController: ObservableObject {
         settings.marginMm   = marginMm
         Settings.shared.edgeControls = settings
 
-        engine.config = EdgeGestureEngine.Configuration(
-            isEnabled: isEnabled,
-            topAction: topEdge,
-            bottomAction: bottomEdge,
-            leftAction: leftEdge,
-            rightAction: rightEdge,
-            marginMm: marginMm,
-            activationTravelMm: Settings.shared.edgeControls.activationTravelMm
-        )
+        engine.config = EdgeGestureEngine.Configuration(settings: settings)
+        hasCorners = settings.hasAnyCorner
 
         TouchTracker.updateEdgeControlsCache(enabled: hasActiveEdgeControls)
         MultitouchBridge.shared.updateMinimumContactCount()
@@ -99,6 +89,7 @@ final class EdgeControlsController: ObservableObject {
 
     func reset() {
         engine.reset()
+        EdgeTapClaims.reset()
         activeEdge = nil
     }
 

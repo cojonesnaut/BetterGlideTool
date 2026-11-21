@@ -121,6 +121,213 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("[TEST] ✅ GestureAnimationView verification PASSED.")
     }
 
+    /// 3.2.0: corners, media strip, start zones, modifier, typing pause,
+    /// sensitivity and the new config keys. Uses `precondition` so the checks
+    /// hold in optimized builds too.
+    @MainActor
+    private func runEdgeOverhaulVerification(now: TimeInterval) {
+        final class Recorder {
+            var corners: [EdgeCornerAction] = []
+            var keys: [SystemActions.MediaKey] = []
+        }
+
+        func makeEngine(_ configure: (inout EdgeGestureEngine.Configuration) -> Void,
+                        recorder: Recorder) -> EdgeGestureEngine {
+            var config = EdgeGestureEngine.Configuration(
+                isEnabled: true, topAction: .none, bottomAction: .none,
+                leftAction: .brightness, rightAction: .volume, marginMm: 10.0)
+            configure(&config)
+            let engine = EdgeGestureEngine(config: config)
+            engine.modifierHeld = { false }
+            engine.secondsSinceKeyPress = { 60 }
+            engine.performCorner = { action, _ in recorder.corners.append(action) }
+            engine.sendMediaKey = { recorder.keys.append($0) }
+            engine.playHaptic = { _ in }
+            return engine
+        }
+
+        var nextId: Int32 = 100
+        func tap(_ engine: EdgeGestureEngine, x: Float, y: Float, at t: TimeInterval,
+                 hold: TimeInterval = 0.08, driftX: Float = 0) {
+            nextId += 1
+            engine.consume(touch: GLDTouchPoint(identifier: nextId, state: 3, x: x, y: y, vx: 0, vy: 0, size: 1),
+                           contacts: 1, timestamp: t)
+            engine.consume(touch: GLDTouchPoint(identifier: nextId, state: 4, x: x + driftX, y: y, vx: 0, vy: 0, size: 1),
+                           contacts: 1, timestamp: t + hold / 2)
+            engine.consume(touch: nil, contacts: 0, timestamp: t + hold)
+        }
+
+        // Corner double-tap fires the corner's action once.
+        do {
+            let r = Recorder()
+            let engine = makeEngine({ $0.corners[.topLeft] = .mute }, recorder: r)
+            tap(engine, x: 0.03, y: 0.97, at: now)
+            precondition(r.corners.isEmpty, "A single corner tap must not fire")
+            tap(engine, x: 0.03, y: 0.97, at: now + 0.2)
+            precondition(r.corners == [.mute], "A corner double-tap must fire its action, got \(r.corners)")
+            tap(engine, x: 0.03, y: 0.97, at: now + 0.4)
+            precondition(r.corners == [.mute], "A third tap starts a new double-tap rather than firing again")
+        }
+        // A corner set to None is not a tap zone at all.
+        do {
+            let r = Recorder()
+            let engine = makeEngine({ $0.corners[.topLeft] = .mute; $0.corners[.topRight] = EdgeCornerAction.none }, recorder: r)
+            precondition(engine.tapZone(for: CGPoint(x: 0.97, y: 0.97)) == nil, "An unassigned corner must not be a tap zone")
+            tap(engine, x: 0.97, y: 0.97, at: now)
+            tap(engine, x: 0.97, y: 0.97, at: now + 0.2)
+            precondition(r.corners.isEmpty, "An unassigned corner must do nothing")
+        }
+        // Too slow, moving, held or split across corners: no double-tap.
+        do {
+            let r = Recorder()
+            let engine = makeEngine({ $0.corners[.topLeft] = .mute; $0.corners[.bottomLeft] = .lockScreen }, recorder: r)
+            tap(engine, x: 0.03, y: 0.97, at: now)
+            tap(engine, x: 0.03, y: 0.97, at: now + 0.7)
+            tap(engine, x: 0.03, y: 0.97, at: now + 1.5, driftX: 0.04)   // ~6 mm drift
+            tap(engine, x: 0.03, y: 0.97, at: now + 1.7, driftX: 0.04)
+            tap(engine, x: 0.03, y: 0.97, at: now + 2.5, hold: 0.5)       // held, not tapped
+            tap(engine, x: 0.03, y: 0.97, at: now + 3.1, hold: 0.5)
+            tap(engine, x: 0.03, y: 0.97, at: now + 4.0)
+            tap(engine, x: 0.03, y: 0.03, at: now + 4.2)                  // other corner
+            precondition(r.corners.isEmpty, "Slow, moving, held or split taps must not fire, got \(r.corners)")
+        }
+        print("[TEST-EDGE] Corner double-tap passed.")
+
+        // Media strip: one track per swipe, reversible; double-tap plays or pauses.
+        do {
+            let r = Recorder()
+            let engine = makeEngine({ $0.bottomAction = .media }, recorder: r)
+            nextId += 1
+            let id = nextId
+            for (i, x) in [Float(0.50), 0.53, 0.58, 0.63, 0.70, 0.78].enumerated() {
+                engine.consume(touch: GLDTouchPoint(identifier: id, state: i == 0 ? 3 : 4, x: x, y: 0.04, vx: 0, vy: 0, size: 1),
+                               contacts: 1, timestamp: now + Double(i) * 0.02)
+            }
+            engine.consume(touch: nil, contacts: 0, timestamp: now + 0.2)
+            precondition(r.keys == [.next], "A right swipe on the media strip skips forward once, got \(r.keys)")
+
+            let reversed = makeEngine({ $0.bottomAction = .media; $0.mediaReverseSwipe = true }, recorder: r)
+            nextId += 1
+            for (i, x) in [Float(0.50), 0.53, 0.58, 0.63].enumerated() {
+                reversed.consume(touch: GLDTouchPoint(identifier: nextId, state: i == 0 ? 3 : 4, x: x, y: 0.04, vx: 0, vy: 0, size: 1),
+                                 contacts: 1, timestamp: now + 1 + Double(i) * 0.02)
+            }
+            precondition(r.keys == [.next, .previous], "Reverse Media Swipe flips the direction, got \(r.keys)")
+
+            let tapper = makeEngine({ $0.bottomAction = .media }, recorder: r)
+            tap(tapper, x: 0.5, y: 0.03, at: now + 2)
+            tap(tapper, x: 0.5, y: 0.03, at: now + 2.2)
+            precondition(r.keys == [.next, .previous, .play], "A media strip double-tap plays or pauses, got \(r.keys)")
+
+            let off = makeEngine({ $0.bottomAction = .media; $0.mediaDoubleTapPlayPause = false }, recorder: r)
+            tap(off, x: 0.5, y: 0.03, at: now + 3)
+            tap(off, x: 0.5, y: 0.03, at: now + 3.2)
+            precondition(r.keys.count == 3, "With double-tap off the media strip ignores taps")
+        }
+        print("[TEST-EDGE] Media strip passed.")
+
+        // Start zones, modifier requirement and the typing pause all act on landing.
+        do {
+            let r = Recorder()
+            func lands(_ engine: EdgeGestureEngine, y: Float) -> Bool {
+                nextId += 1
+                engine.consume(touch: GLDTouchPoint(identifier: nextId, state: 3, x: 0.99, y: y, vx: 0, vy: 0, size: 1),
+                               contacts: 1, timestamp: now)
+                let started = engine.activeEdge == .right
+                engine.consume(touch: nil, contacts: 0, timestamp: now + 0.05)
+                return started
+            }
+            let topHalf = makeEngine({ $0.activeArea = .topHalf }, recorder: r)
+            precondition(!lands(topHalf, y: 0.3), "Top Half must refuse a landing in the bottom half")
+            precondition(lands(topHalf, y: 0.7), "Top Half must accept a landing in the top half")
+            let bottomQuarter = makeEngine({ $0.activeArea = .bottomQuarter }, recorder: r)
+            precondition(!lands(bottomQuarter, y: 0.5) && lands(bottomQuarter, y: 0.2), "Bottom ¼ start zone")
+
+            let modifier = makeEngine({ $0.requireModifier = true }, recorder: r)
+            precondition(!lands(modifier, y: 0.5), "Without Fn or Option held a slide must not start")
+            modifier.modifierHeld = { true }
+            precondition(lands(modifier, y: 0.5), "With Fn or Option held a slide starts")
+
+            let typing = makeEngine({ $0.pauseWhileTyping = true }, recorder: r)
+            typing.secondsSinceKeyPress = { 0.1 }
+            precondition(!lands(typing, y: 0.5), "A touch right after a key press must be ignored")
+            typing.secondsSinceKeyPress = { 2 }
+            precondition(lands(typing, y: 0.5), "A touch well after typing starts normally")
+        }
+        print("[TEST-EDGE] Start zones, modifier and typing pause passed.")
+
+        // Sensitivity and precise sliding shape the step size.
+        do {
+            let r = Recorder()
+            let base = makeEngine({ _ in }, recorder: r).makeTickConfiguration(for: .volume).stepSize
+            let fast = makeEngine({ $0.sensitivity = 2.0 }, recorder: r).makeTickConfiguration(for: .volume).stepSize
+            let coarse = makeEngine({ $0.preciseSliding = false }, recorder: r).makeTickConfiguration(for: .volume).stepSize
+            precondition(abs(fast - base / 2) < 0.0001, "Sensitivity 2× halves the travel per step")
+            precondition(abs(coarse - 4.5) < 0.0001, "Precise sliding off moves a full notch per 4.5 mm")
+            precondition(abs(base - 4.5 / 4) < 0.0001, "Default is the quarter step")
+        }
+        print("[TEST-EDGE] Sensitivity and precise sliding passed.")
+
+        // New config keys round-trip, clamp and fall back.
+        do {
+            var settings = EdgeControlsSettings()
+            precondition(settings.pauseWhileTyping && settings.preciseSliding && !settings.requireModifier
+                         && settings.activeArea == .full && settings.hapticLevel == .medium
+                         && !settings.hasAnyCorner, "3.2.0 defaults")
+            settings.bottomEdge = .media
+            settings.activeArea = .bottomThreeQuarters
+            settings.requireModifier = true
+            settings.pauseWhileTyping = false
+            settings.preciseSliding = false
+            settings.sensitivity = 1.6
+            settings.hapticLevel = .strong
+            settings.mediaReverseSwipe = true
+            settings.mediaDoubleTapPlayPause = false
+            settings.setCornerAction(.mute, for: .topRight)
+            settings.setCornerAction(.runShortcut, for: .bottomLeft)
+            settings.setShortcutName("Say \"hi\" #1", for: .bottomLeft)
+
+            var config = GlideConfig()
+            config.edgeControls.bottomEdge = settings.bottomEdge.rawValue
+            config.edgeControls.activeArea = settings.activeArea.rawValue
+            config.edgeControls.requireModifier = settings.requireModifier
+            config.edgeControls.pauseWhileTyping = settings.pauseWhileTyping
+            config.edgeControls.preciseSliding = settings.preciseSliding
+            config.edgeControls.sensitivity = settings.sensitivity
+            config.edgeControls.hapticLevel = settings.hapticLevel.rawValue
+            config.edgeControls.mediaReverseSwipe = settings.mediaReverseSwipe
+            config.edgeControls.mediaDoubleTapPlayPause = settings.mediaDoubleTapPlayPause
+            config.edgeControls.topRightCorner = "mute"
+            config.edgeControls.bottomLeftCorner = "run_shortcut"
+            config.edgeControls.bottomLeftShortcut = "Say \"hi\" #1"
+            guard let parsed = GlideConfigParser.parse(yaml: GlideConfigSerializer.serialize(config)) else {
+                fatalError("Failed to parse emitted YAML with the 3.2.0 edge keys")
+            }
+            let back = parsed.toEdgeControls()
+            precondition(back == settings, "3.2.0 edge settings must round-trip through YAML")
+            precondition(back.isActive && back.usesMedia, "isActive and usesMedia")
+
+            var bad = GlideConfig()
+            bad.edgeControls.activeArea = "sideways"
+            bad.edgeControls.hapticLevel = "loud"
+            bad.edgeControls.topLeftCorner = "launch_rockets"
+            bad.edgeControls.sensitivity = 40
+            let fallback = bad.toEdgeControls()
+            precondition(fallback.activeArea == .full && fallback.hapticLevel == .medium
+                         && fallback.topLeftCorner == .none
+                         && fallback.sensitivity == EdgeControlsSettings.sensitivityRange.upperBound,
+                         "Unknown values fall back and sensitivity clamps")
+
+            var cornersOnly = EdgeControlsSettings()
+            cornersOnly.leftEdge = .none
+            cornersOnly.rightEdge = .none
+            precondition(!cornersOnly.isActive, "No edges and no corners is inactive")
+            cornersOnly.setCornerAction(.playPause, for: .bottomRight)
+            precondition(cornersOnly.isActive, "A corner alone keeps Edge Controls active")
+        }
+        print("[TEST-EDGE] 3.2.0 config keys passed.")
+    }
+
     @MainActor
     private func runEdgeControlsVerification(forceFailure: Bool) {
         print("[TEST-EDGE] Running Trackpad Edge Controls verification suite...")
@@ -647,6 +854,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                "Negative scroll_speed must clamp to the range floor, got \(clampedLow)")
         assert(!EdgeControlsSettings().usesScroll, "Default settings assign no scroll edge")
         print("[TEST-EDGE] Scroll speed clamping passed.")
+
+        runEdgeOverhaulVerification(now: now)
 
         print("[TEST-EDGE] ✅ Trackpad Edge Controls verification PASSED.")
     }
