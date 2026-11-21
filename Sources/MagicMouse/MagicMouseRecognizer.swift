@@ -148,7 +148,7 @@ private struct BasicTouchRecognizer {
 }
 
 
-enum TipTapRejection: String {
+enum TipTapRejection: String, CaseIterable {
     case anchorsMoved = "Resting fingers moved; let them settle before the next tap."
     case anchorLifted = "Resting contact changed; let the fingers settle, then tap again."
     case notSettled = "Resting fingers had not settled. Check TipTap anchor timing."

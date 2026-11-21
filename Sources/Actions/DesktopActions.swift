@@ -706,7 +706,7 @@ final class DesktopActions: NSObject, ObservableObject {
         guard !alertVisible else { return }
         alertVisible = true
         let alert = NSAlert(); alert.messageText = "BetterGlideTool"; alert.informativeText = message
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: L("OK"))
         alert.runModal()
         alertVisible = false
     }

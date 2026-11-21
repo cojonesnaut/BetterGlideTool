@@ -253,7 +253,7 @@ final class GestureProcessor {
         if let rule = updated.continuousRule, direction.matchesAxis(of: rule.direction) {
             let action = engine?.continuousUpdateAction(for: direction, in: rule) ?? .doNothing
             if action != .doNothing {
-                engine?.executeContinuousAction(action, shortcut: engine?.continuousUpdateShortcut(for: direction, in: rule), keyboard: engine?.continuousUpdateKeyboard(for: direction, in: rule) ?? [], gesture: direction.title(fingers: data.fingers))
+                engine?.executeContinuousAction(action, shortcut: engine?.continuousUpdateShortcut(for: direction, in: rule), keyboard: engine?.continuousUpdateKeyboard(for: direction, in: rule) ?? [], gesture: direction.displayTitle(fingers: data.fingers))
             }
             updated.lastContinuousActionTime = now
         }

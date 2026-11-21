@@ -18,7 +18,8 @@ enum EdgeAction: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String {
+    var displayName: String { L(englishName) }
+    var englishName: String {
         switch self {
         case .none:              return "None"
         case .scroll:            return "Scroll"
@@ -90,7 +91,8 @@ enum TrackpadPhysicalEdge: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String {
+    var displayName: String { L(englishName) }
+    var englishName: String {
         switch self {
         case .top:    return "Top Edge"
         case .bottom: return "Bottom Edge"

@@ -59,7 +59,7 @@ struct TipTapTuningCard: View {
             }.padding(16)
         }
     }
-    private func slider(_ title: String, key: WritableKeyPath<TipTapTuning, Double>, range: ClosedRange<Double>, low: String, high: String) -> some View {
+    private func slider(_ title: LocalizedStringKey, key: WritableKeyPath<TipTapTuning, Double>, range: ClosedRange<Double>, low: LocalizedStringKey, high: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title).font(.headline).fixedSize(horizontal: false, vertical: true)
             HStack {

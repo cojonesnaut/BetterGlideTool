@@ -25,7 +25,7 @@ struct TuningTab: View {
             // Categories along the top, as in BetterTouchTool's settings, so
             // each page fits without long scrolling.
             Picker("Tuning category", selection: $page) {
-                ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(Page.allCases) { Text(L($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -209,9 +209,9 @@ struct TuningTab: View {
     // MARK: - Presets
 
     private struct Preset {
-        let name: String
+        let name: LocalizedStringKey
         let icon: String
-        let blurb: String
+        let blurb: LocalizedStringKey
         let apply: (inout GestureTuning) -> Void
         let matches: (GestureTuning) -> Bool
     }
@@ -257,7 +257,7 @@ struct TuningTab: View {
     private var presetsCard: some View {
         TuningSection(title: "Quick Setup", icon: "wand.and.stars") {
             HStack(spacing: 10) {
-                ForEach(presets, id: \.name) { preset in
+                ForEach(presets, id: \.icon) { preset in
                     let active = preset.matches(store.tuning)
                     Button {
                         withAnimation { store.updateTuning(preset.apply) }
@@ -386,7 +386,7 @@ struct TuningTab: View {
     }
 
     @ViewBuilder
-    private func explainer(_ text: String) -> some View {
+    private func explainer(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -443,7 +443,7 @@ struct TuningTab: View {
 
     /// Margin stored as fraction 0.0–0.20, slider displays 0–20 %.
     @ViewBuilder
-    private func marginSlider(label: String, keyPath: WritableKeyPath<GestureTuning, Float>, range: ClosedRange<Double> = 0...20, hint: String = "Ignore touches starting in this edge zone.") -> some View {
+    private func marginSlider(label: LocalizedStringKey, keyPath: WritableKeyPath<GestureTuning, Float>, range: ClosedRange<Double> = 0...20, hint: LocalizedStringKey = "Ignore touches starting in this edge zone.") -> some View {
         let percentBinding = Binding<Double>(
             get: { Double(store.tuning[keyPath: keyPath]) * 100 },
             set: { newValue in store.updateTuning { $0[keyPath: keyPath] = Float(newValue / 100) } }
@@ -463,10 +463,10 @@ struct TuningTab: View {
 /// Plain-language 0–1 slider: a title, one sentence of context, and words
 /// instead of numbers at the ends.
 struct FriendlySlider: View {
-    let title: String
-    let subtitle: String
-    let leftLabel: String
-    let rightLabel: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
+    let leftLabel: LocalizedStringKey
+    let rightLabel: LocalizedStringKey
     @Binding var value: Double
 
     var body: some View {
@@ -497,7 +497,7 @@ struct FriendlySlider: View {
 // MARK: - Tuning Section
 
 struct TuningSection<Content: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     let icon: String
     @ViewBuilder let content: () -> Content
 
@@ -520,11 +520,11 @@ struct TuningSection<Content: View>: View {
 // MARK: - Slider Row (advanced)
 
 struct SliderRow<T: BinaryFloatingPoint>: View {
-    let label: String
+    let label: LocalizedStringKey
     @Binding var value: T
     let range: ClosedRange<T>
     let format: String
-    let hint: String
+    let hint: LocalizedStringKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -550,10 +550,10 @@ struct SliderRow<T: BinaryFloatingPoint>: View {
 // MARK: - Stepper Row (advanced)
 
 struct StepperRow: View {
-    let label: String
+    let label: LocalizedStringKey
     @Binding var value: Int
     let range: ClosedRange<Int>
-    let hint: String
+    let hint: LocalizedStringKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -583,7 +583,7 @@ struct AngleToleranceCompass: View {
 
     private struct DirectionInfo {
         let angle: Double   // math angle in radians (0=right, CCW positive)
-        let label: String
+        let label: LocalizedStringKey
         let color: Color
     }
 

@@ -40,7 +40,8 @@ enum HapticPattern: String, CaseIterable, Codable {
     case falling    = "falling"
     case heartbeat  = "heartbeat"
 
-    var displayName: String {
+    var displayName: String { L(englishName) }
+    var englishName: String {
         switch self {
         case .none:       return "None"
         case .softTick:   return "Soft Tick"
@@ -82,7 +83,8 @@ enum HapticEvent: String, CaseIterable {
     case otherAction       = "other_action"         // shortcuts, media, apps, everything else
     case reciprocal        = "reciprocal"
 
-    var displayName: String {
+    var displayName: String { L(englishName) }
+    var englishName: String {
         switch self {
         case .destructiveAction: return "Quit & Close Actions"
         case .windowAction:      return "Window Actions"

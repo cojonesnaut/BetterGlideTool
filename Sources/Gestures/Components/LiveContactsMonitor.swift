@@ -2,7 +2,7 @@ import Cocoa
 import Combine
 
 extension GestureDevice {
-    var monitoringTitle: String { self == .trackpad ? "Trackpad" : "Magic Mouse" }
+    var monitoringTitle: String { self == .trackpad ? L("Trackpad") : L("Magic Mouse") }
 }
 
 struct LiveContact: Codable, Equatable, Identifiable {

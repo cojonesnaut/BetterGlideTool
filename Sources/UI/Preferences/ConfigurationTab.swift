@@ -95,10 +95,10 @@ struct ConfigurationTab: View {
 
                         Button("Reset to Defaults…") {
                             let alert = NSAlert()
-                            alert.messageText = "Reset to Default Gestures?"
-                            alert.informativeText = "This will replace all your gestures with the built-in defaults. This cannot be undone."
-                            alert.addButton(withTitle: "Reset")
-                            alert.addButton(withTitle: "Cancel")
+                            alert.messageText = L("Reset to Default Gestures?")
+                            alert.informativeText = L("This will replace all your gestures with the built-in defaults. This cannot be undone.")
+                            alert.addButton(withTitle: L("Reset"))
+                            alert.addButton(withTitle: L("Cancel"))
                             alert.alertStyle = .warning
                             if alert.runModal() == .alertFirstButtonReturn {
                                 store.resetRules()

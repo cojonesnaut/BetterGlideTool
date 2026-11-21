@@ -19,7 +19,7 @@ struct DesktopActionOptionsView: View {
                     Button("Test Action") {
                         desktopActions.performStage(rule.action, options: rule.desktopOptions)
                     }
-                    Text(desktopActions.stageStatus)
+                    Text(L(desktopActions.stageStatus))
                         .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                 }
             }

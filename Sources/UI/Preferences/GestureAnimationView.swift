@@ -85,7 +85,7 @@ struct GestureAnimationView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Live View: shows how to perform \(direction.title(fingers: fingerCount))")
+        .accessibilityLabel("Live View: shows how to perform \(direction.displayTitle(fingers: fingerCount))")
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ struct GestureAnimationView: View {
             VStack {
                 Spacer()
                 HStack {
-                    Text(zone.rawValue)
+                    Text(L(zone.rawValue))
                         .font(.system(size: 8.5, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
                         .padding(.horizontal, 4)
@@ -188,7 +188,7 @@ struct GestureAnimationView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text(direction.title(fingers: fingerCount))
+                Text(direction.displayTitle(fingers: fingerCount))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
 
@@ -196,7 +196,7 @@ struct GestureAnimationView: View {
                     Text("•")
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
-                    Text(speed.rawValue.capitalized)
+                    Text(L(speed.rawValue))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(speedColor)
                 }
@@ -205,7 +205,7 @@ struct GestureAnimationView: View {
                     Text("•")
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
-                    Text(zone.rawValue)
+                    Text(L(zone.rawValue))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
@@ -220,7 +220,7 @@ struct GestureAnimationView: View {
                 HStack(spacing: 3) {
                     Image(systemName: action.iconName)
                         .font(.system(size: 10))
-                    Text(action.rawValue)
+                    Text(L(action.rawValue))
                         .font(.system(size: 11, weight: .semibold))
                         .lineLimit(1)
                 }

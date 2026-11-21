@@ -74,6 +74,16 @@ enum GestureDirection: String, Codable, CaseIterable {
         if device == .magicMouse { return [.tap] }
         return [.click, .forceClick, .tapHold, .swipeLeftRight, .swipeUpDown, .swipeLeft, .swipeRight, .swipeUp, .swipeDown]
     }
+    /// The gesture's name in the user's language, for display only. `title`
+    /// stays English: it is matched against recorded gestures and configs.
+    func displayTitle(fingers: Int) -> String {
+        if usesTwoFixedFingers || usesThreeFixedFingers || isCornerClick || self == .tipTapLeft || self == .tipTapRight { return L(rawValue) }
+        if fingers == 4 && self == .doubleTap { return L("4 Finger Double Tap") }
+        if fingers == 4 && self == .forceClick { return L("4 Finger FORCE Click") }
+        if self == .leftTap { return L("%lld Finger Tap Left", fingers) }
+        if self == .rightTap { return L("%lld Finger Tap Right", fingers) }
+        return L("%lld Finger %@", fingers, L(rawValue))
+    }
     func title(fingers: Int) -> String {
         if usesTwoFixedFingers || usesThreeFixedFingers || isCornerClick || self == .tipTapLeft || self == .tipTapRight { return rawValue }
         if fingers == 4 && self == .doubleTap { return "4 Finger Double Tap" }
@@ -449,12 +459,12 @@ struct GestureRule: Codable, Identifiable, Equatable {
     var displayName: String {
         if let name, !name.trimmingCharacters(in: .whitespaces).isEmpty { return name }
         if action == .customShortcut, let s = customShortcut, s.isValid {
-            return "Shortcut: \(s.displayString)"
+            return L("Shortcut: %@", s.displayString)
         }
         if action == .advancedKeyboard, !advancedKeyboard.isEmpty {
-            return "Advanced Keyboard"
+            return L("Advanced Keyboard")
         }
-        return menuItemLabel ?? action.rawValue
+        return menuItemLabel ?? L(action.rawValue)
     }
 
     /// True when the trigger combo can be registered as a global hotkey.
@@ -1262,9 +1272,9 @@ enum KeyboardInputEvent: String, Codable, CaseIterable {
 
     var label: String {
         switch self {
-        case .tap: return "Tap"
-        case .hold: return "Hold"
-        case .release: return "Release"
+        case .tap: return L("Tap")
+        case .hold: return L("Hold")
+        case .release: return L("Release")
         }
     }
 }

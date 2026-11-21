@@ -59,14 +59,14 @@ struct PreferencesWindow: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $navigator.tab) {
-                Section(navigator.device.rawValue) {
+                Section(L(navigator.device.rawValue)) {
                     ForEach(navigator.device.tabs) { tab in
-                        Label(tab.rawValue, systemImage: tab.systemImage).tag(tab)
+                        Label(L(tab.rawValue), systemImage: tab.systemImage).tag(tab)
                     }
                 }
                 Section("Shared") {
                     ForEach([PrefsTab.keyboard, .general, .configuration]) { tab in
-                        Label(tab.rawValue, systemImage: tab.systemImage).tag(tab)
+                        Label(L(tab.rawValue), systemImage: tab.systemImage).tag(tab)
                     }
                 }
             }
@@ -78,7 +78,7 @@ struct PreferencesWindow: View {
                     set: { navigator.device = $0; navigator.tab = .gestures }
                 )) {
                     ForEach(PreferencesDevice.allCases) { device in
-                        Label(device.rawValue, systemImage: device.icon).tag(device)
+                        Label(L(device.rawValue), systemImage: device.icon).tag(device)
                     }
                 }
                 .pickerStyle(.menu)
@@ -106,7 +106,7 @@ struct PreferencesWindow: View {
                 case .configuration: ConfigurationTab()
                 }
             }
-            .navigationTitle(selectedTab == .gestures ? "\(navigator.device.rawValue) Gestures" : selectedTab.rawValue)
+            .navigationTitle(selectedTab == .gestures ? L("%@ Gestures", L(navigator.device.rawValue)) : L(selectedTab.rawValue))
         }
         .frame(minWidth: 760, minHeight: 520)
         .onChange(of: navigator.tab) { tab in

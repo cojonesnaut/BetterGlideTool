@@ -1,5 +1,11 @@
 # Changelog
 
+## BetterGlideTool 3.1.0
+
+- **Turkish language support.** Every screen — Preferences, Tuning, Input Monitoring, Live View, the welcome tour, the menu bar menu, alerts and gesture/action names — is translated into Turkish. Trackpad and Magic Mouse keep their names, and the rest uses macOS's own Turkish terms (Kuvvetli Tıklama, Sahne Yöneticisi, Erişilebilirlik).
+- BetterGlideTool follows the system language by default. **General → Behavior → Language** picks System Language, English or Türkçe for this app only; a **Relaunch Now** button applies the change.
+- Config files keep English action and gesture names, so configs import and export the same in either language.
+
 ## BetterGlideTool 3.0.1
 
 - Fix Tap Above Apple on the Magic Mouse. Taps just above the Apple logo land on the very back edge of the touch sensor (recorded at x 0.50–0.54, y 0.04–0.05), but the region started at y 0.15, so it never matched. It now covers the centre of the back edge (x 0.30–0.70, y up to 0.12). Back-edge taps also read longer — recorded ones lasted up to 0.56 s — so a tap there may last up to 0.6 s, as long as the finger stays still and fingertip-sized; a palm resting on the back of the mouse still never counts. Replaying the recording, all five taps now trigger the gesture; before, none did.

@@ -373,7 +373,7 @@ final class MagicMouseInput: ObservableObject {
                 self.inputStatus = "Gesture recognized; no matching rule in this app"
                 return
             }
-            self.lastGesture = rule.direction.title(fingers: rule.fingers)
+            self.lastGesture = rule.direction.displayTitle(fingers: rule.fingers)
             self.inputStatus = "Gesture matched: \(rule.action.rawValue)"
             GestureEngine.shared.executeGestureRuleAction(rule)
         }

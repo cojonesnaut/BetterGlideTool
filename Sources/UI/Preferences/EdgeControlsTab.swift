@@ -267,7 +267,7 @@ struct EdgeControlsTab: View {
         )
     }
 
-    private func explainer(_ text: String) -> some View {
+    private func explainer(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(.caption)
             .foregroundColor(.secondary)

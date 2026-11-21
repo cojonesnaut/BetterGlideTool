@@ -223,7 +223,7 @@ private struct OnboardingView: View {
 
     // MARK: Bits
 
-    private func featureRow(icon: String, color: Color, title: String, detail: String) -> some View {
+    private func featureRow(icon: String, color: Color, title: LocalizedStringKey, detail: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.title2)
@@ -236,7 +236,7 @@ private struct OnboardingView: View {
         }
     }
 
-    private func tipRow(_ text: String) -> some View {
+    private func tipRow(_ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "sparkle")
                 .foregroundStyle(.yellow)
@@ -329,7 +329,7 @@ struct StarterGestureTour: View {
         let device: GestureDevice
         let direction: GestureDirection
         let fingers: Int
-        let does: String
+        let does: LocalizedStringKey
     }
     private let starters: [Starter] = [
         Starter(device: .magicMouse, direction: .tipTapTwoLeft, fingers: 3, does: "Next Stage Manager stage"),
@@ -362,7 +362,7 @@ struct StarterGestureTour: View {
                       systemImage: starter.device == .magicMouse ? "magicmouse" : "rectangle.and.hand.point.up.left")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text(starter.direction.title(fingers: starter.fingers))
+                Text(starter.direction.displayTitle(fingers: starter.fingers))
                     .font(.headline)
                 Text(starter.does)
                     .font(.callout)

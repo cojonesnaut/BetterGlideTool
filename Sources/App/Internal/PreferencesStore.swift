@@ -293,15 +293,11 @@ final class PreferencesStore: ObservableObject {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = actions.count == 1
-            ? "This config runs 1 command"
-            : "This config runs \(actions.count) commands"
-        alert.informativeText = """
-        Importing it will let the following run on your Mac whenever the matching gesture is performed. Only continue if you trust where this file came from.
-
-        \(detail)
-        """
-        alert.addButton(withTitle: "Import Anyway")
-        alert.addButton(withTitle: "Cancel")
+            ? L("This config runs 1 command")
+            : L("This config runs %lld commands", actions.count)
+        alert.informativeText = L("Importing it will let the following run on your Mac whenever the matching gesture is performed. Only continue if you trust where this file came from.") + "\n\n" + detail
+        alert.addButton(withTitle: L("Import Anyway"))
+        alert.addButton(withTitle: L("Cancel"))
         // Cancel is the safe default, so make Escape and Return both land there.
         alert.buttons.last?.keyEquivalent = "\r"
         alert.buttons.first?.keyEquivalent = ""

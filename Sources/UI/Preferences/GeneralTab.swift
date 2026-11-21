@@ -3,6 +3,8 @@ import SwiftUI
 import ServiceManagement
 
 struct GeneralTab: View {
+    @State private var language = AppLanguage.current
+    @State private var languageChanged = false
     @EnvironmentObject var store: PreferencesStore
     @ObservedObject private var updater = UpdateChecker.shared
 
@@ -32,6 +34,29 @@ struct GeneralTab: View {
 
                         SettingsRow(label: "Launch at Login") {
                             Toggle("Start BetterGlideTool automatically when you log in", isOn: Binding(get: { store.launchAtLoginEnabled }, set: store.updateLaunchAtLogin))
+                        }
+                        Divider().padding(.leading, 12)
+
+                        SettingsRow(label: "Language") {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Picker("", selection: Binding(get: { language }, set: { value in
+                                    AppLanguage.choose(value); language = value; languageChanged = true
+                                })) {
+                                    Text("System Language").tag(AppLanguage.system)
+                                    // Each language is named in itself, so it can always be found.
+                                    Text(verbatim: "English").tag(AppLanguage.english)
+                                    Text(verbatim: "Türkçe").tag(AppLanguage.turkish)
+                                }
+                                .frame(maxWidth: 260)
+                                if languageChanged {
+                                    HStack(spacing: 8) {
+                                        Text("Relaunch BetterGlideTool to use the new language.")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                        Button("Relaunch Now") { UpdateInstaller.relaunch(Bundle.main.bundleURL) }
+                                            .controlSize(.small)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -106,7 +131,7 @@ struct GeneralTab: View {
 
                 ForEach(HapticEvent.allCases, id: \.self) { event in
                     Divider().padding(.leading, 12)
-                    SettingsRow(label: event.displayName) {
+                    SettingsRow(label: LocalizedStringKey(event.displayName)) {
                         Picker("", selection: Binding(
                             get: { store.hapticAssignments[event] ?? event.defaultPattern },
                             set: { store.updateHapticPattern($0, for: event) })) {
@@ -162,7 +187,7 @@ struct GeneralTab: View {
                                 .foregroundStyle(.orange)
                                 .padding(.top, 2)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(conflict.native.title)
+                                Text(L(conflict.native.title))
                                     .font(.callout.weight(.medium))
                                 Text("Collides with: \(conflict.glideTriggers.joined(separator: ", "))")
                                     .font(.caption)
@@ -212,7 +237,7 @@ struct GeneralTab: View {
                             Image(systemName: "slash.circle")
                                 .foregroundStyle(.secondary)
                                 .padding(.top, 2)
-                            Text(gesture.title)
+                            Text(L(gesture.title))
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -429,7 +454,7 @@ struct GeneralTab: View {
 // MARK: - Settings Row
 
 struct SettingsRow<Content: View>: View {
-    let label: String
+    let label: LocalizedStringKey
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -449,7 +474,7 @@ struct SettingsRow<Content: View>: View {
 
 struct StatCard: View {
     let value: String
-    let label: String
+    let label: LocalizedStringKey
     let icon: String
     let color: Color
 

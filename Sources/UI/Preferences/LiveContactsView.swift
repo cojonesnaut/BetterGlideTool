@@ -76,7 +76,7 @@ struct LiveContactsReadout: View {
                                     Text(event.gesture).font(.system(size: 12, weight: .semibold)).lineLimit(2)
                                     Text(event.action).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
                                     if let result = event.stageResult {
-                                        Text(result.message).font(.system(size: 10))
+                                        Text(L(result.message)).font(.system(size: 10))
                                             .foregroundStyle(result.state == "failed" ? Color.orange : Color.secondary)
                                             .lineLimit(3).help(result.message)
                                     }
@@ -167,7 +167,7 @@ private struct LiveContactsDetails: View {
     let transitions: [LiveContactTransition]
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(frame.feedback).font(.callout)
+            Text(L(frame.feedback)).font(.callout)
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
                 GridRow { Text("ID"); Text("X"); Text("Y"); Text("Size"); Text("State"); Text("Role") }
                     .foregroundStyle(.secondary)

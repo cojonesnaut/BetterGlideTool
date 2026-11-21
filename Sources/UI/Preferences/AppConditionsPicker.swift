@@ -17,7 +17,7 @@ struct AppConditionsPicker: View {
     }
     var body: some View {
         LabeledContent("Apps") {
-            Button(selected.isEmpty ? "Any App" : selected.count == 1 ? store.appFilterLabel(for: selected[0]) : "\(selected.count) Apps") { showing = true }
+            Button(selected.isEmpty ? L("Any App") : selected.count == 1 ? store.appFilterLabel(for: selected[0]) : L("%lld Apps", selected.count)) { showing = true }
                 .popover(isPresented: $showing) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Run in any selected app").font(.headline)

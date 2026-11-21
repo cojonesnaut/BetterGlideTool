@@ -232,6 +232,17 @@ fi
 
 
 # ─────────────────────────────────────────────────────────────
+# Copy localizations
+# ─────────────────────────────────────────────────────────────
+
+# Localization/<language>.lproj/Localizable.strings: English text is the key,
+# so English needs no table; Turkish is in tr.lproj.
+for lproj in "$SCRIPT_DIR"/Localization/*.lproj; do
+    [[ -d "$lproj" ]] && cp -R "$lproj" "$RESOURCES/"
+done
+
+
+# ─────────────────────────────────────────────────────────────
 # Collect Swift sources
 # ─────────────────────────────────────────────────────────────
 

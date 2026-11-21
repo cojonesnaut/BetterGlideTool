@@ -337,7 +337,7 @@ final class GestureEngine {
         clearReciprocalToken()
         phase = .fired
 
-        if logIfBlocked(rule.direction.title(fingers: rule.fingers), action: rule.action, device: rule.device) {
+        if logIfBlocked(rule.direction.displayTitle(fingers: rule.fingers), action: rule.action, device: rule.device) {
             updateObservableState(); return
         }
         let monitoring = recordMonitoredGesture(rule)
@@ -369,21 +369,21 @@ final class GestureEngine {
     }
 
     private func recordMonitoredGesture(_ rule: GestureRule) -> LiveActionContext? {
-        LiveContactsMonitor.forDevice(rule.device).recordGesture(rule.direction.title(fingers: rule.fingers),
-            action: rule.action.rawValue, appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
+        LiveContactsMonitor.forDevice(rule.device).recordGesture(rule.direction.displayTitle(fingers: rule.fingers),
+            action: L(rule.action.rawValue), appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
     }
 
     /// With Block Real Gesture Triggering on, log the gesture as blocked and
     /// report true so the caller skips its action.
     private func logIfBlocked(_ gesture: String, action: GestureAction, device: GestureDevice) -> Bool {
         guard GestureActionBlock.shared.blocksActions else { return false }
-        _ = LiveContactsMonitor.forDevice(device).recordGesture(gesture, action: "Blocked · \(action.rawValue)",
+        _ = LiveContactsMonitor.forDevice(device).recordGesture(gesture, action: L("Blocked · %@", L(action.rawValue)),
             appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
         return true
     }
 
     func executeGestureRuleAction(_ rule: GestureRule) {
-        if logIfBlocked(rule.direction.title(fingers: rule.fingers), action: rule.action, device: rule.device) { return }
+        if logIfBlocked(rule.direction.displayTitle(fingers: rule.fingers), action: rule.action, device: rule.device) { return }
         let monitoring = recordMonitoredGesture(rule)
         if rule.device == .trackpad { Haptic.forRule(rule) }
         ActionExecutor.shared.execute(rule.action, appPath: rule.appPath,
@@ -395,7 +395,7 @@ final class GestureEngine {
 
     func executeSwipeRule(_ rule: GestureRule, fingers: Int, direction: GestureDirection) {
         LowFingerTrackpadInput.shared.cancelCurrentGesture()
-        if logIfBlocked(rule.direction.title(fingers: rule.fingers), action: rule.action, device: rule.device) { return }
+        if logIfBlocked(rule.direction.displayTitle(fingers: rule.fingers), action: rule.action, device: rule.device) { return }
         executeGestureRuleAction(rule)
 
         // Track what just fired so we can detect back-to-back same-direction toggles.
@@ -434,9 +434,9 @@ final class GestureEngine {
         clearReciprocalToken()
         lastFiredSwipe = nil   // reciprocal consumed — reset toggle tracking
         LowFingerTrackpadInput.shared.cancelCurrentGesture()
-        if logIfBlocked(direction.title(fingers: fingers), action: token.inverseAction, device: .trackpad) { return true }
+        if logIfBlocked(direction.displayTitle(fingers: fingers), action: token.inverseAction, device: .trackpad) { return true }
         Haptic.reciprocal()
-        let monitoring = LiveContactsMonitor.shared.recordGesture(direction.title(fingers: fingers), action: token.inverseAction.rawValue,
+        let monitoring = LiveContactsMonitor.shared.recordGesture(direction.displayTitle(fingers: fingers), action: L(token.inverseAction.rawValue),
             appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
         ActionExecutor.shared.execute(token.inverseAction, desktopOptions: token.desktopOptions, monitoring: monitoring)
         return true
@@ -459,7 +459,7 @@ final class GestureEngine {
 
     func executeContinuousAction(_ action: GestureAction, shortcut: KeyboardShortcut? = nil, keyboard: [KeyboardInputStep] = [], gesture: String = "Continuous gesture") {
         if logIfBlocked(gesture, action: action, device: .trackpad) { return }
-        let monitoring = LiveContactsMonitor.shared.recordGesture(gesture, action: action.rawValue, appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
+        let monitoring = LiveContactsMonitor.shared.recordGesture(gesture, action: L(action.rawValue), appName: NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown app")
         LowFingerTrackpadInput.shared.cancelCurrentGesture()
         Haptic.forAction(action)
         ActionExecutor.shared.execute(action, customShortcut: shortcut, advancedKeyboard: keyboard, monitoring: monitoring)
@@ -467,7 +467,7 @@ final class GestureEngine {
 
     func executeContinuousEndAction(for data: SwipeTrackData) {
         guard let rule = data.continuousRule else { return }
-        executeContinuousAction(rule.continuousEndAction, shortcut: rule.continuousEndShortcut, keyboard: rule.continuousEndKeyboard, gesture: "\(rule.direction.title(fingers: rule.fingers)) · End")
+        executeContinuousAction(rule.continuousEndAction, shortcut: rule.continuousEndShortcut, keyboard: rule.continuousEndKeyboard, gesture: L("%@ · End", rule.direction.displayTitle(fingers: rule.fingers)))
     }
 
     func continuousUpdateAction(for dir: GestureDirection, in rule: GestureRule) -> GestureAction {

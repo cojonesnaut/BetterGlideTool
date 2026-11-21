@@ -240,7 +240,7 @@ struct TriggerBadge: View {
                 } else {
                     Image(systemName: directionIcon)
                         .font(.system(size: 11, weight: .bold))
-                    Text(rule.direction.title(fingers: rule.fingers))
+                    Text(rule.direction.displayTitle(fingers: rule.fingers))
                         .font(.system(size: 11, weight: .bold))
                 }
             }
@@ -262,10 +262,10 @@ struct RuleRow: View {
     private var subtitle: String {
         var parts: [String] = []
         if rule.direction == .forceClick && rule.zone != .any {
-            parts.append(rule.zone.rawValue)
+            parts.append(L(rule.zone.rawValue))
         }
         if rule.direction.hasSpeed && rule.speed != .any {
-            parts.append(rule.speed.rawValue)
+            parts.append(L(rule.speed.rawValue))
         }
         if !rule.effectiveAppFilters.isEmpty {
             parts.append(rule.effectiveAppFilters.map { store.appFilterLabel(for: $0) }.joined(separator: ", "))
@@ -462,7 +462,7 @@ struct RuleEditor: View {
 
                         Picker("Gesture", selection: $rule.direction) {
                             ForEach(availableDirections, id: \.self) { dir in
-                                Label(dir.title(fingers: rule.fingers), systemImage: dir.iconName).tag(dir)
+                                Label(dir.displayTitle(fingers: rule.fingers), systemImage: dir.iconName).tag(dir)
                             }
                         }
                         .onChange(of: rule.direction) { _ in
@@ -499,14 +499,14 @@ struct RuleEditor: View {
                         }
                         Picker("Modifier", selection: $rule.modifierFilter) {
                             ForEach(ModifierFilter.allCases, id: \.self) { m in
-                                Text(m.rawValue).tag(m)
+                                Text(L(m.rawValue)).tag(m)
                             }
                         }
 
                         if rule.device == .trackpad && rule.direction.hasSpeed && rule.fingers >= 3 {
                             Picker("Speed", selection: $rule.speed) {
                                 ForEach(GestureSpeed.allCases, id: \.self) { s in
-                                    Text(s.rawValue.capitalized).tag(s)
+                                    Text(L(s.rawValue)).tag(s)
                                 }
                             }
                             .pickerStyle(.segmented)
@@ -515,7 +515,7 @@ struct RuleEditor: View {
                         if rule.direction == .forceClick {
                             Picker("Trackpad Zone", selection: $rule.zone) {
                                 ForEach(TrackpadZone.allCases, id: \.self) { z in
-                                    Text(z.rawValue).tag(z)
+                                    Text(L(z.rawValue)).tag(z)
                                 }
                             }
                         }
@@ -590,7 +590,7 @@ struct RuleEditor: View {
 
                         Picker("Window State", selection: $rule.windowStateFilter) {
                             ForEach(WindowStateFilter.allCases, id: \.self) { w in
-                                Text(w.rawValue).tag(w)
+                                Text(L(w.rawValue)).tag(w)
                             }
                         }
 
@@ -603,9 +603,9 @@ struct RuleEditor: View {
                                     set: { rule.reciprocalAction = $0 }
                                 )) {
                                     ForEach(categorizedActions, id: \.0) { cat, actions in
-                                        Section(cat) {
+                                        Section(L(cat)) {
                                             ForEach(actions.filter { $0 != .stageMatching && $0 != .stagePosition }, id: \.self) { action in
-                                                Label(action.rawValue, systemImage: action.iconName).tag(action)
+                                                Label(L(action.rawValue), systemImage: action.iconName).tag(action)
                                             }
                                         }
                                     }
@@ -626,9 +626,9 @@ struct RuleEditor: View {
     private var primaryActionRows: some View {
         Picker("Action", selection: $rule.action) {
             ForEach(categorizedActions, id: \.0) { cat, actions in
-                Section(cat) {
+                Section(L(cat)) {
                     ForEach(actions, id: \.self) { action in
-                        Label(action.rawValue, systemImage: action.iconName).tag(action)
+                        Label(L(action.rawValue), systemImage: action.iconName).tag(action)
                     }
                 }
             }
@@ -757,9 +757,9 @@ struct RuleEditor: View {
     ) -> some View {
         Picker(label, selection: action) {
             ForEach(continuousActions, id: \.0) { cat, actions in
-                Section(cat) {
+                Section(L(cat)) {
                     ForEach(actions, id: \.self) { a in
-                        Label(a.rawValue, systemImage: a.iconName).tag(a)
+                        Label(L(a.rawValue), systemImage: a.iconName).tag(a)
                     }
                 }
             }
@@ -900,7 +900,7 @@ struct MenuItemPickerSheet: View {
                         .foregroundStyle(.secondary)
                     Text("No Menu Items Found")
                         .font(.headline)
-                    Text(failureReason ?? "Open \(targetLabel) and try again.")
+                    Text(failureReason.map(L) ?? L("Open %@ and try again.", targetLabel))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

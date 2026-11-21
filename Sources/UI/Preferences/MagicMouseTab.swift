@@ -16,7 +16,7 @@ struct MagicMouseTab: View {
             // Categories along the top, as in BetterTouchTool's settings, so
             // each page fits without long scrolling.
             Picker("Tuning category", selection: $page) {
-                ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(Page.allCases) { Text(L($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -59,7 +59,7 @@ struct MagicMouseTab: View {
                 Toggle("Enable Magic Mouse gestures", isOn: Binding(
                     get: { settings.enabled }, set: { value in store.updateMagicMouse { $0.enabled = value } }))
                 HStack {
-                    Label(input.status, systemImage: input.connectedCount > 0 ? "checkmark.circle" : "info.circle")
+                    Label(L(input.status), systemImage: input.connectedCount > 0 ? "checkmark.circle" : "info.circle")
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button("Reconnect") { input.reconnect() }
@@ -120,7 +120,7 @@ struct MagicMouseTab: View {
     private func binding(_ key: WritableKeyPath<MagicMouseSettings, Double>) -> Binding<Double> {
         Binding(get: { settings[keyPath: key] }, set: { value in store.updateMagicMouse { $0[keyPath: key] = value } })
     }
-    private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, display: String) -> some View {
+    private func slider(_ title: LocalizedStringKey, value: Binding<Double>, range: ClosedRange<Double>, display: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack { Text(title); Spacer(); Text(display).monospacedDigit().foregroundStyle(.secondary) }
             Slider(value: value, in: range).accessibilityLabel(title)

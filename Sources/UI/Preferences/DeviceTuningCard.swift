@@ -71,7 +71,7 @@ struct DeviceTuningCard: View {
                         }
                         Text(mouse ? "Native Magic Mouse tracking. Effect varies with movement speed. 1× restores the original speed." : "Keeps native macOS acceleration. Effect varies with movement speed. 1× restores the original speed.")
                             .font(.caption).foregroundStyle(.secondary)
-                        Text(mouse ? pointer.mouseStatus : pointer.trackpadStatus)
+                        Text(L(mouse ? pointer.mouseStatus : pointer.trackpadStatus))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     }
