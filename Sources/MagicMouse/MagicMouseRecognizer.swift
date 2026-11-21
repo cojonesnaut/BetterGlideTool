@@ -433,6 +433,8 @@ struct MagicMouseRecognizer {
 /// lift. The session stays exclusive so its final release cannot become a tap.
 private struct FixedFingerRecognizer {
     let anchorCount: Int
+
+    init(anchorCount: Int) { self.anchorCount = anchorCount }
     private var anchors: [MouseContact] = []
     private var restingSince = 0.0
     private var moving: MouseContact?
