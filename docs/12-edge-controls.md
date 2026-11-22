@@ -94,6 +94,10 @@ Edge Controls apply several independent filters to separate rim gestures from or
 - **Commit Near the Rim:** More than 3 mm of inward drift before committing cancels the gesture outright. The decision gets made close to where your finger landed, rather than after it has wandered.
 - **Single-Contact Isolation:** Only single-finger touches are considered. A second finger immediately returns handling to native macOS gestures.
 
+### Dropped frames
+
+The sensor sometimes reports no contact for a frame or two while a finger is still sliding, most often right at the rim. A committed slide is held through a gap of up to 120 ms with the pointer still frozen; if the finger is seen again in time (same contact, or a new one within 8 mm of where the slide was) the slide simply carries on, otherwise it ends as if the finger had lifted when the gap began. Taps are not held, so a double-tap is never slower, and an edge scroll hands off to its glide at once, since the glide is judged on the finger's speed at the moment it lifts.
+
 ### Easier to keep than to start
 
 Entering a gesture is strict, so edge controls stay out of the way of cursor work. Staying in one is deliberately not, because by then the finger has already proved its intent with a straight slide along the rim, and the cost of being wrong has flipped: a gesture dropped halfway through is worse than one held slightly too long.

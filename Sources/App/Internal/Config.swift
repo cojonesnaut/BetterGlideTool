@@ -1344,6 +1344,14 @@ final class GlideConfigStore {
 
     var configURL: URL {
         if let location { return location }
+        // Tests and offscreen harnesses build the app's sources into their own
+        // executables, where any `Settings` change schedules a save through
+        // `GlideConfigStore.shared`. Pointing this variable at a scratch file keeps
+        // them from overwriting the user's real config. The app itself never sets it.
+        if let override = ProcessInfo.processInfo.environment["BETTERGLIDETOOL_CONFIG_PATH"],
+           !override.isEmpty {
+            return URL(fileURLWithPath: override)
+        }
         let dir = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first!

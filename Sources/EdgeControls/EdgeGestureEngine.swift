@@ -128,7 +128,7 @@ final class EdgeGestureEngine {
     }
 
     private struct ActiveGesture {
-        let touchId: Int32
+        var touchId: Int32
         let edge: TrackpadPhysicalEdge
         let action: EdgeAction
         let startPosition: CGPoint
@@ -262,16 +262,106 @@ final class EdgeGestureEngine {
     }
 
     func reset() {
+        endDropout()
         endPointerSuppression()
         activeGesture = nil
         activeEdge = nil
+    }
+
+    // MARK: - Dropped frames
+    //
+    // The sensor sometimes reports no contact for a frame or two while a finger is
+    // still sliding — most often at the very rim of the pad. Ending the slide there
+    // stops it halfway and hands the pointer back, which reads as the cursor
+    // lurching into life mid-slide. So a committed slide is held for a short grace
+    // period instead. If the finger comes back in time it carries on; if not, the
+    // slide ends as if it had lifted at the first empty frame.
+    //
+    // Taps are not held: they still end on the first empty frame, so a double-tap
+    // is never slower. Scrolling hands off to its glide at once — the glide is
+    // judged on the finger's speed at lift, and waiting would read every flick as
+    // a finger that had stopped.
+
+    /// How long a committed slide survives without contact frames.
+    static let dropoutTolerance: TimeInterval = 0.12
+
+    /// How far a finger that returns with a new identifier may be from where the
+    /// slide was last seen and still count as the same finger.
+    static let dropoutRejoinDistanceMm = 8.0
+
+    /// When the current dropout began, on the frame clock. Nil while in contact.
+    private var dropoutStarted: TimeInterval?
+    private var dropoutDeadline: DispatchWorkItem?
+    /// Whether this slide's scroll has already been handed off to its glide.
+    private var scrollHandedOff = false
+
+    /// Runs `work` after `delay` seconds. The test suite swaps this to fire it by hand.
+    var scheduleAfter: (TimeInterval, @escaping () -> Void) -> DispatchWorkItem = { delay, work in
+        let item = DispatchWorkItem(block: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+        return item
+    }
+
+    /// Told when a held slide times out between frames, so observers (the
+    /// controller's published `activeEdge`) can catch up.
+    var onStateChange: (() -> Void)?
+
+    /// Whether a committed slide is currently being held through a dropout.
+    var isHoldingThroughDropout: Bool { dropoutStarted != nil }
+
+    /// Ends a held slide now, exactly as the grace-period timer would. The test
+    /// suite uses it to stand in for the timer; it does nothing if no slide is held.
+    func expireDropout() {
+        guard dropoutStarted != nil else { return }
+        endHeldSlide()
+        onStateChange?()
+    }
+
+    private func beginDropout(at timestamp: TimeInterval) {
+        guard dropoutStarted == nil, let gesture = activeGesture else { return }
+        dropoutStarted = timestamp
+        if gesture.action == .scroll && !scrollHandedOff {
+            scrollHandedOff = true
+            EdgeScrollSession.shared.end(momentum: Settings.shared.edgeControls.scrollMomentum)
+        }
+        dropoutDeadline = scheduleAfter(Self.dropoutTolerance) { [weak self] in
+            guard let self, self.dropoutStarted != nil else { return }
+            AppLogger.debug("[Edge] slide ended after a \(Int(Self.dropoutTolerance * 1000)) ms gap")
+            self.endHeldSlide()
+            self.onStateChange?()
+        }
+    }
+
+    private func endDropout() {
+        dropoutDeadline?.cancel()
+        dropoutDeadline = nil
+        dropoutStarted = nil
+    }
+
+    /// The held slide is over: finish it as an ordinary lift.
+    private func endHeldSlide() {
+        reset()
+        landedTouchId = nil
+        disqualifiedTouchIds.removeAll(keepingCapacity: true)
+    }
+
+    /// Whether a finger arriving during a dropout is the slide's own finger
+    /// coming back: in time, and either the same identifier or close to where
+    /// the slide was last seen.
+    private func rejoinsHeldSlide(_ touch: GLDTouchPoint, position: CGPoint, timestamp: TimeInterval) -> Bool {
+        guard let started = dropoutStarted, let gesture = activeGesture,
+              timestamp - started <= Self.dropoutTolerance else { return false }
+        if touch.identifier == gesture.touchId { return true }
+        let dx = Double(position.x - gesture.lastPosition.x) * surfaceSize.width
+        let dy = Double(position.y - gesture.lastPosition.y) * surfaceSize.height
+        return (dx * dx + dy * dy).squareRoot() <= Self.dropoutRejoinDistanceMm
     }
 
     // MARK: - Frame ingestion
 
     func consume(touch: GLDTouchPoint?, contacts: Int, timestamp: TimeInterval) {
         guard config.isEnabled else {
-            if activeGesture != nil { reset() }
+            if activeGesture != nil || dropoutStarted != nil { reset() }
             disqualifiedTouchIds.removeAll(keepingCapacity: true)
             tapCandidate = nil
             lastTap = nil
@@ -284,6 +374,11 @@ final class EdgeGestureEngine {
         guard contacts == 1, let touch else {
             if contacts == 0 {
                 finishTap(at: timestamp)
+                // A committed slide rides out a short gap rather than ending here.
+                if let gesture = activeGesture, gesture.isSwiping {
+                    beginDropout(at: timestamp)
+                    return
+                }
             } else {
                 // A second finger makes it something else entirely.
                 tapCandidate = nil
@@ -296,6 +391,26 @@ final class EdgeGestureEngine {
         }
 
         let currentPos = CGPoint(x: CGFloat(touch.x), y: CGFloat(touch.y))
+
+        if dropoutStarted != nil {
+            if rejoinsHeldSlide(touch, position: currentPos, timestamp: timestamp),
+               var gesture = activeGesture {
+                // The same finger is back: carry on with the slide as if no frame
+                // had been lost.
+                endDropout()
+                gesture.touchId = touch.identifier
+                activeGesture = gesture
+                landedTouchId = touch.identifier
+                if gesture.action == .scroll && scrollHandedOff {
+                    scrollHandedOff = false
+                    EdgeScrollSession.shared.begin(pointsPerMm: Settings.shared.edgeControls.scrollSpeed)
+                }
+                advance(current: gesture, touch: touch, currentPos: currentPos, timestamp: timestamp)
+                return
+            }
+            // Too late, or a different finger: the held slide ended at the gap.
+            endHeldSlide()
+        }
 
         if landedTouchId != touch.identifier {
             // A different finger without a lift frame in between: settle the old
@@ -558,6 +673,7 @@ final class EdgeGestureEngine {
             }
 
             if updated.action == .scroll {
+                scrollHandedOff = false
                 EdgeScrollSession.shared.begin(pointsPerMm: Settings.shared.edgeControls.scrollSpeed)
             }
         }
@@ -648,7 +764,12 @@ final class EdgeGestureEngine {
         guard isSuppressingPointer else { return }
         isSuppressingPointer = false
         GestureEngine.shared.inputManager?.setPointerSuppression(false, owner: .edgeControls)
-        EdgeScrollSession.shared.end(momentum: Settings.shared.edgeControls.scrollMomentum)
+        // A scroll already handed to its glide at the start of a dropout must not
+        // be ended a second time, or the glide would restart.
+        if !scrollHandedOff {
+            EdgeScrollSession.shared.end(momentum: Settings.shared.edgeControls.scrollMomentum)
+        }
+        scrollHandedOff = false
         AppLogger.debug("[Edge] released — pointer returned")
     }
 
