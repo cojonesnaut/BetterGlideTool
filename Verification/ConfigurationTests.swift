@@ -85,6 +85,7 @@ struct ConfigurationTests {
         precondition(defaults.contains { $0.direction == .forceClick && $0.zone == .topRight && $0.action == .screenshotAreaClipboard })
         try! verifyLiveContacts()
         try! renderLiveContactsPreviewIfRequested()
+        verifyPreferencesLayout()
         verifyTrackpadNativeEvents()
         let freshTuning = GlideConfigParser.parse(yaml: "touchpad:\n  device_tuning:\n    trackpad_sensitivity: 0.5")!.deviceTuning
         precondition(freshTuning.trackpadTipTap == .trackpadDefaults && freshTuning.mouseTipTap == .mouseDefaults)

@@ -226,6 +226,77 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         print("[TEST-EDGE] Media strip passed.")
 
+        // Dropped frames: a committed slide rides out a short gap.
+        do {
+            let r = Recorder()
+            var pendingDeadline: (() -> Void)?
+            func heldEngine() -> EdgeGestureEngine {
+                let engine = makeEngine({ $0.bottomAction = .media }, recorder: r)
+                engine.scheduleAfter = { _, work in pendingDeadline = work; return DispatchWorkItem {} }
+                return engine
+            }
+            func frame(_ engine: EdgeGestureEngine, id: Int32, x: Float, y: Float = 0.04, at t: TimeInterval, landing: Bool = false) {
+                engine.consume(touch: GLDTouchPoint(identifier: id, state: landing ? 3 : 4, x: x, y: y, vx: 0, vy: 0, size: 1),
+                               contacts: 1, timestamp: t)
+            }
+
+            // Same finger back within the grace period: the slide carries on.
+            var engine = heldEngine()
+            frame(engine, id: 300, x: 0.50, at: now, landing: true)
+            frame(engine, id: 300, x: 0.53, at: now + 0.02)           // ~4.7 mm: commits
+            precondition(engine.hasCommittedGesture, "test setup: the slide should have committed")
+            engine.consume(touch: nil, contacts: 0, timestamp: now + 0.03)
+            precondition(engine.isHoldingThroughDropout && engine.activeEdge == .bottom,
+                         "A committed slide must be held through an empty frame")
+            frame(engine, id: 300, x: 0.63, at: now + 0.08)           // ~20 mm from the start
+            precondition(!engine.isHoldingThroughDropout && r.keys == [.next],
+                         "The returning finger must continue the same slide, got \(r.keys)")
+            engine.consume(touch: nil, contacts: 0, timestamp: now + 0.10)
+            pendingDeadline?()
+            precondition(engine.activeEdge == nil && !engine.isHoldingThroughDropout,
+                         "When the grace period runs out the slide ends")
+
+            // A finger back after the grace period starts fresh rather than continuing.
+            engine = heldEngine()
+            frame(engine, id: 310, x: 0.50, at: now + 1, landing: true)
+            frame(engine, id: 310, x: 0.53, at: now + 1.02)
+            engine.consume(touch: nil, contacts: 0, timestamp: now + 1.03)
+            frame(engine, id: 310, x: 0.63, at: now + 1.03 + EdgeGestureEngine.dropoutTolerance + 0.05)
+            precondition(r.keys == [.next] && !engine.isHoldingThroughDropout,
+                         "A finger back too late must not continue the old slide, got \(r.keys)")
+
+            // A new identifier close to where the slide was is the same finger;
+            // one far away is a different finger.
+            engine = heldEngine()
+            frame(engine, id: 320, x: 0.50, at: now + 2, landing: true)
+            frame(engine, id: 320, x: 0.53, at: now + 2.02)
+            engine.consume(touch: nil, contacts: 0, timestamp: now + 2.03)
+            frame(engine, id: 321, x: 0.555, at: now + 2.06)          // ~4 mm on
+            precondition(!engine.isHoldingThroughDropout && engine.hasCommittedGesture,
+                         "A nearby new identifier rejoins the held slide")
+            engine.consume(touch: nil, contacts: 0, timestamp: now + 2.08)
+            frame(engine, id: 322, x: 0.90, y: 0.5, at: now + 2.10)  // far away
+            precondition(!engine.hasCommittedGesture && !engine.isHoldingThroughDropout,
+                         "A distant new finger ends the held slide")
+
+            // A touch that never committed still ends on the first empty frame.
+            engine = heldEngine()
+            frame(engine, id: 330, x: 0.50, at: now + 3, landing: true)
+            engine.consume(touch: nil, contacts: 0, timestamp: now + 3.05)
+            precondition(engine.activeEdge == nil && !engine.isHoldingThroughDropout,
+                         "An uncommitted touch must not be held")
+
+            // A second finger during the gap ends the slide at once.
+            engine = heldEngine()
+            frame(engine, id: 340, x: 0.50, at: now + 4, landing: true)
+            frame(engine, id: 340, x: 0.53, at: now + 4.02)
+            engine.consume(touch: nil, contacts: 0, timestamp: now + 4.03)
+            engine.consume(touch: nil, contacts: 2, timestamp: now + 4.04)
+            precondition(engine.activeEdge == nil && !engine.isHoldingThroughDropout,
+                         "Two fingers during a gap end the held slide")
+        }
+        print("[TEST-EDGE] Dropped-frame tolerance passed.")
+
         // Start zones, modifier requirement and the typing pause all act on landing.
         do {
             let r = Recorder()
@@ -422,6 +493,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             engine.consume(touch: move, contacts: 1, timestamp: now + offset + 0.02)
             let armed = engine.hasCommittedGesture
             engine.consume(touch: nil, contacts: 0, timestamp: now + offset + 0.04)
+            engine.expireDropout()   // a lift ends the slide once the dropout grace period passes
             return armed
         }
 
@@ -473,6 +545,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         strict.consume(touch: strictMove, contacts: 1, timestamp: now + 0.77)
         assert(!strict.hasCommittedGesture, "A 6.8mm slide must not trip a 12.0mm threshold")
         strict.consume(touch: nil, contacts: 0, timestamp: now + 0.79)
+        strict.expireDropout()   // a lift ends the slide once the dropout grace period passes
         print("[TEST-EDGE] Activation gate (travel + direction purity) passed.")
 
         // 2c. Pointer suppression is positional, not conditional on committing.
@@ -501,6 +574,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             assert(!engine.hasCommittedGesture,
                    "\(action.rawValue): landing alone must not commit the action")
             engine.consume(touch: nil, contacts: 0, timestamp: now + 0.86 + Double(index) * 0.01)
+            engine.expireDropout()   // a lift ends the slide once the dropout grace period passes
             assert(!engine.isSuppressingPointer, "\(action.rawValue): lifting must free the pointer")
         }
 
@@ -515,6 +589,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(!sweepEngine.isSuppressingPointer,
                "Sweeping into the strip from mid-pad must still not freeze the pointer")
         sweepEngine.consume(touch: nil, contacts: 0, timestamp: now + 0.99)
+        sweepEngine.expireDropout()   // a lift ends the slide once the dropout grace period passes
 
         // Heading inward hands the pointer straight back — "between the edge and the
         // trackpad" is cursor territory.
@@ -528,6 +603,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(!inwardEngine.isSuppressingPointer,
                "Moving inward must release the pointer promptly, not hold it hostage")
         inwardEngine.consume(touch: nil, contacts: 0, timestamp: now + 1.04)
+        inwardEngine.expireDropout()   // a lift ends the slide once the dropout grace period passes
         print("[TEST-EDGE] Positional pointer suppression (strip = frozen) passed.")
 
         // 2c-2. Hysteresis: a committed gesture survives inward drift that would have
@@ -555,6 +631,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             engine.consume(touch: drift, contacts: 1, timestamp: now + offset + 0.04)
             let survived = engine.hasCommittedGesture && engine.activeEdge == .right
             engine.consume(touch: nil, contacts: 0, timestamp: now + offset + 0.06)
+            engine.expireDropout()   // a lift ends the slide once the dropout grace period passes
             return survived
         }
 
@@ -589,12 +666,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         cornerEngine.consume(touch: midEdgeTouch, contacts: 1, timestamp: now + 1.02)
         assert(cornerEngine.activeEdge == .right, "Mid-edge touches must still be accepted")
         cornerEngine.consume(touch: nil, contacts: 0, timestamp: now + 1.04)
+        cornerEngine.expireDropout()   // a lift ends the slide once the dropout grace period passes
 
         // Just past the 12mm corner floor is edge territory again: 15.6mm up the edge.
         let nearCornerTouch = GLDTouchPoint(identifier: 42, state: 3, x: 0.99, y: 0.16, vx: 0, vy: 0, size: 1)
         cornerEngine.consume(touch: nearCornerTouch, contacts: 1, timestamp: now + 1.06)
         assert(cornerEngine.activeEdge == .right, "15.6mm up the edge clears the corner exclusion")
         cornerEngine.consume(touch: nil, contacts: 0, timestamp: now + 1.08)
+        cornerEngine.expireDropout()   // a lift ends the slide once the dropout grace period passes
         print("[TEST-EDGE] Corner exclusion passed.")
 
         // 2e. Committing must undo the pointer drift the pre-commit travel caused.
@@ -632,6 +711,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                    "Committing must put the cursor back where the finger landed, off by \(offBy)")
 
             restoreEngine.consume(touch: nil, contacts: 0, timestamp: now + 1.14)
+            restoreEngine.expireDropout()   // a lift ends the slide once the dropout grace period passes
             CursorDriver.shared.warp(to: originalCursor)
             print("[TEST-EDGE] Pre-commit cursor drift is undone on commit.")
         }
@@ -705,6 +785,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(scrollEngine.isSuppressingPointer, "A committed scroll gesture must still hold the pointer")
 
         scrollEngine.consume(touch: nil, contacts: 0, timestamp: now + 0.34)
+        scrollEngine.expireDropout()   // a lift ends the slide once the dropout grace period passes
         assert(scrollEngine.activeEdge == nil, "Lifting the finger must end the scroll gesture")
         assert(!scrollEngine.isSuppressingPointer, "Pointer suppression must be released on lift")
         print("[TEST-EDGE] Scroll pointer-suppression lifecycle passed.")
@@ -728,6 +809,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         assert(scrollEngine.isSuppressingPointer, "A committed top-edge scroll must hold the pointer")
 
         scrollEngine.consume(touch: nil, contacts: 0, timestamp: now + 0.44)
+        scrollEngine.expireDropout()   // a lift ends the slide once the dropout grace period passes
         assert(!scrollEngine.isSuppressingPointer, "Top edge scroll must release suppression on lift")
         print("[TEST-EDGE] Horizontal-edge (top/bottom) scrolling passed.")
 

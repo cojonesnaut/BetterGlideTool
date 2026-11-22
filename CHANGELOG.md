@@ -1,5 +1,11 @@
 # Changelog
 
+## BetterGlideTool 3.2.1
+
+- **Slides no longer stop halfway when the trackpad drops a frame.** The sensor sometimes reports no contact for a frame or two mid-slide, most often at the rim. A committed edge slide now rides out a gap of up to 120 ms and carries on when the finger is seen again, even under a new contact ID if it's within 8 mm. Taps still end on lift, so double-taps are no slower, and edge scrolling still hands off to its glide at once so flicks feel the same.
+- **Fix the Edge Controls page being cut off at the top.** Its header sat outside the scroll area and could stretch the Settings window's content to about 1,550 pt, pushing the sidebar and the page up under the title bar. The header now scrolls with the page, and a new verification test fails if any Settings page asks for more height than Tuning.
+- The verification suite saves its settings to a scratch file (`BETTERGLIDETOOL_CONFIG_PATH`) instead of the real `config.yaml`.
+
 ## BetterGlideTool 3.2.0
 
 - **A redesigned Edge Controls page.** It opens on a trackpad diagram showing what each edge and corner does, with live volume and brightness filling the strips that control them. Settings are sorted into categories along the top, like the Tuning page: Edges, Corners, While Sliding and Feedback. Clicking an edge or corner on the diagram opens its category.

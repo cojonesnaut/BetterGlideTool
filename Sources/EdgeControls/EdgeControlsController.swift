@@ -32,6 +32,11 @@ final class EdgeControlsController: ObservableObject {
 
     private init() {
         applySettings()
+        // A slide held through a dropped frame can end on a timer, between frames.
+        engine.onStateChange = { [weak self] in
+            guard let self, self.activeEdge != self.engine.activeEdge else { return }
+            self.activeEdge = self.engine.activeEdge
+        }
     }
 
     // MARK: - Settings Synchronization

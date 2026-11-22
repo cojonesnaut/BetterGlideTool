@@ -31,11 +31,13 @@ struct EdgeControlsTab: View {
     private var settings: EdgeControlsSettings { store.edgeControls }
 
     var body: some View {
+        // Only the category picker sits outside the scroll view, exactly as on
+        // the Tuning page. Anything else up here — the header's wrapping text
+        // in particular — feeds its ideal height into the window's size and,
+        // with `.contentMinSize` resizability, can stretch the whole window's
+        // content past the screen, pushing the sidebar and page up under the
+        // title bar. Keep it that way.
         VStack(spacing: 0) {
-            headerCard
-                .padding([.horizontal, .top])
-                .padding(.bottom, settings.enabled ? 4 : 16)
-
             if settings.enabled {
                 Picker("Edge Controls category", selection: $page) {
                     ForEach(Page.allCases) { Text(L($0.rawValue)).tag($0) }
@@ -45,9 +47,13 @@ struct EdgeControlsTab: View {
                 .padding(.horizontal)
                 .padding(.vertical, 10)
                 Divider()
+            }
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    headerCard
+
+                    if settings.enabled {
                         switch page {
                         case .edges:
                             glanceCard
@@ -70,10 +76,8 @@ struct EdgeControlsTab: View {
                             .buttonStyle(.bordered)
                         }
                     }
-                    .padding()
                 }
-            } else {
-                Spacer()
+                .padding()
             }
         }
         .animation(.easeInOut(duration: 0.2), value: settings.enabled)
@@ -107,10 +111,8 @@ struct EdgeControlsTab: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Edge Controls")
                         .font(.headline)
-                    // No `.fixedSize` here: this header sits outside the scroll view,
-                    // and a fixed-height wrap measured at the window's narrowest
-                    // width inflated the whole window's fitting height to ~1,550 pt,
-                    // pushing the sidebar and page up under the title bar.
+                    // This header scrolls with the page; see `body` for why it must
+                    // never sit outside the scroll view again.
                     Text("Slide one finger along an edge of the trackpad to change volume, brightness and more, or double-tap a corner to run an action.")
                         .font(.caption)
                         .foregroundColor(.secondary)
