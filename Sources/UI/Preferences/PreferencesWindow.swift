@@ -49,7 +49,22 @@ final class PreferencesNavigator: ObservableObject {
     @Published var device: PreferencesDevice = .trackpad
 }
 
+/// Whether opening Preferences turns BetterGlideTool into a regular app with a
+/// Dock icon (and back when it closes). Always true in the app; tests that host
+/// the window offscreen turn it off so their process never gets a Dock tile.
+private struct ManagesActivationPolicyKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var preferencesManagesActivationPolicy: Bool {
+        get { self[ManagesActivationPolicyKey.self] }
+        set { self[ManagesActivationPolicyKey.self] = newValue }
+    }
+}
+
 struct PreferencesWindow: View {
+    @Environment(\.preferencesManagesActivationPolicy) private var managesActivationPolicy
     @ObservedObject private var navigator = PreferencesNavigator.shared
     @EnvironmentObject var preferencesStore: PreferencesStore
     @EnvironmentObject var engineBridge: EngineBridge
@@ -113,6 +128,7 @@ struct PreferencesWindow: View {
             if tab == .edgeControls { navigator.device = .trackpad }
         }
         .onAppear {
+            guard managesActivationPolicy else { return }
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
         }
@@ -120,6 +136,7 @@ struct PreferencesWindow: View {
             engineBridge.recheckAccessibilityPermission()
         }
         .onDisappear {
+            guard managesActivationPolicy else { return }
             NSApp.setActivationPolicy(.accessory)
         }
     }
