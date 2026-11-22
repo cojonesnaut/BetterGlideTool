@@ -481,42 +481,73 @@ if [[ "${1:-}" == "--dmg" ]]; then
 
     ln -s /Applications "$DMG_STAGE/Applications"
 
-    cat > "$DMG_STAGE/READ ME - How to Install.txt" <<'EOF'
-How to install BetterGlideTool
-====================
+    # The window shows a background (assets/dmg-background.png, drawn by
+    # render_dmg_background.swift) with an arrow from the app to Applications
+    # and the xattr line. Finder stores that layout in the volume's .DS_Store,
+    # so the image is built writable, laid out through Finder, then compressed.
+    # If Finder can't be scripted (no Automation permission, headless runner),
+    # the DMG still ships, just without the custom layout.
+    DMG_BACKGROUND="$SCRIPT_DIR/assets/dmg-background.png"
+    if [[ -f "$DMG_BACKGROUND" ]]; then
+        mkdir -p "$DMG_STAGE/.background"
+        cp "$DMG_BACKGROUND" "$DMG_STAGE/.background/background.png"
+        chflags hidden "$DMG_STAGE/.background"
+    fi
 
-1. Drag BetterGlideTool.app onto the Applications folder icon.
-
-2. BetterGlideTool is a free open-source app and is not notarized by Apple,
-   so macOS blocks it on first launch. It is NOT damaged. To open it
-   (needed only once):
-
-   - Double-click BetterGlideTool. macOS says it was "Not Opened" - click Done.
-   - Open System Settings -> Privacy & Security, scroll down to
-     "BetterGlideTool.app was blocked", and click "Open Anyway".
-
-   On macOS 14 or older you can instead right-click (Control-click)
-   BetterGlideTool in Applications, choose "Open", then click "Open".
-
-   If an older Mac claims the app is "damaged", run this one line
-   in Terminal:
-
-       xattr -cr /Applications/BetterGlideTool.app
-
-3. Open BetterGlideTool from Applications. When prompted, grant Accessibility
-   access in System Settings -> Privacy & Security -> Accessibility.
-
-4. Look for the hand icon in your menu bar. Enjoy!
-EOF
-
-    hdiutil create \
-        -volname "$APP_NAME" \
-        -srcfolder "$DMG_STAGE" \
-        -ov \
-        -format UDZO \
-        "$DMG_PATH"
-
+    DMG_RW="$BUILD_DIR/$APP_NAME-rw.dmg"
+    rm -f "$DMG_RW"
+    hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_STAGE" -ov -format UDRW -fs HFS+ "$DMG_RW" >/dev/null
     rm -rf "$DMG_STAGE"
+
+    # Mounted in /Volumes so Finder lists it; the volume may come up as
+    # "BetterGlideTool 1" if another copy is open, so take the name from the
+    # mount point.
+    DMG_MOUNT=""
+    if [[ -f "$DMG_BACKGROUND" ]]; then
+        DMG_MOUNT="$(hdiutil attach "$DMG_RW" -readwrite -noverify -noautoopen | grep -o '/Volumes/.*$' | tail -1)"
+    fi
+    if [[ -n "$DMG_MOUNT" && -d "$DMG_MOUNT" ]]; then
+        DMG_VOLUME="$(basename "$DMG_MOUNT")"
+        if osascript >/dev/null <<OSA
+tell application "Finder"
+    tell disk "$DMG_VOLUME"
+        open
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set the bounds of container window to {200, 120, 840, 600}
+        set viewOptions to the icon view options of container window
+        set arrangement of viewOptions to not arranged
+        set icon size of viewOptions to 128
+        set text size of viewOptions to 13
+        set background picture of viewOptions to file ".background:background.png"
+        set position of item "$APP_NAME.app" of container window to {170, 140}
+        set position of item "Applications" of container window to {470, 140}
+        try
+            set position of item ".background" of container window to {900, 600}
+        end try
+        close
+        open
+        delay 1
+        close
+    end tell
+end tell
+OSA
+        then
+            # Give Finder a moment to write .DS_Store before detaching.
+            for _ in 1 2 3 4 5 6 7 8 9 10; do [[ -f "$DMG_MOUNT/.DS_Store" ]] && break; sleep 0.5; done
+            echo "DMG: window laid out with background and arrow"
+        else
+            echo "⚠️  DMG: Finder couldn't be scripted; shipping without the background layout"
+        fi
+        rm -rf "$DMG_MOUNT/.fseventsd"
+        sync
+        for _ in 1 2 3 4 5; do hdiutil detach "$DMG_MOUNT" >/dev/null 2>&1 && break; sleep 1; done
+        if [[ -d "$DMG_MOUNT/$APP_NAME.app" ]]; then hdiutil detach -force "$DMG_MOUNT" >/dev/null; fi
+    fi
+
+    hdiutil convert "$DMG_RW" -format UDZO -imagekey zlib-level=9 -ov -o "$DMG_PATH" >/dev/null
+    rm -f "$DMG_RW"
 
 
     # Notarize + staple when a Developer ID cert and stored
