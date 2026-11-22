@@ -11,7 +11,9 @@ import SwiftUI
 /// same picker-over-scroll-view layout, at both the minimum and a typical size.
 @MainActor
 func verifyPreferencesLayout() {
-    NSApplication.shared.setActivationPolicy(.accessory)
+    // `.prohibited`: the measuring windows are never shown, and the test process
+    // must never get a Dock tile. `.accessory` left an "exec" tile behind per run.
+    NSApplication.shared.setActivationPolicy(.prohibited)
     let navigator = PreferencesNavigator.shared
     let originalTab = navigator.tab
     let originalPage = UserDefaults.standard.string(forKey: "edgeControlsPage")
@@ -26,7 +28,8 @@ func verifyPreferencesLayout() {
         if let page { UserDefaults.standard.set(page, forKey: "edgeControlsPage") }
         let controller = NSHostingController(rootView: PreferencesWindow()
             .environmentObject(PreferencesStore.shared)
-            .environmentObject(EngineBridge.shared))
+            .environmentObject(EngineBridge.shared)
+            .environment(\.preferencesManagesActivationPolicy, false))
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                               styleMask: [.titled, .resizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
