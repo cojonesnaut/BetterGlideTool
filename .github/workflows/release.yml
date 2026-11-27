@@ -60,9 +60,10 @@ jobs:
           body: |
             ## Already running BetterGlideTool?
 
-            Open **BetterGlideTool → Preferences → General** and click **Check for Updates**.
-            BetterGlideTool downloads and installs this version itself, then relaunches —
-            no DMG dragging, and no Gatekeeper warning.
+            Open **BetterGlideTool → Settings → About** and click **Check Now**, or choose
+            **Check for Updates…** from the menu bar icon. On 3.2.1 and earlier, the button
+            is in **Preferences → General**. BetterGlideTool downloads and installs this
+            version itself, then relaunches — no DMG dragging, and no Gatekeeper warning.
 
             ## New install
 
