@@ -1,5 +1,15 @@
 # Changelog
 
+## BetterGlideTool 3.3.0
+
+- **A redesigned Settings sidebar.** Sections are now your device (Trackpad or Magic Mouse), **Keyboard**, **General** (General and Permissions) and **Advanced** (Backup and About). The Configuration page is now called **Backup**.
+- **Icons follow your Icon & widget style.** Every icon in Settings sits in a small tile that matches System Settings › Appearance › Icon & widget style: Default, Dark, Clear or Tinted, including your tint colour. Changes show while Settings is open.
+- **Liquid Glass instead of accent-coloured highlights** on macOS 26 and later: the selected page and gesture, trigger chips, the selected segment of every picker, Edge Controls tiles and the active Quick Setup preset. Earlier macOS versions get a frosted material.
+- **New Permissions page.** Shows Accessibility, plus the optional Automation permissions for System Events (Menu Item actions) and Finder (Empty Trash), each with its live status and a button to grant it or open System Settings. It replaces the Accessibility card in General and the status switch at the bottom of the sidebar; turning gestures on and off stays in the menu bar.
+- **New About page.** App version, software updates, usage stats and links (GitHub, release notes, reporting an issue, the welcome tour), moved out of General. The menu bar's update items now open it.
+- **Smoother finger filter.** Switching between All and 1–5 fingers no longer makes the gesture list's old and new rows slide over each other; only the picker's selection moves.
+- **Settings gives back memory when closed.** The window drops its contents and returns freed memory to macOS. Most of what remains is system framework state; moving Settings into its own process is planned (`docs/settings-process-plan.md`).
+
 ## BetterGlideTool 3.2.1
 
 - **Slides no longer stop halfway when the trackpad drops a frame.** The sensor sometimes reports no contact for a frame or two mid-slide, most often at the rim. A committed edge slide now rides out a gap of up to 120 ms and carries on when the finger is seen again, even under a new contact ID if it's within 8 mm. Taps still end on lift, so double-taps are no slower, and edge scrolling still hands off to its glide at once so flicks feel the same.
