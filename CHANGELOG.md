@@ -1,5 +1,15 @@
 # Changelog
 
+## BetterGlideTool 3.4.0
+
+- **Settings runs as its own app and gives its memory back when closed.** Opening Settings starts a separate BetterGlideTool Settings window with its own Dock icon; closing it quits that process. The menu bar app now stays at about 37 MB after you've used Settings, instead of about 84 MB for the rest of the session. Opening Settings takes a little under a second.
+- **Edits sync both ways.** Changes made in Settings reach the running app immediately, and changes made from the menu bar (like Enable Edge Controls) show up in an open Settings window.
+- **Everything live still works from the separate Settings app:** Input Monitoring's contacts and Gesture Log, Block Real Gesture Triggering, recording and export, Copy Readings, Magic Mouse Reconnect, pointer-speed status and the Edge Controls highlights. The floating Live Contacts panel now belongs to the menu bar app, so it stays up after Settings closes.
+- **Settings… while Settings is open** switches the open window to the page you asked for. **Check for Updates…** opens About and checks there; **Install Update…** installs from the menu bar and offers a relaunch.
+- **Edge Controls corners flash green** when their double-tap runs, in the diagram and in their row.
+- **The Keyboard page matches Gestures:** a search field, Liquid Glass selection, a section header, an active/total count and the same empty states, plus Rename and Duplicate on right-click. Duplicating a shortcut leaves the copy without a key combination so the two don't clash.
+- Empty-list messages on the Keyboard and Gestures pages now sit level with the editor's.
+
 ## BetterGlideTool 3.3.0
 
 - **A redesigned Settings sidebar.** Sections are now your device (Trackpad or Magic Mouse), **Keyboard**, **General** (General and Permissions) and **Advanced** (Backup and About). The Configuration page is now called **Backup**.
