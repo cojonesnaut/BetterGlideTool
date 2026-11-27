@@ -173,6 +173,9 @@ final class EdgeGestureEngine {
 
     var sendMediaKey: (SystemActions.MediaKey) -> Void = { SystemActions.sendMediaKey($0) }
 
+    /// Called when a corner's double-tap runs its action, for Settings to flash it.
+    var onCornerFired: ((TrackpadCorner) -> Void)?
+
     var playHaptic: (HapticPattern) -> Void = { HapticEngine.shared.play($0) }
 
     // MARK: - Tap tuning
@@ -506,6 +509,7 @@ final class EdgeGestureEngine {
             let action = config.corners[corner] ?? EdgeCornerAction.none
             AppLogger.debug("[Edge] double-tap \(corner.rawValue) → \(action.rawValue)")
             performCorner(action, config.cornerShortcuts[corner])
+            onCornerFired?(corner)
         case .strip(let edge):
             AppLogger.debug("[Edge] double-tap media strip on \(edge.rawValue) → play/pause")
             sendMediaKey(.play)

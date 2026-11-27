@@ -759,3 +759,15 @@
 "Empties the Trash for the Empty Trash action. Only needed for that action." = "Çöp Sepetini Boşalt eylemi için Çöp Sepeti'ni boşaltır. Yalnızca bu eylem için gerekir.";
 "Gestures work without these. If you don't grant them now, macOS asks the first time one of these features runs. AppleScript actions you write can ask to control other apps; those appear in the same Automation list." = "Hareketler bunlar olmadan da çalışır. Şimdi izin vermezseniz macOS, bu özelliklerden biri ilk kez çalıştığında sorar. Yazdığınız AppleScript eylemleri başka uygulamaları denetlemek için izin isteyebilir; bunlar aynı Otomasyon listesinde görünür.";
 "Optional" = "İsteğe bağlı";
+"Couldn't open Settings" = "Ayarlar açılamadı";
+
+/* Keyboard page */
+"Search shortcuts" = "Kısayollarda ara";
+"Keyboard Shortcuts" = "Klavye Kısayolları";
+"No shortcuts yet" = "Henüz kısayol yok";
+"Click Add Shortcut to run an action from anywhere." = "Bir eylemi her yerden çalıştırmak için Kısayol Ekle'ye tıklayın.";
+"Try a different search." = "Farklı bir arama deneyin.";
+"No Shortcut Selected" = "Kısayol Seçilmedi";
+"Select a shortcut from the list or click + to add one." = "Listeden bir kısayol seçin veya eklemek için + simgesine tıklayın.";
+"Rename Shortcut" = "Kısayolu Yeniden Adlandır";
+"Give this shortcut a name you'll recognize. Leave empty to go back to the automatic name." = "Bu kısayola tanıyacağınız bir ad verin. Otomatik ada dönmek için boş bırakın.";

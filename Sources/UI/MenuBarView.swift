@@ -5,7 +5,6 @@ struct MenuBarView: View {
     @EnvironmentObject var preferencesStore: PreferencesStore
     @EnvironmentObject var engineBridge:  EngineBridge
     @ObservedObject private var updater = UpdateChecker.shared
-    @Environment(\.openWindow) var openWindow
 
     var body: some View {
         Button("Settings…") {
@@ -50,14 +49,14 @@ struct MenuBarView: View {
         .keyboardShortcut("q", modifiers: .command)
     }
 
-    /// Updates are downloaded and installed inside the app, so every path here
-    /// leads to the About page rather than out to the browser.
+    /// Updates are downloaded and installed inside the app. Checking opens
+    /// Settings › About; installing runs here and then offers a relaunch.
     @ViewBuilder
     private var updateItem: some View {
         switch updater.state {
         case .available(let update):
             Button("Install Update \(update.tag)…") {
-                showPreferences(tab: .about)
+                // Installs here; the menu then offers Relaunch to Finish Update.
                 updater.downloadAndInstall(update)
             }
 
@@ -72,16 +71,14 @@ struct MenuBarView: View {
 
         case .idle, .checking, .upToDate, .failed, .manualInstall:
             Button("Check for Updates…") {
-                showPreferences(tab: .about)
-                updater.check()
+                // Settings › About shows the check and any update it finds.
+                SettingsProcess.open(tab: .about, checkForUpdates: true)
             }
         }
     }
 
     private func showPreferences(tab: PrefsTab? = nil) {
-        PreferencesNavigator.shared.present(tab: tab)
-        NSApp.setActivationPolicy(.regular)
-        openWindow(id: "preferences")
-        NSApp.activate(ignoringOtherApps: true)
+        // Settings runs in its own process, which quits when its window closes.
+        SettingsProcess.open(tab: tab)
     }
 }

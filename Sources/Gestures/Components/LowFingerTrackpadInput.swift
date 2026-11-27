@@ -56,6 +56,19 @@ final class LowFingerTrackpadInput: ObservableObject {
         lock.unlock()
     }
 
+    /// Status lines in the order Settings shows them.
+    var statusLines: [String] { [inputStatus, contextStatus, tipTapStatus, lastGesture, actionStatus] }
+
+    /// Settings process: shows the menu bar app's status lines.
+    func applyRemote(statusLines lines: [String]) {
+        guard lines.count == 5 else { return }
+        if inputStatus != lines[0] { inputStatus = lines[0] }
+        if contextStatus != lines[1] { contextStatus = lines[1] }
+        if tipTapStatus != lines[2] { tipTapStatus = lines[2] }
+        if lastGesture != lines[3] { lastGesture = lines[3] }
+        if actionStatus != lines[4] { actionStatus = lines[4] }
+    }
+
     func start() {
         if let observer = activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(

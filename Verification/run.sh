@@ -29,6 +29,6 @@ clang -target "$(uname -m)-apple-macosx13.0" -isysroot "$SDK_PATH" -c Sources/Ge
 clang -target "$(uname -m)-apple-macosx13.0" -isysroot "$SDK_PATH" -c Sources/Actions/Components/GlideWindowServerBridge.c -o "$CHECK_DIR/windows.o"
 swiftc "${COMMON[@]}" -import-objc-header Sources/App/Internal/Glide-Bridging-Header.h \
     -framework Cocoa -framework SwiftUI -framework IOKit -framework CoreGraphics -framework UniformTypeIdentifiers \
-    "${SOURCES[@]}" "$CHECK_DIR/GestureApp.swift" Verification/ConfigurationTests.swift Verification/ConfigAuditTests.swift Verification/LiveContactsTests.swift Verification/PreferencesLayoutTests.swift \
+    "${SOURCES[@]}" "$CHECK_DIR/GestureApp.swift" Verification/ConfigurationTests.swift Verification/ConfigAuditTests.swift Verification/LiveContactsTests.swift Verification/PreferencesLayoutTests.swift Verification/ConfigSyncTests.swift Verification/EngineLinkTests.swift Verification/LiveStreamTests.swift \
     "$CHECK_DIR/multitouch.o" "$CHECK_DIR/windows.o" -o "$CHECK_DIR/configuration"
 "$CHECK_DIR/configuration"

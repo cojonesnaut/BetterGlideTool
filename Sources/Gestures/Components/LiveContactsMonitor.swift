@@ -134,8 +134,21 @@ struct LiveContactsRecording: Codable {
 /// view is visible — closing it can never leave gestures silently disabled.
 final class GestureActionBlock: ObservableObject {
     static let shared = GestureActionBlock()
-    @Published var isOn = false
+    @Published var isOn = false {
+        didSet {
+            // In Settings the switch is a mirror; the menu bar app does the blocking.
+            if AppMode.isSettings, !applyingRemote, isOn != oldValue {
+                AppMode.tellMenuBarApp(.setBlockActions(isOn))
+            }
+        }
+    }
+    private var applyingRemote = false
     private init() {}
+
+    func applyRemote(_ value: Bool) {
+        guard value != isOn else { return }
+        applyingRemote = true; isOn = value; applyingRemote = false
+    }
 
     /// Whether a recognised gesture's action must be withheld right now.
     var blocksActions: Bool {
@@ -167,8 +180,19 @@ final class LiveContactsMonitor: ObservableObject {
     var isEnabled: Bool {
         lock.lock(); defer { lock.unlock() }; return !owners.isEmpty
     }
+    /// Caption for the last command run in the menu bar app (Settings only).
+    @Published private(set) var lastResult: String?
+
     func setVisible(_ visible: Bool, owner: String) {
         precondition(Thread.isMainThread)
+        if AppMode.isSettings {
+            // Settings shows the menu bar app's monitor; ask it to stream or stop.
+            lock.lock()
+            if visible { owners.insert(owner) } else { owners.remove(owner) }
+            lock.unlock()
+            MainActor.assumeIsolated { LiveStreamClient.shared.updateSubscription() }
+            return
+        }
         lock.lock()
         if visible { owners.insert(owner) } else { owners.remove(owner) }
         if owners.isEmpty { history.stopRecording(); history.resetLive(); receivedAt = 0 }
@@ -212,8 +236,55 @@ final class LiveContactsMonitor: ObservableObject {
         frame = snapshot.latest; transitions = snapshot.transitions; gestures = events
         isRecording = snapshot.recording; recordedFrameCount = snapshot.frames.count; lastReceived = received
     }
+    // MARK: Settings process: a mirror of the menu bar app's monitor
+
+    /// Applies state streamed from the menu bar app.
+    func applyRemote(_ snapshot: LiveContactsSnapshot) {
+        precondition(Thread.isMainThread)
+        if frame != snapshot.frame { frame = snapshot.frame }
+        if transitions != snapshot.transitions { transitions = snapshot.transitions }
+        if isRecording != snapshot.isRecording { isRecording = snapshot.isRecording }
+        if recordedFrameCount != snapshot.recordedFrameCount { recordedFrameCount = snapshot.recordedFrameCount }
+        if let events = snapshot.gestures, gestures != events { gestures = events }
+        lastReceived = snapshot.lastReceived
+    }
+
+    func applyRemoteResult(_ message: String) { lastResult = message }
+
+    /// The state Settings mirrors, read on the menu bar app's main thread.
+    func snapshot(includingGestures: Bool) -> LiveContactsSnapshot {
+        LiveContactsSnapshot(frame: frame, transitions: transitions, isRecording: isRecording,
+                             recordedFrameCount: recordedFrameCount, lastReceived: lastReceived,
+                             gestures: includingGestures ? gestures : nil)
+    }
+
+    /// Copies the current readings, here or (from Settings) in the menu bar app.
+    func copyReadings() -> String? {
+        if AppMode.isSettings {
+            AppMode.tellMenuBarApp(.liveCommand(device: device, command: .copyReadings))
+            return nil   // the caption arrives as a liveResult
+        }
+        do {
+            let data = try snapshotData()
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(String(decoding: data, as: UTF8.self), forType: .string)
+            return "Current readings copied."
+        } catch { return error.localizedDescription }
+    }
+
+    /// Writes the last recording to `url`, here or (from Settings) in the menu bar app.
+    func exportRecording(to url: URL) -> String? {
+        if AppMode.isSettings {
+            AppMode.tellMenuBarApp(.exportRecording(device: device, path: url.path))
+            return nil
+        }
+        do { try recordingData().write(to: url, options: .atomic); return "Recording exported." }
+        catch { return "Export failed: \(error.localizedDescription)" }
+    }
+
     func startRecording() {
         precondition(Thread.isMainThread)
+        if AppMode.isSettings { AppMode.tellMenuBarApp(.liveCommand(device: device, command: .startRecording)); return }
         let id = UUID(); recordingID = id
         lock.lock(); history.startRecording(); recordedGestures = []; lock.unlock()
         refresh()
@@ -223,6 +294,7 @@ final class LiveContactsMonitor: ObservableObject {
     }
     func stopRecording() {
         precondition(Thread.isMainThread)
+        if AppMode.isSettings { AppMode.tellMenuBarApp(.liveCommand(device: device, command: .stopRecording)); return }
         lock.lock(); history.stopRecording(); lock.unlock(); refresh()
     }
     /// Called at gesture action dispatch, never inferred from repeated status
@@ -248,6 +320,7 @@ final class LiveContactsMonitor: ObservableObject {
         DispatchQueue.main.async { self.refresh() }
     }
     func clearGestureLog() {
+        if AppMode.isSettings { AppMode.tellMenuBarApp(.liveCommand(device: device, command: .clearGestureLog)); return }
         lock.lock(); gestureHistory = []; lock.unlock()
         refresh()
     }

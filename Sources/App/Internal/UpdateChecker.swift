@@ -224,7 +224,11 @@ final class UpdateChecker: ObservableObject {
 
     /// Quits and reopens the freshly installed copy.
     func relaunch() {
-        UpdateInstaller.relaunch(installedApp ?? Bundle.main.bundleURL)
+        let app = installedApp ?? Bundle.main.bundleURL
+        // From Settings, the menu bar app is what has to restart into the new
+        // version; Settings quits along with it.
+        if AppMode.tellMenuBarApp(.relaunchAfterUpdate(appPath: app.path)) { return }
+        UpdateInstaller.relaunch(app)
     }
 
     /// Reveals the downloaded image in Finder for the manual-install fallback.

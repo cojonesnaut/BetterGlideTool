@@ -5,7 +5,10 @@ struct DesktopActionOptionsView: View {
     @Binding var rule: GestureRule
     @EnvironmentObject var store: PreferencesStore
     @ObservedObject private var desktopActions = DesktopActions.shared
-    var body: some View {
+    // Streams the menu bar app's Stage Manager result while shown in Settings.
+    var body: some View { pageBody.liveStatus() }
+
+    @ViewBuilder private var pageBody: some View {
         if rule.action == .spaceLeftInstant || rule.action == .spaceRightInstant {
             Toggle("Allow native animated fallback", isOn: $rule.desktopOptions.allowAnimatedFallback)
             Text("Instant switching depends on private macOS APIs. If macOS rejects it, this optional fallback uses your configured Mission Control shortcut.")

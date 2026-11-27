@@ -19,6 +19,10 @@ final class EdgeControlsController: ObservableObject {
     @Published var rightEdge: EdgeAction = .volume
     @Published var marginMm: Double = 8.0
     @Published var activeEdge: TrackpadPhysicalEdge?
+    /// The corner whose double-tap just ran, for about 0.7 s, so Settings can
+    /// flash it. Corners have no lasting active state like a slide does.
+    @Published var firedCorner: TrackpadCorner?
+    private var firedCornerToken = 0
 
     private let engine = EdgeGestureEngine()
 
@@ -36,6 +40,19 @@ final class EdgeControlsController: ObservableObject {
         engine.onStateChange = { [weak self] in
             guard let self, self.activeEdge != self.engine.activeEdge else { return }
             self.activeEdge = self.engine.activeEdge
+        }
+        engine.onCornerFired = { [weak self] corner in
+            DispatchQueue.main.async { self?.flash(corner) }
+        }
+    }
+
+    private func flash(_ corner: TrackpadCorner) {
+        firedCornerToken += 1
+        let token = firedCornerToken
+        firedCorner = corner
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            guard let self, self.firedCornerToken == token else { return }
+            self.firedCorner = nil
         }
     }
 

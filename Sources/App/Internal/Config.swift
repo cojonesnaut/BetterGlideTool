@@ -1337,7 +1337,16 @@ final class GlideConfigStore {
 
     /// Coalesces rapid preference edits (e.g. slider drags) into a single disk write.
     private var pendingSave: DispatchWorkItem?
-    private var isDirty = false
+    private(set) var isDirty = false
+
+    /// The file contents this process last loaded or wrote. A change on disk
+    /// that differs came from the other process (menu bar app or Settings).
+    private(set) var lastSyncedText: String?
+    /// Set while applying another process's save, so the reload never writes.
+    private var isApplyingExternalChange = false
+    /// Runs after another process's save has been applied to `Settings`, to
+    /// refresh what depends on it (PreferencesStore, the engine).
+    var onExternalChange: (() -> Void)?
     private let saveDebounceInterval: TimeInterval = 0.4
 
     // MARK: Path
@@ -1365,6 +1374,7 @@ final class GlideConfigStore {
 
     /// Queues a debounced write. In-memory `Settings` are already updated; the engine sees changes immediately.
     func scheduleSave() {
+        guard !isApplyingExternalChange else { return }
         isDirty = true
         pendingSave?.cancel()
         let work = DispatchWorkItem { [weak self] in
@@ -1396,6 +1406,7 @@ final class GlideConfigStore {
                                                     withIntermediateDirectories: true)
             let yaml = GlideConfigSerializer.serialize(GlideConfig.fromSettings())
             try yaml.write(to: url, atomically: true, encoding: .utf8)
+            lastSyncedText = yaml
             isDirty = false
             AppLogger.debug("[Config] Saved → \(url.lastPathComponent)")
             return true
@@ -1421,7 +1432,31 @@ final class GlideConfigStore {
             return false
         }
         Settings.shared.apply(cfg)
+        lastSyncedText = raw
         AppLogger.debug("[Config] Loaded from \(configURL.lastPathComponent)")
+        return true
+    }
+
+    // MARK: Sync between the menu bar app and the Settings process
+
+    /// Applies the config file if another process changed it since this one
+    /// last loaded or saved it. Returns whether anything was applied.
+    ///
+    /// Never writes. With an unsaved local edit pending it leaves the file
+    /// alone: the local save lands moments later and the other process reloads
+    /// that instead, so the two never fight over the file.
+    @discardableResult
+    func reloadIfChangedExternally() -> Bool {
+        guard !isDirty,
+              let raw = try? String(contentsOf: configURL, encoding: .utf8),
+              raw != lastSyncedText,
+              let cfg = GlideConfigParser.parse(yaml: raw) else { return false }
+        isApplyingExternalChange = true
+        defer { isApplyingExternalChange = false }
+        Settings.shared.apply(cfg)
+        lastSyncedText = raw
+        onExternalChange?()
+        AppLogger.debug("[Config] Applied a change saved by the other process")
         return true
     }
 

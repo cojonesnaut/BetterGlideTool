@@ -28,6 +28,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         EngineBridge.shared.startEngine()
+        // Pick up edits saved by the Settings process, and take its requests.
+        ConfigSync.start()
+        EngineLink.listen(on: EngineLink.menuBarPortName(pid: getpid())) { message in
+            MainActor.assumeIsolated {
+                switch message {
+                case .showOnboarding:
+                    OnboardingController.shared.show()
+                case .relaunchAfterUpdate(let path):
+                    // Quits this app; Settings follows when it sees it exit.
+                    UpdateInstaller.relaunch(URL(fileURLWithPath: path))
+                case .subscribe, .liveCommand, .setBlockActions, .exportRecording:
+                    LiveStreamServer.shared.handle(message)
+                case .show, .liveContacts, .liveStatus, .liveResult:
+                    break   // meant for Settings
+                }
+            }
+        }
         if OnboardingController.shouldShow {
             SplashOverlay.present { OnboardingController.shared.show() }
         } else {
@@ -129,6 +146,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         final class Recorder {
             var corners: [EdgeCornerAction] = []
             var keys: [SystemActions.MediaKey] = []
+            var flashed: [TrackpadCorner] = []
         }
 
         func makeEngine(_ configure: (inout EdgeGestureEngine.Configuration) -> Void,
@@ -141,6 +159,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             engine.modifierHeld = { false }
             engine.secondsSinceKeyPress = { 60 }
             engine.performCorner = { action, _ in recorder.corners.append(action) }
+            engine.onCornerFired = { recorder.flashed.append($0) }
             engine.sendMediaKey = { recorder.keys.append($0) }
             engine.playHaptic = { _ in }
             return engine
@@ -165,6 +184,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             precondition(r.corners.isEmpty, "A single corner tap must not fire")
             tap(engine, x: 0.03, y: 0.97, at: now + 0.2)
             precondition(r.corners == [.mute], "A corner double-tap must fire its action, got \(r.corners)")
+            precondition(r.flashed == [.topLeft], "A fired corner is reported so Settings can flash it, got \(r.flashed)")
             tap(engine, x: 0.03, y: 0.97, at: now + 0.4)
             precondition(r.corners == [.mute], "A third tap starts a new double-tap rather than firing again")
         }
@@ -943,7 +963,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// One executable, two modes: the menu bar app, or with `--settings` the
+/// short-lived Settings process (see SettingsApp.swift).
 @main
+enum AppEntry {
+    static func main() {
+        if AppMode.isSettings {
+            SettingsApp.main()
+        } else {
+            GestureApp.main()
+        }
+    }
+}
+
 struct GestureApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
@@ -964,33 +996,19 @@ struct GestureApp: App {
                 .accessibilityLabel("BetterGlideTool")
         }
         .menuBarExtraStyle(.menu)
-
-        Window("BetterGlideTool Preferences", id: "preferences") {
-            PreferencesWindowRoot()
-                .environmentObject(preferencesStore)
-                .environmentObject(engineBridge)
-        }
-        .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified)
-        .defaultSize(width: 820, height: 600)
-        .windowResizability(.contentMinSize)
+        // No Settings window here: Settings… opens the separate Settings
+        // process (SettingsApp), which takes its memory with it when it quits.
         .commands {
-            // BetterGlideTool ▸ Settings… (⌘,) opens Preferences on General,
-            // instead of an empty Settings window.
+            // BetterGlideTool ▸ Settings… (⌘,) opens Settings on General.
             CommandGroup(replacing: .appSettings) { SettingsMenuItem() }
         }
     }
 }
 
 private struct SettingsMenuItem: View {
-    @Environment(\.openWindow) private var openWindow
-
     var body: some View {
         Button("Settings…") {
-            PreferencesNavigator.shared.present(tab: .general)
-            NSApp.setActivationPolicy(.regular)
-            openWindow(id: "preferences")
-            NSApp.activate(ignoringOtherApps: true)
+            SettingsProcess.open(tab: .general)
         }
         .keyboardShortcut(",", modifiers: .command)
     }
@@ -1031,6 +1049,7 @@ final class EngineBridge: ObservableObject {
     private var started = false
 
     func startEngine() {
+        guard !AppMode.isSettings else { return }   // the Settings process never runs the engine
         guard !started else { return }
         started = true
 
