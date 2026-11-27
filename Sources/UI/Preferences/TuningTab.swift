@@ -24,11 +24,8 @@ struct TuningTab: View {
         VStack(spacing: 0) {
             // Categories along the top, as in BetterTouchTool's settings, so
             // each page fits without long scrolling.
-            Picker("Tuning category", selection: $page) {
-                ForEach(Page.allCases) { Text(L($0.rawValue)).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            GlassSegmentedPicker("Tuning category", selection: $page,
+                                 options: Page.allCases.map { ($0, L($0.rawValue)) }, fillsWidth: true)
             .padding(.horizontal)
             .padding(.vertical, 10)
             Divider()
@@ -101,11 +98,10 @@ struct TuningTab: View {
         TuningSection(title: "Swipe Speed", icon: "speedometer") {
             explainer("Only matters for gestures you've set to trigger on a Fast or Slow swipe.")
             VStack(alignment: .leading, spacing: 4) {
-                Picker("Detection method", selection: speedLogicBinding) {
-                    Text("Simple").tag(SpeedLogic.simple)
-                    Text("Classic").tag(SpeedLogic.classic)
+                LabeledContent(L("Detection method")) {
+                    GlassSegmentedPicker(L("Detection method"), selection: speedLogicBinding,
+                                         options: [(SpeedLogic.simple, L("Simple")), (.classic, L("Classic"))])
                 }
-                .pickerStyle(.segmented)
                 Text(store.tuning.speedLogic == .simple
                      ? "Simple: one average-speed reading decides the tier. Predictable and consistent."
                      : "Classic: reads peak speed, acceleration, and timing. Snappier flicks, more nuanced but less consistent.")
@@ -269,18 +265,22 @@ struct TuningTab: View {
                                 .font(.headline)
                             Text(preset.blurb)
                                 .font(.caption)
-                                .foregroundStyle(active ? Color.white.opacity(0.85) : Color.secondary)
+                                .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                                 .frame(maxWidth: .infinity)
                         }
                         .padding(.vertical, 10)
                         .padding(.horizontal, 6)
                         .frame(maxWidth: .infinity, minHeight: 96)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(active ? AnyShapeStyle(Color.accentColor.gradient) : AnyShapeStyle(.quaternary.opacity(0.5)))
-                        )
-                        .foregroundStyle(active ? .white : .primary)
+                        .background {
+                            if active {
+                                GlassSurface(shape: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            } else {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.quaternary.opacity(0.5))
+                            }
+                        }
+                        .fontWeight(active ? .semibold : .regular)
+                        .foregroundStyle(.primary)
                     }
                     .buttonStyle(.plain)
                 }

@@ -727,3 +727,35 @@
 "Open Shortcuts" = "Kestirmeler'i Aç";
 "Enable Edge Controls" = "Kenar Denetimlerini Etkinleştir";
 "Edge Controls category" = "Kenar Denetimleri kategorisi";
+
+/* Permissions page */
+"Permissions" = "İzinler";
+"Backup" = "Yedekleme";
+"Automation" = "Otomasyon";
+"Accessibility" = "Erişilebilirlik";
+"System Events" = "System Events";
+"Finder" = "Finder";
+"Detects trackpad and Magic Mouse gestures and controls windows." = "Trackpad ve Magic Mouse hareketlerini algılar ve pencereleri yönetir.";
+"Granted" = "Verildi";
+"Not granted" = "Verilmedi";
+"Not asked yet" = "Henüz sorulmadı";
+"Open…" = "Aç…";
+"Grant Access…" = "Erişim Ver…";
+
+/* About page */
+"Links" = "Bağlantılar";
+"Check Now" = "Şimdi Denetle";
+"Not checked yet" = "Henüz denetlenmedi";
+"Last checked %@" = "Son denetim: %@";
+"Version %@" = "Sürüm %@";
+"Report an Issue" = "Sorun Bildir";
+"Released under the MIT License" = "MIT Lisansı ile yayımlanmıştır";
+"What's new in each version" = "Her sürümdeki yenilikler";
+"Bugs and feature requests" = "Hatalar ve özellik istekleri";
+"Show the introduction again" = "Tanıtımı yeniden göster";
+"Trackpad and Magic Mouse gestures for macOS. Free and open source. Everything stays on your Mac." = "macOS için trackpad ve Magic Mouse hareketleri. Ücretsiz ve açık kaynak. Her şey Mac'inizde kalır.";
+"Software Update" = "Yazılım Güncellemesi";
+"Lists an app's menu items when you choose a Menu Item action, and clicks them when Accessibility can't. Only needed for Menu Item actions." = "Menü Öğesi eylemi seçtiğinizde bir uygulamanın menü öğelerini listeler ve Erişilebilirlik tıklayamadığında onlara tıklar. Yalnızca Menü Öğesi eylemleri için gerekir.";
+"Empties the Trash for the Empty Trash action. Only needed for that action." = "Çöp Sepetini Boşalt eylemi için Çöp Sepeti'ni boşaltır. Yalnızca bu eylem için gerekir.";
+"Gestures work without these. If you don't grant them now, macOS asks the first time one of these features runs. AppleScript actions you write can ask to control other apps; those appear in the same Automation list." = "Hareketler bunlar olmadan da çalışır. Şimdi izin vermezseniz macOS, bu özelliklerden biri ilk kez çalıştığında sorar. Yazdığınız AppleScript eylemleri başka uygulamaları denetlemek için izin isteyebilir; bunlar aynı Otomasyon listesinde görünür.";
+"Optional" = "İsteğe bağlı";

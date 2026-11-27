@@ -51,13 +51,13 @@ struct MenuBarView: View {
     }
 
     /// Updates are downloaded and installed inside the app, so every path here
-    /// leads to the General tab rather than out to the browser.
+    /// leads to the About page rather than out to the browser.
     @ViewBuilder
     private var updateItem: some View {
         switch updater.state {
         case .available(let update):
             Button("Install Update \(update.tag)…") {
-                showPreferences(tab: .general)
+                showPreferences(tab: .about)
                 updater.downloadAndInstall(update)
             }
 
@@ -72,14 +72,14 @@ struct MenuBarView: View {
 
         case .idle, .checking, .upToDate, .failed, .manualInstall:
             Button("Check for Updates…") {
-                showPreferences(tab: .general)
+                showPreferences(tab: .about)
                 updater.check()
             }
         }
     }
 
     private func showPreferences(tab: PrefsTab? = nil) {
-        if let tab { PreferencesNavigator.shared.tab = tab }
+        PreferencesNavigator.shared.present(tab: tab)
         NSApp.setActivationPolicy(.regular)
         openWindow(id: "preferences")
         NSApp.activate(ignoringOtherApps: true)

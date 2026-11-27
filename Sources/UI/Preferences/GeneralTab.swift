@@ -6,14 +6,10 @@ struct GeneralTab: View {
     @State private var language = AppLanguage.current
     @State private var languageChanged = false
     @EnvironmentObject var store: PreferencesStore
-    @ObservedObject private var updater = UpdateChecker.shared
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-
-                // Accessibility card
-                accessibilityCard
 
                 // Behavior section
                 GroupBox(label: Label("Behavior", systemImage: "gearshape")) {
@@ -66,58 +62,10 @@ struct GeneralTab: View {
 
                 // Native gesture conflicts
                 nativeGesturesCard
-
-                // Stats dashboard
-                statsDashboard
-
-                // About
-                aboutCard
             }
             .padding()
         }
-        .onAppear {
-            store.reload()
-            updater.checkIfDue()
-        }
-    }
-
-    // MARK: - Accessibility Card
-
-    private var accessibilityCard: some View {
-        GroupBox(label: Label("Accessibility Permission", systemImage: "hand.raised")) {
-            HStack(spacing: 16) {
-                Image(systemName: store.accessibilityGranted ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(store.accessibilityGranted ? .green : .orange)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(store.accessibilityGranted ? "Permission granted" : "Permission required")
-                        .font(.headline)
-                    Text(store.accessibilityGranted
-                         ? "BetterGlideTool has all the permissions it needs to handle trackpad and Magic Mouse gestures."
-                         : "BetterGlideTool needs Accessibility access to detect trackpad and Magic Mouse gestures. Click below to grant it.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    if !store.accessibilityGranted {
-                        Text("Already enabled? Quit other copies. After replacing an ad-hoc build, remove its old Accessibility entry and add the running app again, then relaunch. macOS must approve the new build.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Text("Running copy: \(Bundle.main.bundlePath)")
-                            .font(.caption2).textSelection(.enabled)
-                    }
-                }
-
-                Spacer()
-
-                VStack(spacing: 8) {
-                    Button("Recheck Permission") { EngineBridge.shared.recheckAccessibilityPermission() }
-                    if !store.accessibilityGranted {
-                        Button("Open System Settings") { AccessibilityPermission.openSettings() }
-                            .buttonStyle(.borderedProminent)
-                    }
-                }
-            }
-            .padding(8)
-        }
+        .onAppear { store.reload() }
     }
 
     // MARK: - Haptics
@@ -252,203 +200,6 @@ struct GeneralTab: View {
         }
     }
 
-    // MARK: - About
-
-    private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-    }
-
-    private var aboutCard: some View {
-        GroupBox(label: Label("About", systemImage: "info.circle")) {
-            VStack(spacing: 12) {
-                HStack(spacing: 14) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .frame(width: 44, height: 44)
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Text("BetterGlideTool").font(.headline)
-                            Text("v\(appVersion)").font(.caption.weight(.medium)).materialPill()
-                        }
-                        Text("Free and open source. Everything stays on your Mac.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Welcome Tour") {
-                        OnboardingController.shared.show()
-                    }
-                    Button("GitHub") {
-                        NSWorkspace.shared.open(UpdateChecker.repositoryURL ?? URL(string: "https://github.com/cojonesnaut/BetterGlideTool")!)
-                    }
-                    .help("Open BetterGlideTool on GitHub")
-                }
-
-                SquiggleDivider()
-
-                updateRow
-            }
-            .padding(8)
-        }
-    }
-
-    // MARK: - Updates
-
-    private var updateRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                updateStatus
-                Spacer()
-                updateActions
-            }
-
-            if case .downloading(let fraction) = updater.state {
-                // Indeterminate when GitHub didn't send a content length.
-                if let fraction {
-                    ProgressView(value: fraction)
-                        .progressViewStyle(.linear)
-                } else {
-                    ProgressView()
-                        .progressViewStyle(.linear)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var updateActions: some View {
-        switch updater.state {
-        case .available(let update):
-            HStack(spacing: 8) {
-                Button("Release Notes") { NSWorkspace.shared.open(update.pageURL) }
-                Button(update.canSelfInstall ? "Download & Install" : "Download") {
-                    updater.downloadAndInstall(update)
-                }
-                .buttonStyle(.borderedProminent)
-            }
-
-        case .installed:
-            Button("Relaunch Now") { updater.relaunch() }
-                .buttonStyle(.borderedProminent)
-
-        case .manualInstall(let dmg, _):
-            Button("Open Installer") { updater.revealDownload(dmg) }
-                .buttonStyle(.borderedProminent)
-
-        case .downloading, .installing:
-            EmptyView()
-
-        case .idle, .checking, .upToDate, .failed:
-            Button("Check for Updates") { updater.check() }
-                .disabled(updater.state.isBusy)
-        }
-    }
-
-    @ViewBuilder
-    private var updateStatus: some View {
-        switch updater.state {
-        case .idle:
-            EmptyView()
-
-        case .checking:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Checking…").font(.callout).foregroundStyle(.secondary)
-            }
-
-        case .upToDate:
-            Label("You're on the latest version", systemImage: "checkmark.circle.fill")
-                .font(.callout)
-                .foregroundStyle(.green)
-
-        case .available(let update):
-            Label("Update available — \(update.tag)", systemImage: "arrow.down.circle.fill")
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.blue)
-                .materialPill()
-                .shimmer()
-
-        case .downloading(let fraction):
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text(fraction.map { "Downloading… \(Int($0 * 100))%" } ?? "Downloading…")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-
-        case .installing:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Installing…").font(.callout).foregroundStyle(.secondary)
-            }
-
-        case .installed(let version):
-            Label("Updated to v\(version) — relaunch to finish", systemImage: "checkmark.circle.fill")
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.green)
-
-        case .manualInstall(_, let reason):
-            Label(reason, systemImage: "exclamationmark.triangle.fill")
-                .font(.callout)
-                .foregroundStyle(.orange)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-
-        case .failed(let message):
-            Label(message, systemImage: "exclamationmark.triangle")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    // MARK: - Stats Dashboard
-
-    private var statsDashboard: some View {
-        GroupBox(label: Label("Stats", systemImage: "chart.bar")) {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                StatCard(
-                    value: "\(store.rules.count)",
-                    label: "Total Gestures",
-                    icon: "hand.draw",
-                    color: .blue
-                )
-                StatCard(
-                    value: "\(store.rules.filter(\.isActive).count)",
-                    label: "Active Gestures",
-                    icon: "bolt",
-                    color: .green
-                )
-                StatCard(
-                    value: "\(store.diagnostics.configuredFingerCounts)",
-                    label: "Finger Sets Used",
-                    icon: "hand.raised",
-                    color: .purple
-                )
-                StatCard(
-                    value: "\(store.diagnostics.openAppRulesMissingTarget)",
-                    label: "Missing Apps",
-                    icon: "exclamationmark.triangle",
-                    color: .orange
-                )
-                StatCard(
-                    value: "\(store.rules.filter { $0.reciprocalEnabled && $0.direction.hasSpeed }.count)",
-                    label: "Reciprocal Pairs",
-                    icon: "arrow.left.and.right",
-                    color: .teal
-                )
-                StatCard(
-                    value: "\(store.rules.filter { $0.modifierFilter != .any }.count)",
-                    label: "Modifier Gestures",
-                    icon: "command",
-                    color: .indigo
-                )
-            }
-            .padding(8)
-        }
-    }
 }
 
 // MARK: - Settings Row
@@ -480,9 +231,7 @@ struct StatCard: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
+            SidebarIconTile(systemImage: icon, size: 30)
 
             Text(value)
                 .font(.title.bold())
@@ -495,7 +244,7 @@ struct StatCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(color.opacity(0.07))
+        .background(Color.primary.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

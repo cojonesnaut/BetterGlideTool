@@ -85,7 +85,7 @@ final class UpdateChecker: ObservableObject {
     /// automatic check that runs when Preferences opens.
     private static let autoCheckInterval: TimeInterval = 6 * 60 * 60
 
-    private var lastCheck: Date?
+    private(set) var lastCheck: Date?
     private var downloadedDMG: URL?
     private var installedApp: URL?
 

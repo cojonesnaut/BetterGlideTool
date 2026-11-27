@@ -39,11 +39,8 @@ struct EdgeControlsTab: View {
         // title bar. Keep it that way.
         VStack(spacing: 0) {
             if settings.enabled {
-                Picker("Edge Controls category", selection: $page) {
-                    ForEach(Page.allCases) { Text(L($0.rawValue)).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                GlassSegmentedPicker("Edge Controls category", selection: $page,
+                                     options: Page.allCases.map { ($0, L($0.rawValue)) }, fillsWidth: true)
                 .padding(.horizontal)
                 .padding(.vertical, 10)
                 Divider()
@@ -107,7 +104,7 @@ struct EdgeControlsTab: View {
     private var headerCard: some View {
         EdgeCard {
             HStack(alignment: .top, spacing: 12) {
-                EdgeIconTile(systemName: "rectangle.inset.filled", tint: .accentColor)
+                EdgeIconTile(systemName: "rectangle.inset.filled", tint: .primary)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Edge Controls")
                         .font(.headline)
@@ -197,7 +194,7 @@ struct EdgeControlsTab: View {
         let action = settings.action(for: edge)
         return EdgeRow(
             icon: action.iconName,
-            iconTint: action == .none ? .secondary : .accentColor,
+            iconTint: action == .none ? .secondary : .primary,
             title: edge.displayName,
             subtitle: action.hint,
             isHighlighted: selection == .edge(edge),
@@ -236,7 +233,7 @@ struct EdgeControlsTab: View {
         return VStack(spacing: 0) {
             EdgeRow(
                 icon: action.iconName,
-                iconTint: action == .none ? .secondary : .accentColor,
+                iconTint: action == .none ? .secondary : .primary,
                 title: corner.displayName,
                 subtitle: action == .none ? L("Off") : L("Double-tap"),
                 isHighlighted: selection == .corner(corner),
@@ -274,7 +271,7 @@ struct EdgeControlsTab: View {
     private var slidingCard: some View {
         EdgeSection(title: L("While Sliding"), icon: "hand.draw") {
             VStack(spacing: 0) {
-                EdgeRow(icon: "arrow.up.and.down", iconTint: .accentColor,
+                EdgeRow(icon: "arrow.up.and.down", iconTint: .primary,
                         title: L("Where Side Slides Can Start"),
                         subtitle: L("Left and right edges only. A slide can run the whole edge once it starts.")) {
                     Picker("", selection: binding(\.activeArea)) {
@@ -324,18 +321,13 @@ struct EdgeControlsTab: View {
     private var feedbackCard: some View {
         EdgeSection(title: L("Feedback"), icon: "waveform") {
             VStack(spacing: 0) {
-                EdgeRow(icon: "hand.tap", iconTint: .accentColor,
+                EdgeRow(icon: "hand.tap", iconTint: .primary,
                         title: L("Haptic Feedback"),
                         subtitle: L("A tick as a slide moves, and a tap when a track skips or a corner runs.")) {
                     EmptyView()
                 }
-                Picker("", selection: binding(\.hapticLevel)) {
-                    ForEach(EdgeHapticLevel.allCases) { level in
-                        Text(level.displayName).tag(level)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
+                GlassSegmentedPicker(L("Haptic Feedback"), selection: binding(\.hapticLevel),
+                                     options: EdgeHapticLevel.allCases.map { ($0, $0.displayName) }, fillsWidth: true)
                 .padding(.leading, 54)
                 .padding(.trailing, 14)
                 .padding(.bottom, 12)
@@ -423,17 +415,14 @@ struct EdgeSection<Content: View>: View {
 
 struct EdgeIconTile: View {
     let systemName: String
-    var tint: Color = .accentColor
+    var tint: Color = .primary
 
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: 13, weight: .semibold))
             .foregroundColor(tint)
             .frame(width: 28, height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(tint.opacity(0.14))
-            )
+            .glassSelection(true, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 }
 
@@ -459,14 +448,14 @@ struct EdgeFootnote: View {
 /// Icon tile, title and subtitle on the left, one control on the right.
 struct EdgeRow<Control: View>: View {
     let icon: String?
-    var iconTint: Color = .accentColor
+    var iconTint: Color = .primary
     let title: String
     let subtitle: String
     var isHighlighted = false
     var isActive = false
     @ViewBuilder let control: () -> Control
 
-    init(icon: String?, iconTint: Color = .accentColor, title: String, subtitle: String,
+    init(icon: String?, iconTint: Color = .primary, title: String, subtitle: String,
          isHighlighted: Bool = false, isActive: Bool = false,
          @ViewBuilder control: @escaping () -> Control) {
         self.icon = icon
@@ -502,7 +491,7 @@ struct EdgeRow<Control: View>: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(isHighlighted ? Color.accentColor.opacity(0.10) : Color.clear)
+        .glassSelection(isHighlighted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(Rectangle())
     }
 }
@@ -707,16 +696,22 @@ private struct TrackpadGlanceView: View {
         let isActive = activeEdge == edge
         let isSelected = selection == .edge(edge)
         let level = levels[action]
-        let tint: Color = isActive ? .green : .accentColor
+        // Green while the edge is being used; otherwise neutral, with assigned
+        // edges drawn as glass rather than an accent-coloured wash.
+        let tint: Color = isActive ? .green : .primary
 
         return ZStack(alignment: edge.isHorizontal ? .leading : .bottom) {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(isOn ? tint.opacity(isActive ? 0.22 : 0.12) : Color.primary.opacity(0.04))
+            if isOn && !isActive {
+                GlassSurface(shape: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            } else {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(isActive ? tint.opacity(0.22) : Color.primary.opacity(0.04))
+            }
 
             if let level {
                 // The live level fills the strip from the bottom (or the left).
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(tint.opacity(0.28))
+                    .fill(tint.opacity(isActive ? 0.28 : 0.16))
                     .frame(width: edge.isHorizontal ? max(frame.width * level, 0) : nil,
                            height: edge.isHorizontal ? nil : max(frame.height * level, 0))
             }
@@ -726,7 +721,7 @@ private struct TrackpadGlanceView: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(isSelected || isActive ? tint : Color.clear, lineWidth: 1.5)
+                .stroke(isActive ? tint : (isSelected ? Color.primary.opacity(0.55) : Color.clear), lineWidth: 1.5)
         )
         .frame(width: frame.width, height: frame.height)
         .position(x: frame.midX, y: frame.midY)
@@ -766,12 +761,9 @@ private struct TrackpadGlanceView: View {
         let isSelected = selection == .corner(corner)
 
         return RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(isOn ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.18),
+            .strokeBorder(isSelected ? Color.primary.opacity(0.55) : Color.primary.opacity(isOn ? 0 : 0.18),
                           style: StrokeStyle(lineWidth: isSelected ? 1.5 : 1, dash: isOn ? [] : [3, 3]))
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(isOn ? Color.accentColor.opacity(isSelected ? 0.22 : 0.12) : Color.clear)
-            )
+            .glassSelection(isOn, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             .overlay(
                 Image(systemName: isOn ? action.iconName : "plus")
                     .font(.system(size: 11, weight: .semibold))

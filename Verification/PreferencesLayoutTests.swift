@@ -44,7 +44,7 @@ func verifyPreferencesLayout() {
     let edgePages = ["Edges", "Corners", "While Sliding", "Feedback"]
     for size in [NSSize(width: 760, height: 520), NSSize(width: 1467, height: 941)] {
         let reference = fittingHeight(.tuning, size: size)
-        for tab in [PrefsTab.gestures, .inputMonitoring, .keyboard, .general, .configuration] {
+        for tab in [PrefsTab.gestures, .inputMonitoring, .keyboard, .general, .permissions, .configuration, .about] {
             let height = fittingHeight(tab, size: size)
             precondition(height <= reference + 1,
                          "\(tab) asks for \(height) pt at \(size), more than Tuning's \(reference) pt")

@@ -966,7 +966,7 @@ struct GestureApp: App {
         .menuBarExtraStyle(.menu)
 
         Window("BetterGlideTool Preferences", id: "preferences") {
-            PreferencesWindow()
+            PreferencesWindowRoot()
                 .environmentObject(preferencesStore)
                 .environmentObject(engineBridge)
         }
@@ -987,7 +987,7 @@ private struct SettingsMenuItem: View {
 
     var body: some View {
         Button("Settings…") {
-            PreferencesNavigator.shared.tab = .general
+            PreferencesNavigator.shared.present(tab: .general)
             NSApp.setActivationPolicy(.regular)
             openWindow(id: "preferences")
             NSApp.activate(ignoringOtherApps: true)

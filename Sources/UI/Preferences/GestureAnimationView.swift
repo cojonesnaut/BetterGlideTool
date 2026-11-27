@@ -112,10 +112,10 @@ struct GestureAnimationView: View {
                 HStack {
                     Text(L(zone.rawValue))
                         .font(.system(size: 8.5, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(.primary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1.5)
-                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                        .glassSelection(true, in: Capsule(style: .continuous))
                     Spacer()
                 }
             }
@@ -217,14 +217,13 @@ struct GestureAnimationView: View {
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.tertiary)
 
-                HStack(spacing: 3) {
-                    Image(systemName: action.iconName)
-                        .font(.system(size: 10))
+                HStack(spacing: 4) {
+                    SidebarIconTile(systemImage: action.iconName, size: 16)
                     Text(L(action.rawValue))
                         .font(.system(size: 11, weight: .semibold))
                         .lineLimit(1)
                 }
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(.primary)
             }
         }
         .padding(.horizontal, 8)
