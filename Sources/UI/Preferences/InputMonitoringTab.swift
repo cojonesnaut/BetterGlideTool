@@ -8,7 +8,10 @@ struct InputMonitoringTab: View {
 
     @State private var showDiagnostics = false
 
-    var body: some View {
+    // Streams the menu bar app's status lines and Stage Manager result while shown in Settings.
+    var body: some View { pageBody.liveStatus() }
+
+    @ViewBuilder private var pageBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 LiveContactsView(device: device)

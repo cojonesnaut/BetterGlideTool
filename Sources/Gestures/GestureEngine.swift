@@ -71,6 +71,7 @@ final class GestureEngine {
     // MARK: - Lifecycle
 
     func start() {
+        guard !AppMode.isSettings else { return }   // only the menu bar app recognizes gestures
         guard AXIsProcessTrusted() else { AppLogger.debug("[Engine] Not trusted"); return }
         guard !isRunning else { return }
 

@@ -45,7 +45,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         w.delegate = self
         window = w
 
-        NSApp.setActivationPolicy(.regular)
+        if !AppMode.isSettings { NSApp.setActivationPolicy(.regular) }
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -58,7 +58,8 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         // Closing counts as done either way — don't nag on every launch.
         UserDefaults.standard.set(true, forKey: Self.completedKey)
         window = nil
-        NSApp.setActivationPolicy(.accessory)
+        // The Settings process stays a regular app with its own window open.
+        if !AppMode.isSettings { NSApp.setActivationPolicy(.accessory) }
         AccessibilityPermission.requestAutomaticallyIfNeeded()
     }
 }

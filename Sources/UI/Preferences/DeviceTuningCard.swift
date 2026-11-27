@@ -25,7 +25,10 @@ struct DeviceTuningCard: View {
         Binding(get: { mouse ? store.deviceTuning.mouseTipTapAnchor : store.deviceTuning.trackpadTipTapAnchor },
                 set: { value in store.updateDeviceTuning { if mouse { $0.mouseTipTapAnchor = value } else { $0.trackpadTipTapAnchor = value } } })
     }
-    var body: some View {
+    // Streams the menu bar app's pointer speed status while shown in Settings.
+    var body: some View { pageBody.liveStatus() }
+
+    @ViewBuilder private var pageBody: some View {
         TuningSection(title: parts == [.tipTapTiming] ? "TipTap Timing" : (mouse ? "Magic Mouse" : "Trackpad & Magic Trackpad"),
                       icon: parts == [.tipTapTiming] ? "timer" : (mouse ? "magicmouse" : "rectangle.and.hand.point.up.left")) {
             HStack(alignment: .center, spacing: 20) {

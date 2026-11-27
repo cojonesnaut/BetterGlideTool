@@ -91,7 +91,7 @@ enum EdgeHapticLevel: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum TrackpadCorner: String, CaseIterable, Identifiable {
+enum TrackpadCorner: String, Codable, CaseIterable, Identifiable {
     case topLeft     = "top_left"
     case topRight    = "top_right"
     case bottomLeft  = "bottom_left"

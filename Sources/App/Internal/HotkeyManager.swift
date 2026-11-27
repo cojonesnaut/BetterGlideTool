@@ -25,6 +25,9 @@ final class HotkeyManager {
 
     /// Rebuilds every registration from the current rule list. Idempotent.
     func reload() {
+        // Settings edits shortcuts but must not register them: the menu bar app
+        // owns the global hotkeys, and a second registration would fire twice.
+        guard !AppMode.isSettings else { return }
         installHandlerIfNeeded()
         unregisterAll()
         for rule in Settings.shared.rules where rule.isKeyboardBinding {

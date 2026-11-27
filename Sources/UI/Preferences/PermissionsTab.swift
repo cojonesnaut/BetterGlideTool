@@ -8,8 +8,9 @@ import CoreServices
 /// macOS stays the authority: states are read fresh every second while the
 /// page is visible and whenever the app comes forward, never remembered.
 struct PermissionsTab: View {
-    // Off in tests that host the window, which must not start System Events.
-    @Environment(\.preferencesManagesActivationPolicy) private var isLiveApp
+    /// Only the real Settings app may start System Events to read its state;
+    /// tests that host this page must not.
+    private var isLiveApp: Bool { AppMode.isSettings }
     @StateObject private var model = PermissionsModel()
 
     var body: some View {

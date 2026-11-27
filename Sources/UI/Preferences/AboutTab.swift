@@ -255,7 +255,8 @@ struct AboutTab: View {
             Divider().padding(.leading, 46)
             AboutLinkRow(icon: "sparkles", title: "Welcome Tour", detail: L("Show the introduction again"),
                          opensExternally: false) {
-                OnboardingController.shared.show()
+                // The tour belongs to the menu bar app; show it there.
+                if !AppMode.tellMenuBarApp(.showOnboarding) { OnboardingController.shared.show() }
             }
         }
     }

@@ -68,10 +68,9 @@ struct GesturesTab: View {
                     }
                 }
                 .listStyle(.inset)
-
-                if visibleGroups.isEmpty {
-                    listEmptyState
-                }
+                // Over the list rather than below it, so it centers at the same
+                // height as the editor's empty state.
+                .overlay { if visibleGroups.isEmpty { listEmptyState } }
 
                 Divider()
 

@@ -51,95 +51,14 @@ final class PreferencesNavigator: ObservableObject {
 
     @Published var tab: PrefsTab = .gestures
     @Published var device: PreferencesDevice = .trackpad
-    /// Whether the Preferences window's contents exist. SwiftUI keeps a closed
-    /// window's whole view graph alive (about 65 MB once every tab has been
-    /// visited), so the window shows an empty placeholder while closed and
-    /// builds the real contents again when it opens.
-    @Published var isPresented = false
-
-    /// Call before `openWindow(id: "preferences")`.
-    func present(tab: PrefsTab? = nil) {
-        if let tab { self.tab = tab }
-        isPresented = true
-    }
 }
 
-/// Root of the Preferences window scene: the real contents while the window is
-/// open, an empty view of the same minimum size while it is closed.
-struct PreferencesWindowRoot: View {
-    @ObservedObject private var navigator = PreferencesNavigator.shared
-
-    var body: some View {
-        Group {
-            if navigator.isPresented {
-                PreferencesWindow()
-            } else {
-                Color.clear.frame(minWidth: 760, minHeight: 520)
-            }
-        }
-        .background(WindowLifecycleObserver(
-            onOpen: { navigator.isPresented = true },
-            onClose: {
-                // After the window has gone, so the swap is never seen.
-                DispatchQueue.main.async {
-                    navigator.isPresented = false
-                    MemoryRelief.returnFreedMemory(after: 1.5)
-                }
-            }))
-    }
-}
-
-/// Reports when the hosting window becomes key (opened or brought back) and
-/// when it closes.
-private struct WindowLifecycleObserver: NSViewRepresentable {
-    var onOpen: () -> Void
-    var onClose: () -> Void
-
-    func makeNSView(context: Context) -> ObserverView { ObserverView() }
-
-    func updateNSView(_ view: ObserverView, context: Context) {
-        view.onOpen = onOpen
-        view.onClose = onClose
-    }
-
-    final class ObserverView: NSView {
-        var onOpen: () -> Void = {}
-        var onClose: () -> Void = {}
-        private var tokens: [NSObjectProtocol] = []
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            tokens.forEach(NotificationCenter.default.removeObserver)
-            tokens = []
-            guard let window else { return }
-            let center = NotificationCenter.default
-            tokens.append(center.addObserver(forName: NSWindow.didBecomeKeyNotification,
-                                             object: window, queue: .main) { [weak self] _ in self?.onOpen() })
-            tokens.append(center.addObserver(forName: NSWindow.willCloseNotification,
-                                             object: window, queue: .main) { [weak self] _ in self?.onClose() })
-        }
-
-        deinit { tokens.forEach(NotificationCenter.default.removeObserver) }
-    }
-}
-
-/// Hands memory the app has freed back to macOS. Without it the allocator keeps
-/// freed pages for reuse, and the app's footprint stays at its peak.
-enum MemoryRelief {
-    static func returnFreedMemory(after delay: TimeInterval) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            // Only while Settings is still closed.
-            guard !PreferencesNavigator.shared.isPresented else { return }
-            malloc_zone_pressure_relief(nil, 0)
-        }
-    }
-}
-
-/// Whether opening Preferences turns BetterGlideTool into a regular app with a
-/// Dock icon (and back when it closes). Always true in the app; tests that host
-/// the window offscreen turn it off so their process never gets a Dock tile.
+/// Whether showing the Preferences window switches the hosting app between a
+/// regular app with a Dock icon and an accessory one. Off: Settings runs as its
+/// own regular app (SettingsApp), and tests host the window offscreen without
+/// a Dock tile. Kept for a host that ever needs it.
 private struct ManagesActivationPolicyKey: EnvironmentKey {
-    static let defaultValue = true
+    static let defaultValue = false
 }
 
 extension EnvironmentValues {

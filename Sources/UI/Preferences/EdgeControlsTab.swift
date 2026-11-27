@@ -88,6 +88,7 @@ struct EdgeControlsTab: View {
         }
         .onAppear(perform: refreshLevels)
         .onReceive(levelTimer) { _ in refreshLevels() }
+        .liveStatus()   // the active edge comes from the menu bar app
     }
 
     private func refreshLevels() {
@@ -133,6 +134,7 @@ struct EdgeControlsTab: View {
                     settings: settings,
                     levels: levels,
                     activeEdge: controller.activeEdge,
+                    firedCorner: controller.firedCorner,
                     selection: $selection
                 )
                 .frame(height: 210)
@@ -237,7 +239,7 @@ struct EdgeControlsTab: View {
                 title: corner.displayName,
                 subtitle: action == .none ? L("Off") : L("Double-tap"),
                 isHighlighted: selection == .corner(corner),
-                isActive: false
+                isActive: controller.firedCorner == corner
             ) {
                 Picker("", selection: Binding(
                     get: { settings.cornerAction(for: corner) },
@@ -644,6 +646,7 @@ private struct TrackpadGlanceView: View {
     let settings: EdgeControlsSettings
     let levels: [EdgeAction: Double]
     let activeEdge: TrackpadPhysicalEdge?
+    let firedCorner: TrackpadCorner?
     @Binding var selection: EdgeControlsSelection?
 
     private let strip: CGFloat = 34
@@ -759,11 +762,15 @@ private struct TrackpadGlanceView: View {
         let action = settings.cornerAction(for: corner)
         let isOn = action != .none
         let isSelected = selection == .corner(corner)
+        // Green for a moment after its double-tap runs, like an edge mid-slide.
+        let isActive = isOn && firedCorner == corner
 
         return RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(isSelected ? Color.primary.opacity(0.55) : Color.primary.opacity(isOn ? 0 : 0.18),
-                          style: StrokeStyle(lineWidth: isSelected ? 1.5 : 1, dash: isOn ? [] : [3, 3]))
-            .glassSelection(isOn, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .strokeBorder(isActive ? Color.green : (isSelected ? Color.primary.opacity(0.55) : Color.primary.opacity(isOn ? 0 : 0.18)),
+                          style: StrokeStyle(lineWidth: isSelected || isActive ? 1.5 : 1, dash: isOn ? [] : [3, 3]))
+            .glassSelection(isOn && !isActive, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(isActive ? RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.green.opacity(0.22)) : nil)
+            .animation(.easeOut(duration: 0.2), value: isActive)
             .overlay(
                 Image(systemName: isOn ? action.iconName : "plus")
                     .font(.system(size: 11, weight: .semibold))

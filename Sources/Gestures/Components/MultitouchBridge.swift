@@ -14,6 +14,7 @@ final class MultitouchBridge {
     // MARK: Start
 
     func start(callback: @escaping GLDTFrameCallback) {
+        guard !AppMode.isSettings else { return }
         guard !isRunning else { return }
         if GLDTStart(callback, nil) {
             isRunning = true

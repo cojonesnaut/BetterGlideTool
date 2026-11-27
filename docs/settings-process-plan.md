@@ -49,28 +49,23 @@ Today every edit goes `PreferencesStore` → `Settings.shared` →
 `GlideConfigStore.scheduleSave()`, a full-file write 0.4 s later. Two processes
 doing that can overwrite each other.
 
-**Rule: one writer at a time.**
-- While the Settings process runs, it is the only writer.
-- The main app's own edits are forwarded to it as messages: the menu bar's
-  Edge Controls switch, and `EdgeControlsController.saveSettings`. The Settings
-  process applies them through `PreferencesStore`, so the UI shows them too.
-- When no Settings process runs, the main app writes as today.
-
-**Reload in the main app.**
-- The main app watches `config.yaml` with a `DispatchSource` file-system watch
-  that survives atomic replacement by re-opening on rename or delete.
-- On a change it calls `GlideConfigStore.load()`, then replays the side effects
-  the in-process edit paths trigger today. Stage 2 starts by listing them; the
-  ones known so far:
-  - the Edge Controls engine configuration and the `TouchTracker` cache
-  - the multitouch minimum contact count
-  - hotkey registration
-  - native pointer speed
-  - native gesture reconciliation
-  - debug logging
-  - launch at login
-
-  A reload must never schedule a save.
+**As built (stage 2): both save, both reload.** Instead of one writer and
+forwarded edits, each process keeps saving its own edits as before and
+watches the file (`ConfigSync`, `ConfigFileWatcher`, which watches the folder so
+atomic saves are seen). When the other process saves,
+`GlideConfigStore.reloadIfChangedExternally()` applies the new contents and
+calls `PreferencesStore.reload()`, which already replays every engine side
+effect of an in-process edit: rules and hotkeys, Magic Mouse and low-finger
+input, Edge Controls, native gesture conflicts and pointer speed. It also
+refreshes the TipTap edge-margin cache.
+- A reload never writes. Saves are suppressed while it runs, and identical
+  serialization means the other process sees nothing new.
+- An unsaved local edit is never discarded. While a save is pending the
+  reload waits; the local save lands 0.4 s later and the other process reloads
+  it. The only loss is when both processes edit within the same 0.4 s, where
+  the later save wins.
+- The menu bar's Edge Controls switch needs no forwarding: its save reaches
+  Settings like any other.
 
 **Saving before Settings quits.** The Settings process flushes its pending save
 before it terminates, from `applicationWillTerminate` and on window close.
@@ -99,7 +94,6 @@ The app isn't sandboxed, so no XPC service or launchd job is needed.
 | Edge Controls live levels, active edge, surface size | main → Settings, while the page is visible | `EdgeControlsController` |
 | Stage Manager test status | main → Settings | `DesktopActions.stageStatus` |
 | Show tab X / come forward | main → Settings | `PreferencesNavigator` |
-| Forwarded config edits (menu bar) | main → Settings | `PreferencesStore` |
 | Install update: quit main, replace, relaunch | Settings → main | `UpdateInstaller` |
 | Show onboarding again | Settings → main | `OnboardingController` |
 
@@ -117,32 +111,62 @@ Each stage ends with a build, `bash Verification/run.sh` and a check of the
 affected Settings pages. Work happens on a branch, and nothing ships until
 stage 6.
 
-1. **Two modes.** Add `AppEntry`, `SettingsApp`, launching and focusing the
+1. **Two modes.** *(Done.)* Add `AppEntry`, `SettingsApp`, launching and focusing the
    Settings process, parent-exit watch and quit-on-close. Settings works for
    anything that only edits config. Live views temporarily show "not
    connected".
-2. **Config sync.** Add the main app's file watch and reload with side-effect
-   replay, the single-writer rule, and flush on Settings quit. New
-   verification: edits from either side survive, nothing is clobbered, a
-   reload doesn't write, and an atomic replace is seen.
-3. **EngineLink core.** Ports, message encoding, connect and reconnect (either
-   side may restart), the on/off switch, forwarded menu edits, show-tab,
-   onboarding and update install. New verification: message round-trips and
-   behaviour when one side is missing.
-4. **Live streams.** Contacts (both devices), gesture events, block-actions
-   switch, input status lines, Edge Controls levels and Stage Manager status.
-   Check that streams stop when the page or window goes away.
-5. **Cut over.** Remove the `Window("…Preferences")` scene from `GestureApp`.
-   The main app no longer links Settings UI at runtime.
-   `PreferencesLayoutTests` keeps hosting `PreferencesWindow` in-process with
-   a scratch config, as it does now.
-6. **Verify and measure.**
-   - The main app's footprint at idle, with Settings open, and after closing,
-     with a target of ≤ ~20 MB after closing.
-   - The Settings process starting time, with a target of under ~0.5 s to a
-     drawn window.
-   - Every Settings page by hand, Live Contacts on the trackpad and Magic
-     Mouse, an update install, and Settings → quit main → Settings quits.
+2. **Config sync.** *(Done.)* Both processes watch the file and reload the
+   other's saves with side-effect replay; Settings flushes on quit.
+   `Verification/ConfigSyncTests.swift` checks: own saves ignored, external
+   saves applied once without writing back, unsaved local edits kept, broken
+   files ignored, atomic saves seen.
+3. **EngineLink core.** *(Done.)* `EngineLink` sends one-way `Codable`
+   messages over `CFMessagePort`s named with each process's pid. Built:
+   "show this page" (and "check for updates") from the menu bar to an open
+   Settings window; the welcome tour and the post-update relaunch from
+   Settings to the menu bar app, falling back to running them locally if the
+   menu bar app can't be reached. "Install Update…" in the menu installs in the
+   menu bar app without opening Settings. The engine on/off switch lives only
+   in the menu bar now, so it needs no message. Settings launches with window
+   restoration off, after a live test showed a closed window being restored
+   as a 135×149 sliver. `Verification/EngineLinkTests.swift` covers encoding,
+   ordered delivery, missing listeners and exclusive names.
+4. **Live streams.** *(Done.)* `LiveStream.swift`: Settings sends one
+   subscription naming what's on screen (trackpad contacts, Magic Mouse
+   contacts, status); the menu bar app turns those monitors on under its own
+   owner name and streams only changes, at most 30 times a second, with the
+   gesture log only when it changes. Recording, export, Copy Readings,
+   Reconnect and the floating panel run in the menu bar app. Edge Controls
+   volume and brightness are read by Settings itself; the active edge is
+   streamed. The subscription ends when Settings unsubscribes, exits, or its
+   port disappears, so Block Real Gesture Triggering can't outlive it; a busy
+   Settings just gets the update on the next tick.
+   `Verification/LiveStreamTests.swift` covers all of that.
+5. **Cut over.** *(Done.)* The `Window("…Preferences")` scene is gone from
+   `GestureApp`, along with the in-process teardown (`PreferencesWindowRoot`,
+   `MemoryRelief`) that only existed to shrink it. Settings… and ⌘, open the
+   Settings process; if that launch fails, an alert says so. The Permissions
+   page now keys "may start System Events" on `AppMode.isSettings`.
+   `PreferencesLayoutTests` still hosts `PreferencesWindow` in-process.
+6. **Verify and measure.** *(Done, with two open items.)* Measured on
+   2026-11-27, macOS 27.2, Apple Silicon:
+
+   | Menu bar app | 3.3.0 (in-process Settings) | Settings process |
+   |---|---|---|
+   | Idle, Settings never opened | 17 MB | 19 MB |
+   | After opening and closing Settings | 84 MB | 37 MB |
+
+   - Settings itself uses about 51 MB while open and all of it goes when it
+     quits.
+   - Opening Settings takes 0.72–0.83 s from the request to a visible window
+     (five runs), over the 0.5 s target.
+   - Every page was clicked through by hand on the installed build; live
+     contacts, the gesture log, blocking, recording and export, the floating
+     panel and the edge and corner highlights all work.
+
+   Open: the menu bar app keeps ~18 MB after Input Monitoring has streamed
+   (recording and gesture log held for export, possibly the floating panel),
+   and launch time could be trimmed.
 
 ## Risks
 

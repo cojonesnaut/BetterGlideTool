@@ -57,6 +57,11 @@ final class DesktopActions: NSObject, ObservableObject {
     }
     private var cycles: [UInt32: CycleState] = [:]
     @Published private(set) var stageStatus = "Not tested yet."
+
+    /// Settings process: shows the menu bar app's last Stage Manager result.
+    func applyRemote(stageStatus value: String) {
+        if stageStatus != value { stageStatus = value }
+    }
     private let stageWorker = DispatchQueue(label: "com.betterglidetool.stage-actions", qos: .userInitiated)
     private var stageBusy = false
     private var stageRequests: [() -> Void] = []

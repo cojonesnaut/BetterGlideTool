@@ -11,7 +11,10 @@ struct MagicMouseTab: View {
     }
     @AppStorage("tuningPage.magicMouse") private var page: Page = .general
 
-    var body: some View {
+    // Streams the menu bar app's Magic Mouse connection status while shown in Settings.
+    var body: some View { pageBody.liveStatus() }
+
+    @ViewBuilder private var pageBody: some View {
         VStack(spacing: 0) {
             // Categories along the top, as in BetterTouchTool's settings, so
             // each page fits without long scrolling.

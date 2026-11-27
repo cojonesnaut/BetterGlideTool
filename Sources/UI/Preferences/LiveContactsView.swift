@@ -214,7 +214,13 @@ struct LiveContactsView: View {
                 Toggle("Show IDs", isOn: $showIDs).toggleStyle(.checkbox)
                 Toggle("Details", isOn: $showDetails).toggleStyle(.checkbox)
                 if !floating {
-                    Button { LiveContactsPanelController.forDevice(device).show() } label: {
+                    Button {
+                        // The floating panel belongs to the menu bar app, so it
+                        // stays up after Settings closes.
+                        if !AppMode.tellMenuBarApp(.liveCommand(device: device, command: .showFloatingPanel)) {
+                            LiveContactsPanelController.forDevice(device).show()
+                        }
+                    } label: {
                         Label("Float", systemImage: "macwindow.on.rectangle")
                     }.help("Open Floating Panel")
                 }
@@ -238,12 +244,8 @@ struct LiveContactsView: View {
                     .disabled(monitor.recordedFrameCount == 0 || monitor.isRecording)
                 Spacer()
                 Button("Copy Readings") {
-                    do {
-                        let data = try monitor.snapshotData()
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(String(decoding: data, as: UTF8.self), forType: .string)
-                        message = "Current readings copied."
-                    } catch { message = error.localizedDescription }
+                    // In Settings the menu bar app copies; its caption arrives as lastResult.
+                    if let result = monitor.copyReadings() { message = result }
                 }
             }.controlSize(.small)
             Text(message ?? (monitor.isRecording ? "Recording… \(monitor.recordedFrameCount) frames" :
@@ -253,19 +255,18 @@ struct LiveContactsView: View {
         .padding(12)
         .onAppear { if !floating { monitor.setVisible(true, owner: "settings") } }
         .onDisappear { if !floating { monitor.setVisible(false, owner: "settings") } }
+        .onChange(of: monitor.lastResult) { result in if let result { message = result } }
+        .liveStatus()   // Block Real Gesture Triggering mirrors the menu bar app
     }
     private func exportRecording() {
-        do {
-            let data = try monitor.recordingData()
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [.json]
-            panel.nameFieldStringValue = "BetterGlideTool-\(device.monitoringTitle.replacingOccurrences(of: " ", with: "-"))-Live-Contacts.json"
-            panel.begin { result in
-                guard result == .OK, let url = panel.url else { return }
-                do { try data.write(to: url, options: .atomic); message = "Recording exported." }
-                catch { message = "Export failed: \(error.localizedDescription)" }
-            }
-        } catch { message = "Export failed: \(error.localizedDescription)" }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "BetterGlideTool-\(device.monitoringTitle.replacingOccurrences(of: " ", with: "-"))-Live-Contacts.json"
+        panel.begin { result in
+            guard result == .OK, let url = panel.url else { return }
+            // In Settings the menu bar app, which holds the recording, writes the file.
+            if let outcome = monitor.exportRecording(to: url) { message = outcome }
+        }
     }
 }
 

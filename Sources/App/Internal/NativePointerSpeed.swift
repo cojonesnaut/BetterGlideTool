@@ -8,6 +8,12 @@ final class NativePointerSpeed: ObservableObject {
     static let shared = NativePointerSpeed()
     @Published private(set) var mouseStatus = "1× uses the original tracking speed"
     @Published private(set) var trackpadStatus = "1× uses the original tracking speed"
+
+    /// Settings process: shows what the menu bar app applied.
+    func applyRemote(mouse: String, trackpad: String) {
+        if mouseStatus != mouse { mouseStatus = mouse }
+        if trackpadStatus != trackpad { trackpadStatus = trackpad }
+    }
     private typealias Create = @convention(c) (CFAllocator?) -> Unmanaged<CFTypeRef>?
     private typealias Services = @convention(c) (CFTypeRef) -> Unmanaged<CFArray>?
     private typealias CopyProperty = @convention(c) (CFTypeRef, CFString) -> Unmanaged<CFTypeRef>?

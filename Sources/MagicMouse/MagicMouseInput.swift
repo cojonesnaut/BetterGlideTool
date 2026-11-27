@@ -158,7 +158,24 @@ final class MagicMouseInput: ObservableObject {
         status = Settings.shared.magicMouse.enabled ? "Magic Mouse is paused" : "Magic Mouse support is off"
     }
 
+    /// Status lines in the order Settings shows them.
+    var statusLines: [String] { [status, inputStatus, tipTapStatus, lastGesture] }
+
+    /// Settings process: shows the menu bar app's Magic Mouse state.
+    func applyRemote(statusLines lines: [String], connectedCount count: Int) {
+        guard lines.count == 4 else { return }
+        if status != lines[0] { status = lines[0] }
+        if inputStatus != lines[1] { inputStatus = lines[1] }
+        if tipTapStatus != lines[2] { tipTapStatus = lines[2] }
+        if lastGesture != lines[3] { lastGesture = lines[3] }
+        if connectedCount != count { connectedCount = count }
+    }
+
     func reconnect() {
+        if AppMode.isSettings {
+            AppMode.tellMenuBarApp(.liveCommand(device: .magicMouse, command: .reconnectMouse))
+            return
+        }
         guard GestureEngine.shared.isRunning else { return }
         if running { rebuildDevices() } else { start() }
     }
