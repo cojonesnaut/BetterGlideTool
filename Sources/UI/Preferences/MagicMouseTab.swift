@@ -15,11 +15,8 @@ struct MagicMouseTab: View {
         VStack(spacing: 0) {
             // Categories along the top, as in BetterTouchTool's settings, so
             // each page fits without long scrolling.
-            Picker("Tuning category", selection: $page) {
-                ForEach(Page.allCases) { Text(L($0.rawValue)).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            GlassSegmentedPicker("Tuning category", selection: $page,
+                                 options: Page.allCases.map { ($0, L($0.rawValue)) }, fillsWidth: true)
             .padding(.horizontal)
             .padding(.vertical, 10)
             Divider()

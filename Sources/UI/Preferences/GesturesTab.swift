@@ -35,12 +35,20 @@ struct GesturesTab: View {
             VStack(spacing: 0) {
                 listHeader
 
-                List(selection: $selectedRule) {
+                // No `selection:`, so the chosen rule sits on glass rather
+                // than the system's accent-coloured row highlight.
+                List {
                     ForEach(visibleGroups, id: \.fingers) { group in
                         Section {
                             ForEach(group.rules) { rule in
                                 RuleRow(rule: rule)
-                                    .tag(rule.id)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .glassSelection(selectedRule == rule.id,
+                                                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectedRule = rule.id }
+                                    .accessibilityAddTraits(selectedRule == rule.id ? .isSelected : [])
                                     .contextMenu {
                                         Button("Rename…") { beginRename(rule) }
                                         Button("Duplicate") {
@@ -147,18 +155,9 @@ struct GesturesTab: View {
             .padding(6)
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 7))
 
-            Picker("", selection: $fingerFilter) {
-                Text("All").tag(Int?.none)
-                Text("1").tag(Int?.some(1))
-                Text("2").tag(Int?.some(2))
-                Text("3").tag(Int?.some(3))
-                Text("4").tag(Int?.some(4))
-                if device == .trackpad {
-                    Text("5").tag(Int?.some(5))
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            GlassSegmentedPicker("Finger filter", selection: $fingerFilter,
+                                 options: [(Int?.none, L("All"))]
+                                    + (1...(device == .trackpad ? 5 : 4)).map { (Int?.some($0), "\($0)") })
         }
         .padding(10)
     }
@@ -242,11 +241,8 @@ struct TriggerBadge: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(
-                Capsule()
-                    .fill(Color.accentColor.opacity(0.15))
-            )
-            .foregroundStyle(Color.accentColor)
+            .glassSelection(true, in: Capsule(style: .continuous))
+            .foregroundStyle(.primary)
         }
     }
 }
@@ -279,10 +275,7 @@ struct RuleRow: View {
                 .foregroundStyle(.tertiary)
             
             HStack(spacing: 8) {
-                Image(systemName: rule.action.iconName)
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 20)
-                    .font(.system(size: 14))
+                SidebarIconTile(systemImage: rule.action.iconName, size: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(rule.displayName)
@@ -361,10 +354,7 @@ struct RuleEditor: View {
 
             // ── Header toolbar ──
             HStack(spacing: 12) {
-                Image(systemName: rule.action.iconName)
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 26)
+                SidebarIconTile(systemImage: rule.action.iconName, size: 30)
 
                 VStack(alignment: .leading, spacing: 1) {
                     TextField(autoName, text: Binding(
@@ -445,10 +435,10 @@ struct RuleEditor: View {
                     } else {
                         let availableDirections = GestureDirection.available(fingers: rule.fingers, device: rule.device)
 
-                        Picker("Fingers", selection: $rule.fingers) {
-                            ForEach(1...(rule.device == .magicMouse ? 4 : 5), id: \.self) { f in Text("\(f)").tag(f) }
+                        LabeledContent(L("Fingers")) {
+                            GlassSegmentedPicker(L("Fingers"), selection: $rule.fingers,
+                                                 options: (1...(rule.device == .magicMouse ? 4 : 5)).map { ($0, "\($0)") })
                         }
-                        .pickerStyle(.segmented)
                         .onChange(of: rule.fingers) { _ in
                             if !GestureDirection.available(fingers: rule.fingers, device: rule.device).contains(rule.direction) {
                                 rule.direction = GestureDirection.available(fingers: rule.fingers, device: rule.device)[0]
@@ -500,12 +490,10 @@ struct RuleEditor: View {
                         }
 
                         if rule.device == .trackpad && rule.direction.hasSpeed && rule.fingers >= 3 {
-                            Picker("Speed", selection: $rule.speed) {
-                                ForEach(GestureSpeed.allCases, id: \.self) { s in
-                                    Text(L(s.rawValue)).tag(s)
-                                }
+                            LabeledContent(L("Speed")) {
+                                GlassSegmentedPicker(L("Speed"), selection: $rule.speed,
+                                                     options: GestureSpeed.allCases.map { ($0, L($0.rawValue)) })
                             }
-                            .pickerStyle(.segmented)
                         }
 
                         if rule.direction == .forceClick {
